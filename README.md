@@ -1,1 +1,1 @@
-# Automatizaci-n-Editorial
+# Automatización-Editorial
