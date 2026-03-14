@@ -33,7 +33,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         )
         self.boton_cargar.pack(side="left", padx=10)
 
-        # ¡NUEVO BOTÓN VERDE PARA EXPORTAR!
+        # Botón de exportar
         self.boton_exportar = ctk.CTkButton(
             self.frame_botones, 
             text="Generar HTML Limpio", 
@@ -105,32 +105,32 @@ class LimpiadorEditorialApp(ctk.CTk):
             
         menu_clasificacion.pack(side="right", padx=10, pady=10)
 
-        # ¡CLAVE! Guardamos la referencia del menú y el texto en nuestra memoria
+        # Guardamos la referencia del menú y el texto en nuestra memoria
         self.datos_bloques.append({
             "contenido": contenido,
             "menu": menu_clasificacion
         })
 
-    # ¡LA FUNCIÓN MÁGICA QUE CREA EL HTML!
+    # Crea el HTML
     def evento_exportar_html(self):
         if not self.datos_bloques:
             print("Carga un PDF primero antes de exportar.")
             return
 
-        # Te pregunta dónde quieres guardar el nuevo archivo HTML
+        # Te pregunta dónde se guarda el nuevo archivo HTML
         ruta_guardar = filedialog.asksaveasfilename(
             defaultextension=".html",
             filetypes=[("Archivo HTML", "*.html")],
             title="Guardar HTML Semántico"
         )
         
-        if not ruta_guardar: # Si cancelas la ventana, no hace nada
+        if not ruta_guardar: # Si cancela la ventana, no hace nada
             return
 
-        # Empezamos a armar el esqueleto del HTML
+        # Base del HTML
         html_final = "<!DOCTYPE html>\n<html lang='es'>\n<head>\n<meta charset='UTF-8'>\n<title>Artículo UNAM</title>\n</head>\n<body>\n"
 
-        # Leemos qué elegiste en cada menú
+        # Lee cada opción del menú
         for bloque in self.datos_bloques:
             eleccion = bloque["menu"].get()
             texto = bloque["contenido"]
@@ -152,7 +152,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         with open(ruta_guardar, "w", encoding="utf-8") as archivo:
             archivo.write(html_final)
             
-        print("¡BOOM! HTML guardado con éxito.")
+        print("HTML guardado.")
 
 if __name__ == "__main__":
     app = LimpiadorEditorialApp()
