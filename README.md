@@ -49,5 +49,3 @@ Para mantener la integridad del código y asegurar un desarrollo ordenado, el eq
 
 *Desarrollado y mantenido por el equipo de Ingeniería en Computación y Análisis de Datos.*
 
-```
-
