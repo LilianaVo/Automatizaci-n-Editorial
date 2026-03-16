@@ -29,26 +29,27 @@ HTML_CSS = """
     color: var(--texto); background: #fff;
     max-width: 880px; margin: 0 auto; padding: 32px 52px 64px; hyphens: auto;
   }
-  h1.titulo-principal { font-family:var(--serif); font-size:14pt; font-weight:700; line-height:1.3; margin:20px 0 8px; }
-  h2.titulo-secundario { font-family:var(--serif); font-size:14pt; font-weight:700; font-style:italic; color:#333; margin-bottom:16px; line-height:1.3; }
-  .autores { font-family:var(--serif); font-size:13pt; margin:12px 0 4px; line-height:1.6; }
+  h1.titulo-principal  { font-family:var(--serif); font-size:14pt; font-weight:700; font-style:normal;  line-height:1.3; margin:20px 0 6px; }
+  h2.titulo-secundario { font-family:var(--serif); font-size:14pt; font-weight:700; font-style:italic;  line-height:1.3; color:#222; margin-bottom:14px; }
+  .autores     { font-family:var(--serif); font-size:13pt; font-weight:400; font-style:normal; margin:12px 0 4px; line-height:1.6; }
   .autores a.orcid-autor { color:#1a3a5c; text-decoration:underline; text-underline-offset:3px; text-decoration-color:#A6CE39; text-decoration-thickness:2px; }
   .autores a.orcid-autor:hover { text-decoration-color:#1a3a5c; }
   .autores .orcid-icon img { width:16px; height:16px; vertical-align:middle; margin-left:2px; }
-  .filiaciones { font-family:var(--serif); font-size:9pt; color:var(--gris); margin:3px 0; line-height:1.5; }
-  .email { font-family:var(--serif); font-size:12pt; font-style:italic; color:#1a5276; margin-bottom:6px; }
-  h2.seccion { font-family:var(--serif); font-size:10pt; font-weight:700; text-align:center; margin:20px 0 8px; }
+  .filiaciones { font-family:var(--serif); font-size:9pt; font-weight:400; font-style:normal; color:var(--gris); margin:2px 0; line-height:1.5; }
+  .email       { font-family:var(--serif); font-size:9pt;  font-style:italic; color:#1a5276; margin-bottom:6px; }
+  h2.seccion { font-family:var(--serif); font-size:13pt; font-weight:700; text-align:center; margin:24px 0 10px; }
+  h2.seccion.con-linea { border-top:1px solid var(--linea); padding-top:18px; margin-top:32px; }
   /* Subtítulos nivel 1 (1. 2. 3.) — negritas */
-  h3.subseccion { font-family:var(--serif); font-size:10pt; font-weight:700; margin:18px 0 6px; }
-  /* Subtítulos nivel 2+ (1.1 1.2 2.3) — sin negritas */
-  h3.subseccion-bajo { font-family:var(--serif); font-size:10pt; font-weight:400; font-style:italic; margin:14px 0 5px; }
+  h3.subseccion { font-family:var(--serif); font-size:12pt; font-weight:700; margin:20px 0 8px; }
+  h3.subseccion.primer-nivel1 { border-top:1px solid var(--linea); padding-top:18px; margin-top:32px; }
+  h3.subseccion-bajo{ font-family:var(--serif); font-size:12pt; font-weight:700; font-style:italic;  margin:16px 0 6px; }
   p.resumen { font-family:var(--serif); font-size:9pt; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
   p.abstract { font-family:var(--tnr); font-size:9pt; font-style:italic; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
   p { font-family:var(--serif); font-size:10pt; text-align:justify; text-indent:1.4em; margin-bottom:8px; font-style:normal; }
   p.sin-sangria { text-indent:0; }
   /* NO aplicar cursiva automática a párrafos de cuerpo */
   /* Cuerpo del artículo: Source Serif Pro 12pt (10+2), desde sección 1 hasta Referencias */
-  p.cuerpo { font-family:var(--serif); font-size:12pt; text-align:justify; text-indent:1.4em; margin-bottom:9px; font-style:normal; color:var(--texto); }
+  p.cuerpo { font-family:var(--serif); font-size:12pt; font-style:normal !important; font-weight:normal; text-align:justify; text-indent:1.4em; margin-bottom:9px; color:var(--texto); }
   .keywords { font-family:var(--serif); font-size:9pt; margin:4px 0 16px; text-indent:0; }
   ol.referencias { padding-left:2em; margin:8px 0 16px; }
   ol.referencias li { font-family:var(--serif); font-size:10pt; margin-bottom:6px; line-height:1.5; }
@@ -119,20 +120,49 @@ def esc(t: str) -> str:
     return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
 
-def _insertar_orcid(texto: str) -> str:
+def _insertar_orcid(texto: str, autores_orcid: list | None = None) -> str:
     """
-    Recibe el texto crudo de autores, separa por ';', limpia superíndices,
-    envuelve cada nombre en un <a> subrayado que apunta a búsqueda ORCID.
+    Construye el HTML de autores con links ORCID.
+    Si autores_orcid está disponible, lo usa directamente (nombres + IDs exactos).
+    Si no, fallback a búsqueda por nombre en orcid.org.
     """
+    _ORCID_BASE = "https://orcid.org/"
+    _ORCID_SEARCH = "https://orcid.org/orcid-search/search?searchQuery="
+
+    if autores_orcid:
+        # Usar la lista manual — nombres y ORCIDs exactos
+        partes = []
+        for a in autores_orcid:
+            nombre = a["nombre"].strip()
+            orcid  = a["orcid"].strip()
+            if not nombre: continue
+            nombre_esc = esc(nombre)
+            if orcid:
+                url = _ORCID_BASE + orcid
+                ico = (f'<a class="orcid-icon" href="{url}" target="_blank" '
+                       f'title="ORCID: {orcid}">'
+                       f'<img src="{_ORCID_SVG}" alt="ORCID"></a>')
+                partes.append(
+                    f'<a class="orcid-autor" href="{url}" target="_blank" '
+                    f'title="ORCID: {orcid}">{nombre_esc}</a>{ico}')
+            else:
+                # Sin ORCID: mostrar nombre sin link pero con búsqueda
+                q   = re.sub(r"\s+", "+", nombre)
+                url = _ORCID_SEARCH + q
+                partes.append(
+                    f'<a class="orcid-autor" href="{url}" target="_blank" '
+                    f'title="Buscar en ORCID">{nombre_esc}</a>')
+        return "; ".join(partes)
+
+    # Fallback: parsear el texto crudo del PDF
     partes = [p.strip() for p in texto.split(";") if p.strip()]
     result = []
     for parte in partes:
         nombre_raw = re.sub(r"[\d,\*\u00b9\u00b2\u00b3\u2070-\u209f]+$", "", parte).strip()
-        if not nombre_raw:
-            continue
+        if not nombre_raw: continue
         nombre_esc = esc(nombre_raw)
         q   = re.sub(r"\s+", "+", nombre_raw)
-        url = f"https://orcid.org/orcid-search/search?searchQuery={q}"
+        url = _ORCID_SEARCH + q
         ico = (f'<a class="orcid-icon" href="{url}" target="_blank" title="Buscar en ORCID">'
                f'<img src="{_ORCID_SVG}" alt="ORCID"></a>')
         result.append(
@@ -222,7 +252,9 @@ class LimpiadorEditorialApp(ctk.CTk):
         self.datos_bloques:        list[dict] = []
         self.referencias_externas: list[str]  = []
         self.figuras_manuales:     list[dict] = []
-        self.tablas_manuales:      list[dict] = []   # {"ruta", "titulo", "_var"}
+        self.tablas_manuales:      list[dict] = []
+        self.autores_orcid:        list[dict] = []
+        self.afiliaciones_txt:     str        = ""   # texto crudo del .txt de afiliaciones
 
         # ── Encabezado ──────────────────────────────────────────
         top = ctk.CTkFrame(self, fg_color="transparent")
@@ -248,10 +280,14 @@ class LimpiadorEditorialApp(ctk.CTk):
         self.tabs.pack(fill="both", expand=True, padx=14, pady=(4, 2))
 
         self.tabs.add("📄  PDF")
+        self.tabs.add("👥  Autores")
+        self.tabs.add("🏛️  Afiliaciones")
         self.tabs.add("📋  Referencias")
         self.tabs.add("🖼️  Figuras")
 
         self._construir_tab_pdf()
+        self._construir_tab_autores()
+        self._construir_tab_afiliaciones()
         self._construir_tab_referencias()
         self._construir_tab_figuras()
 
@@ -331,7 +367,176 @@ class LimpiadorEditorialApp(ctk.CTk):
         self.frame_scroll.pack(fill="both", expand=True, padx=0, pady=(0, 2))
 
     # ═════════════════════════════════════════════════════════════
-    # TAB 2 — REFERENCIAS
+    # TAB 2 — AUTORES / ORCID
+    # ═════════════════════════════════════════════════════════════
+
+    def _construir_tab_autores(self):
+        tab = self.tabs.tab("👥  Autores")
+
+        ctk.CTkLabel(
+            tab,
+            text="Agrega cada autor. Del link ORCID copia solo la parte numérica: 0000-0001-XXXX-XXXX",
+            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa"
+        ).pack(anchor="w", padx=14, pady=(10, 4))
+
+        bf = ctk.CTkFrame(tab, fg_color="transparent")
+        bf.pack(fill="x", padx=10, pady=(0, 4))
+        ctk.CTkButton(bf, text="➕  Agregar autor",
+                      command=self._agregar_autor,
+                      fg_color="#1565c0", hover_color="#0d47a1",
+                      width=160, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+        ctk.CTkButton(bf, text="🗑  Limpiar todo",
+                      command=self._limpiar_autores,
+                      fg_color="#6d4c41", hover_color="#4e342e",
+                      width=120, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+        self._autores_lbl = ctk.CTkLabel(
+            bf, text="Sin autores cargados",
+            font=ctk.CTkFont(size=11), text_color="#888")
+        self._autores_lbl.pack(side="left", padx=10)
+
+        # Encabezado columnas
+        hdr = ctk.CTkFrame(tab, fg_color="#1a2a3a", corner_radius=4)
+        hdr.pack(fill="x", padx=10, pady=(2, 0))
+        hdr.columnconfigure(1, weight=2)
+        hdr.columnconfigure(2, weight=1)
+        ctk.CTkLabel(hdr, text="#", width=36,
+                     font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color="#aaa").grid(row=0, column=0, padx=6, pady=4)
+        ctk.CTkLabel(hdr, text="Apellido, Nombre",
+                     font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color="#aaa", anchor="w").grid(row=0, column=1, padx=4, pady=4, sticky="ew")
+        ctk.CTkLabel(hdr, text="ORCID  (solo números: 0000-0001-2345-6789)",
+                     font=ctk.CTkFont(size=10, weight="bold"),
+                     text_color="#aaa", anchor="w").grid(row=0, column=2, padx=4, pady=4, sticky="ew")
+        ctk.CTkLabel(hdr, text="", width=36,
+                     font=ctk.CTkFont(size=10)).grid(row=0, column=3, padx=6)
+
+        self._autores_scroll = ctk.CTkScrollableFrame(tab)
+        self._autores_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+
+    def _agregar_autor(self):
+        self._sync_autores()
+        self.autores_orcid.append({"nombre": "", "orcid": ""})
+        self._refrescar_lista_autores()
+
+    def _sync_autores(self):
+        for a in self.autores_orcid:
+            if "_var_nom" in a: a["nombre"] = a["_var_nom"].get()
+            if "_var_orc" in a: a["orcid"]  = a["_var_orc"].get()
+
+    def _refrescar_lista_autores(self):
+        for w in self._autores_scroll.winfo_children():
+            w.destroy()
+        for i, autor in enumerate(self.autores_orcid):
+            row = ctk.CTkFrame(self._autores_scroll, fg_color="#1e2a3a", corner_radius=4)
+            row.pack(fill="x", padx=2, pady=2)
+            row.columnconfigure(1, weight=2)
+            row.columnconfigure(2, weight=1)
+            ctk.CTkLabel(row, text=f"{i+1}", width=36,
+                         font=ctk.CTkFont(size=11, weight="bold"),
+                         text_color="#7986cb").grid(row=0, column=0, padx=6, pady=6)
+            var_nom = ctk.StringVar(value=autor.get("nombre", ""))
+            ctk.CTkEntry(row, textvariable=var_nom,
+                         placeholder_text="Apellido, Nombre",
+                         font=ctk.CTkFont(size=11), height=32).grid(
+                row=0, column=1, padx=4, pady=6, sticky="ew")
+            autor["_var_nom"] = var_nom
+            var_orc = ctk.StringVar(value=autor.get("orcid", ""))
+            ctk.CTkEntry(row, textvariable=var_orc,
+                         placeholder_text="0000-0001-2345-6789",
+                         font=ctk.CTkFont(size=11), height=32).grid(
+                row=0, column=2, padx=4, pady=6, sticky="ew")
+            autor["_var_orc"] = var_orc
+            def _borrar(idx=i):
+                self._sync_autores()
+                self.autores_orcid.pop(idx)
+                self._refrescar_lista_autores()
+            ctk.CTkButton(row, text="✕", width=28, height=28,
+                          fg_color="#b71c1c", hover_color="#7f0000",
+                          command=_borrar,
+                          font=ctk.CTkFont(size=11)).grid(row=0, column=3, padx=(0,6), pady=6)
+        n = len(self.autores_orcid)
+        self._autores_lbl.configure(
+            text=f"{n} autor{'es' if n!=1 else ''}" if n else "Sin autores cargados",
+            text_color="#90caf9" if n else "#888")
+
+    def _aplicar_autores(self):
+        self._sync_autores()
+
+    # ═════════════════════════════════════════════════════════════
+    # TAB 3 — AFILIACIONES
+    # ═════════════════════════════════════════════════════════════
+
+    def _construir_tab_afiliaciones(self):
+        tab = self.tabs.tab("🏛️  Afiliaciones")
+
+        ctk.CTkLabel(
+            tab,
+            text=(
+                "Carga un .txt con las afiliaciones, una por línea:\n"
+                "    1 Colección de Paleontología, Facultad...\n"
+                "    2 Departamento de Paleontología, Instituto...\n"
+                "    * pativel@unam.mx\n"
+                "El número inicial se convierte en superíndice. Los correos se vinculan automáticamente."
+            ),
+            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa"
+        ).pack(anchor="w", padx=14, pady=(12, 6))
+
+        bf = ctk.CTkFrame(tab, fg_color="transparent")
+        bf.pack(fill="x", padx=10, pady=(0, 6))
+
+        ctk.CTkButton(bf, text="📂  Cargar .txt",
+                      command=self._cargar_afiliaciones,
+                      fg_color="#1b5e20", hover_color="#2e7d32",
+                      width=160, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+        ctk.CTkButton(bf, text="🗑  Limpiar",
+                      command=self._limpiar_afiliaciones,
+                      fg_color="#6d4c41", hover_color="#4e342e",
+                      width=100, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+        self._afil_lbl = ctk.CTkLabel(
+            bf, text="Sin afiliaciones cargadas",
+            font=ctk.CTkFont(size=11), text_color="#888")
+        self._afil_lbl.pack(side="left", padx=10)
+
+        self._afil_scroll = ctk.CTkScrollableFrame(tab, label_text="Afiliaciones cargadas")
+        self._afil_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 6))
+
+    def _cargar_afiliaciones(self):
+        ruta = filedialog.askopenfilename(
+            title="Selecciona .txt de afiliaciones",
+            filetypes=[("Texto", "*.txt"), ("Todos", "*.*")])
+        if not ruta: return
+        with open(ruta, encoding="utf-8", errors="replace") as f:
+            self.afiliaciones_txt = f.read()
+        self._refrescar_afiliaciones()
+
+    def _limpiar_afiliaciones(self):
+        self.afiliaciones_txt = ""
+        for w in self._afil_scroll.winfo_children():
+            w.destroy()
+        self._afil_lbl.configure(text="Sin afiliaciones cargadas", text_color="#888")
+
+    def _refrescar_afiliaciones(self):
+        for w in self._afil_scroll.winfo_children():
+            w.destroy()
+        lineas = [l for l in self.afiliaciones_txt.splitlines() if l.strip()]
+        for linea in lineas:
+            frame = ctk.CTkFrame(self._afil_scroll, fg_color="#1a2a1a", corner_radius=4)
+            frame.pack(fill="x", padx=2, pady=2)
+            ctk.CTkLabel(frame, text=linea, font=ctk.CTkFont(size=11),
+                         justify="left", anchor="w", wraplength=700).pack(
+                padx=10, pady=5, fill="x")
+        n = len(lineas)
+        self._afil_lbl.configure(
+            text=f"{n} afiliación{'es' if n != 1 else ''}" if n else "Sin afiliaciones",
+            text_color="#a5d6a7" if n else "#888")
+
+    def _limpiar_autores(self):
+        self.autores_orcid = []
+        self._refrescar_lista_autores()
+
+    # ═════════════════════════════════════════════════════════════
+    # TAB 3 — REFERENCIAS
     # ═════════════════════════════════════════════════════════════
 
     def _construir_tab_referencias(self):
@@ -602,7 +807,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             ])
         if not rutas: return
         for ruta in rutas:
-            self.figuras_manuales.append({"ruta": ruta, "pie": ""})
+            self.figuras_manuales.append({"ruta": ruta, "pie": "", "ancla": ""})
         self._refrescar_lista_figuras()
         self._set_status(f"✓ {len(self.figuras_manuales)} figura(s) en total.")
 
@@ -618,53 +823,57 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         for i, fig in enumerate(self.figuras_manuales):
             num = i + 1
-            frame = ctk.CTkFrame(self._figs_scroll,
-                                  fg_color="#1e2a1e", corner_radius=6)
-            frame.pack(fill="x", padx=4, pady=4)
+            frame = ctk.CTkFrame(self._figs_scroll, fg_color="#1e2a1e", corner_radius=6)
+            frame.pack(fill="x", padx=4, pady=6)
             frame.columnconfigure(2, weight=1)
 
             # Miniatura
             try:
                 img_pil = PILImage.open(fig["ruta"])
-                img_pil.thumbnail((80, 80))
+                img_pil.thumbnail((72, 72))
                 thumb   = ctk.CTkImage(img_pil, size=img_pil.size)
                 ctk.CTkLabel(frame, image=thumb, text="").grid(
-                    row=0, column=0, rowspan=2, padx=(8, 6), pady=6)
+                    row=0, column=0, rowspan=3, padx=(8, 6), pady=8)
             except Exception:
-                ctk.CTkLabel(frame, text="🖼️", font=ctk.CTkFont(size=30),
-                             width=80).grid(row=0, column=0, rowspan=2,
-                                            padx=(8, 6), pady=6)
+                ctk.CTkLabel(frame, text="🖼️", font=ctk.CTkFont(size=28),
+                             width=72).grid(row=0, column=0, rowspan=3,
+                                            padx=(8, 6), pady=8)
 
-            # Número de figura (fijo)
-            ctk.CTkLabel(frame,
-                         text=f"Figura {num}",
+            ctk.CTkLabel(frame, text=f"Figura {num}",
                          font=ctk.CTkFont(size=11, weight="bold"),
                          text_color="#a5d6a7").grid(
-                row=0, column=1, padx=(0, 8), pady=(6, 0), sticky="w")
+                row=0, column=1, padx=(0, 8), pady=(8, 0), sticky="w")
 
-            # Nombre de archivo
-            ctk.CTkLabel(frame,
-                         text=os.path.basename(fig["ruta"]),
-                         font=ctk.CTkFont(size=9), text_color="#888").grid(
-                row=1, column=1, padx=(0, 8), pady=(0, 6), sticky="w")
+            ctk.CTkLabel(frame, text=os.path.basename(fig["ruta"]),
+                         font=ctk.CTkFont(size=9), text_color="#666").grid(
+                row=1, column=1, padx=(0, 8), sticky="w")
 
-            # Campo de texto para el pie de figura
-            pie_var = ctk.StringVar(value=fig["pie"])
-            entry = ctk.CTkEntry(
-                frame,
-                placeholder_text=f"Pie de la Figura {num}…",
-                textvariable=pie_var,
-                font=ctk.CTkFont(size=11),
-                height=36)
-            entry.grid(row=0, column=2, columnspan=2,
-                       rowspan=2, padx=(0, 8), pady=8, sticky="ew")
-
-            # Guardar referencia al StringVar para leer al exportar
+            # Campo pie de figura
+            pie_var = ctk.StringVar(value=fig.get("pie", ""))
+            ctk.CTkEntry(frame,
+                         placeholder_text=f"Pie de la Figura {num}…",
+                         textvariable=pie_var,
+                         font=ctk.CTkFont(size=11), height=30).grid(
+                row=0, column=2, columnspan=2,
+                padx=(0, 8), pady=(8, 2), sticky="ew")
             fig["_var"] = pie_var
 
-            # Botón eliminar
+            # Campo ancla
+            ctk.CTkLabel(frame,
+                         text="📍 Pega aquí el texto del párrafo donde va la figura:",
+                         font=ctk.CTkFont(size=9), text_color="#a5d6a7").grid(
+                row=2, column=1, columnspan=3, padx=(0, 8), pady=(4, 0), sticky="w")
+
+            anc_var = ctk.StringVar(value=fig.get("ancla", ""))
+            ctk.CTkEntry(frame,
+                         placeholder_text='Ej: "Se muestra en la Figura 1A-B."',
+                         textvariable=anc_var,
+                         font=ctk.CTkFont(size=10), height=30).grid(
+                row=3, column=1, columnspan=3,
+                padx=(0, 8), pady=(0, 8), sticky="ew")
+            fig["_var_anc"] = anc_var
+
             def _borrar(idx=i):
-                # Leer pies actualizados antes de borrar
                 self._sync_pies()
                 self.figuras_manuales.pop(idx)
                 self._refrescar_lista_figuras()
@@ -674,7 +883,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                           fg_color="#b71c1c", hover_color="#7f0000",
                           command=_borrar,
                           font=ctk.CTkFont(size=12)).grid(
-                row=0, column=4, padx=(0, 6), pady=6)
+                row=0, column=4, padx=(0, 6), pady=8)
 
         n = len(self.figuras_manuales)
         self._figs_count_lbl.configure(
@@ -682,10 +891,12 @@ class LimpiadorEditorialApp(ctk.CTk):
             text_color="#a5d6a7" if n else "#888")
 
     def _sync_pies(self):
-        """Sincroniza los campos de texto con self.figuras_manuales."""
+        """Sincroniza pie y ancla con self.figuras_manuales."""
         for fig in self.figuras_manuales:
             if "_var" in fig:
                 fig["pie"] = fig["_var"].get()
+            if "_var_anc" in fig:
+                fig["ancla"] = fig["_var_anc"].get()
 
     def _sync_titulos_tablas(self):
         for tab in self.tablas_manuales:
@@ -799,10 +1010,29 @@ class LimpiadorEditorialApp(ctk.CTk):
         return avg, bold, italic, dom
 
     def _texto_bloque(self, block):
-        partes = ["".join(s["text"] for s in l.get("spans", []))
-                  for l in block.get("lines", [])]
-        t = re.sub(r"\s+", " ", " ".join(partes)).strip()
-        return re.sub(r"(\w)-\s+(\w)", r"\1\2", t)
+        """Extrae el texto del bloque reconectando palabras cortadas por guión."""
+        lineas = []
+        for line in block.get("lines", []):
+            lineas.append("".join(s["text"] for s in line.get("spans", [])))
+
+        # Unir líneas: si una termina en guión (- o ­), pegar directamente
+        resultado = ""
+        for i, linea in enumerate(lineas):
+            if i == 0:
+                resultado = linea
+            else:
+                if resultado.endswith("-") or resultado.endswith("\u00ad"):
+                    # Guión de corte: quitar guión y pegar sin espacio
+                    resultado = resultado.rstrip("-\u00ad") + linea.lstrip()
+                else:
+                    resultado = resultado + " " + linea
+
+        # Limpiar espacios múltiples y soft-hyphens residuales
+        resultado = resultado.replace("\u00ad", "")       # soft hyphens
+        resultado = re.sub(r"\s+", " ", resultado).strip()
+        # Guiones de corte que quedaron con espacio: "pos­ teriormente" → "posteriormente"
+        resultado = re.sub(r"(\w)-\s+(\w)", r"\1\2", resultado)
+        return resultado
 
     def _clasificar_auto(self, texto, size, bold, italic, font, body_size):
         t, t_low = texto.strip(), texto.strip().lower()
@@ -879,18 +1109,57 @@ class LimpiadorEditorialApp(ctk.CTk):
                                 all_sizes.append(round(span["size"]))
             body_size = Counter(all_sizes).most_common(1)[0][0] if all_sizes else 12
 
-            # ── Filtro de cornisas: solo por posición, desde página 2 ──────
+            # ── Filtro de cornisas: posición + patrón de texto ────────────
+            # Umbral conservador: solo top 5% / bottom 5%.
+            # DOIs y números de página están en el 2-4%, nunca más abajo.
+            # Encabezados de sección legítimos (Abstract, 1. Intro…) pueden
+            # estar al 6-8% de la página y NO deben filtrarse.
+            _pat_cornisa_txt = re.compile(
+                r"^(https?://doi\.org/|doi\.org/|\d{1,3}$"
+                r"|paleontolog[íi]a mexicana\s+vol\."
+                r"|velasco-de le[oó]n et al"
+                r"|ra[íi]ces de la paleobotánica)",
+                re.IGNORECASE
+            )
             def _es_cornisa(by0, by1, page_h, pnum):
                 if pnum == 0:
                     return False
-                return by1 < page_h * 0.09 or by0 > page_h * 0.91
+                # Filtrar por posición muy estricta (top/bottom 5%)
+                return by1 < page_h * 0.05 or by0 > page_h * 0.95
 
             # ─── PASO 1: extraer todos los bloques de texto crudos ────────
-            raw = []   # list of {"texto", "size", "bold", "italic", "font"}
+            raw = []   # list of {"texto", "size", "bold", "italic", "font", "pnum"}
             for pnum in range(len(doc)):
                 page   = doc.load_page(pnum)
                 page_h = page.rect.height
-                for block in page.get_text("dict")["blocks"]:
+                page_w = page.rect.width
+                all_blocks = page.get_text("dict")["blocks"]
+
+                # ── Detectar si la página tiene dos columnas ───────────────
+                # Tomamos el centroide X de cada bloque de texto y vemos si
+                # se agrupan claramente en dos mitades.
+                text_blocks = [b for b in all_blocks if b["type"] == 0]
+                cx_list = [(b["bbox"][0] + b["bbox"][2]) / 2 for b in text_blocks]
+
+                # Si hay bloques a ambos lados del 55% de la página → dos columnas
+                mid = page_w * 0.55
+                left_cx  = [cx for cx in cx_list if cx < mid]
+                right_cx = [cx for cx in cx_list if cx >= mid]
+                two_cols = len(left_cx) >= 2 and len(right_cx) >= 2
+
+                if two_cols:
+                    # Separar en columna izquierda y derecha, cada una ordenada por Y
+                    left_blocks  = sorted(
+                        [b for b in all_blocks if (b["bbox"][0]+b["bbox"][2])/2 < mid],
+                        key=lambda b: b["bbox"][1])
+                    right_blocks = sorted(
+                        [b for b in all_blocks if (b["bbox"][0]+b["bbox"][2])/2 >= mid],
+                        key=lambda b: b["bbox"][1])
+                    ordered_blocks = left_blocks + right_blocks
+                else:
+                    ordered_blocks = sorted(all_blocks, key=lambda b: b["bbox"][1])
+
+                for block in ordered_blocks:
                     if block["type"] == 1:
                         x0, y0, x1, y1 = block["bbox"]
                         w_px, h_px = abs(x1-x0), abs(y1-y0)
@@ -900,7 +1169,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                             "texto": f"[IMAGEN {w_px:.0f}×{h_px:.0f}px]",
                             "clasificacion": "Ignorar" if ignorar else "Imagen",
                             "size": 0, "bold": False, "italic": False,
-                            "imagen": True,
+                            "imagen": True, "pnum": pnum,
                         })
                         continue
                     if block["type"] != 0:
@@ -912,10 +1181,15 @@ class LimpiadorEditorialApp(ctk.CTk):
                     texto = self._texto_bloque(block)
                     if not texto or len(texto) < 3:
                         continue
+                    # Zona 5-12%: filtrar solo si el texto parece cornisa
+                    if pnum > 0 and by1 < page_h * 0.12:
+                        if _pat_cornisa_txt.search(texto.strip()[:100]):
+                            continue
                     raw.append({
                         "texto": texto, "size": size,
                         "bold": bold, "italic": italic, "font": font,
                         "imagen": False, "clasificacion": None,
+                        "pnum": pnum,
                     })
 
             # ─── PASO 2: detectar zonas ───────────────────────────────────
@@ -988,7 +1262,9 @@ class LimpiadorEditorialApp(ctk.CTk):
                     elif t_low in _SECCIONES_EXACTAS:
                         cls = "Encabezado sección"
                     elif re.search(r"\btabla\s+\d+[\.\:\s]", t_low):
-                        cls = "Título tabla"   # "Tabla 1. descripción"
+                        cls = "Título tabla"
+                    elif re.match(r"^figura\s+\d+[\.\:\s]", t_low):
+                        cls = "Pie de figura"   # pie de foto del PDF → ignorar en HTML
                     else:
                         cls = "Cuerpo"
                 else:
@@ -1006,6 +1282,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                     "size": r["size"],
                     "bold": r["bold"],
                     "italic": r["italic"],
+                    "pnum": r.get("pnum", 0),
                 })
 
             # ─── PASO 3b: suprimir filas de tabla del PDF ─────────────────
@@ -1017,8 +1294,9 @@ class LimpiadorEditorialApp(ctk.CTk):
             #    o un encabezado/subencabezado
 
             # Patrón universal de fila de tabla académica:
-            # - Empieza con año (1800-2099) seguido de texto corto
-            # - O es un bloque muy corto (<80 chars) con formato de celda
+            # SOLO activar proactivamente si empieza con año (1800-2099).
+            # La supresión genérica de bloques cortos causaba falsos positivos
+            # con párrafos partidos por columnas del PDF.
             _pat_fila_tabla = re.compile(
                 r"^(1[89]\d{2}|20\d{2})\s+\S"   # año AAAA + contenido
             )
@@ -1027,14 +1305,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                 t   = item["contenido"].strip()
                 cls = item["clasificacion"]
                 if cls != "Cuerpo": return False
-                # Fila que empieza con año
+                # Solo suprimir proactivamente si empieza con año de 4 dígitos
                 if _pat_fila_tabla.match(t): return True
-                # Bloque muy corto de celda (sin punto al final, sin mayúscula inicial
-                # que sea inicio de oración real)
-                if len(t) < 80 and not t.endswith(".") and not t.endswith("?"):
-                    # Si es todo números, años o nombres cortos → celda
-                    if re.match(r"^[\w\s\-\.,;&éáíóúüñÉÁÍÓÚÜÑ]{3,79}$", t):
-                        return True
                 return False
 
             bloques_sin_tabla_pdf = []
@@ -1072,10 +1344,17 @@ class LimpiadorEditorialApp(ctk.CTk):
                 else:
                     bloques_sin_tabla_pdf.append(item)
             bloques_raw = bloques_sin_tabla_pdf
+            # Encabezados que pueden llegar pegados al texto anterior
             HEADERS_EMBEBIDOS = [
-                "Non-technical Abstract", "Resumen no técnico",
-                "Resumen no Técnico", "Non-Technical Abstract",
+                "Non-technical Abstract", "Non-Technical Abstract",
+                "Resumen no técnico", "Resumen no Técnico",
+                # "Abstract" se maneja por separado con regex (ver abajo)
             ]
+            # Detectar "Abstract" sola sin cortar "Non-technical Abstract"
+            _pat_abstract_solo = re.compile(
+                r'(?<!\w)(Abstract)(?!\s+\w)',   # no precedida ni seguida de palabra
+                re.IGNORECASE
+            )
             # Patrón que identifica títulos de tabla embebidos en un bloque mayor.
             # Captura todo desde "Tabla N." hasta el fin de esa "oración" (hasta \n
             # o hasta el final del texto).
@@ -1103,7 +1382,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                         bloques_clean.append({
                             "contenido": hdr, "clasificacion": "Encabezado sección",
                             "size": item["size"], "bold": item["bold"],
-                            "italic": item["italic"],
+                            "italic": item["italic"], "pnum": item.get("pnum", 0),
                         })
                         despues = txt[idx+len(hdr):].strip()
                         if despues:
@@ -1114,6 +1393,33 @@ class LimpiadorEditorialApp(ctk.CTk):
 
                 if partido:
                     continue
+
+                # 1b. "Abstract" sola pegada al texto anterior
+                if not partido:
+                    m_abs = _pat_abstract_solo.search(txt)
+                    # Solo aplicar si no es parte de "Non-technical Abstract"
+                    if m_abs and m_abs.start() > 0:
+                        ctx_antes = txt[max(0, m_abs.start()-20):m_abs.start()].lower()
+                        es_non_technical = "technical" in ctx_antes or "técnico" in ctx_antes
+                        if not es_non_technical:
+                            antes = txt[:m_abs.start()].strip()
+                            despues = txt[m_abs.end():].strip()
+                            if antes:
+                                b1 = dict(item); b1["contenido"] = antes
+                                b1["clasificacion"] = self._clasificar_auto(
+                                    antes, item["size"], item["bold"],
+                                    item["italic"], "", body_size)
+                                bloques_clean.append(b1)
+                            bloques_clean.append({
+                                "contenido": "Abstract",
+                                "clasificacion": "Encabezado sección",
+                                "size": item["size"], "bold": item["bold"],
+                                "italic": item["italic"], "pnum": item.get("pnum", 0),
+                            })
+                            if despues:
+                                b3 = dict(item); b3["contenido"] = despues
+                                bloques_clean.append(b3)
+                            partido = True
 
                 # 2. Separar títulos de tabla embebidos en bloques Cuerpo
                 #    Ej: "...texto previo. Tabla 1. Lista de trabajos…\nTexto sig."
@@ -1135,6 +1441,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                             "size": item["size"],
                             "bold": item["bold"],
                             "italic": item["italic"],
+                            "pnum": item.get("pnum", 0),
                         })
 
                         if despues:
@@ -1149,46 +1456,81 @@ class LimpiadorEditorialApp(ctk.CTk):
                 bloques_clean.append(item)
 
             # ─── PASO 5: fusionar bloques Cuerpo/Normal consecutivos ──────
-            # Encabezados de nivel-1 rompen la fusión → cada sección queda
-            # como: [Subencabezado] + [Cuerpo fusionado]
-            # Clases que NUNCA se fusionan:
             NO_FUSIONAR = {
                 "Título principal", "Título secundario", "Autores",
                 "Filiación", "Email / Metadatos", "Cómo citar",
                 "Fecha manuscrito", "Encabezado sección",
                 "Subencabezado",
                 "Palabras clave", "Referencia", "Título tabla",
-                "Pie de figura", "Imagen", "Ignorar",
+                # "Pie de figura", "Imagen", "Ignorar" se saltan arriba sin flush
             }
-            # "Subencabezado-bajo" se embebe en el bloque Cuerpo con §SUB§
+
+            def _es_continuacion(anterior: str, siguiente: str,
+                                  pnum_ant: int, pnum_sig: int) -> bool:
+                """Une bloques de la misma oración cortada por salto de página/columna.
+                Regla universal: si el anterior no termina en punto/signo de cierre,
+                es continuación. Seguro porque el orden de columnas ya es correcto."""
+                if abs(pnum_sig - pnum_ant) > 1:
+                    return False
+                ant = anterior.rstrip()
+                if not ant:
+                    return False
+                # Termina en signo de cierre → párrafo completo, no unir
+                if ant[-1] in ".?!:":
+                    return False
+                # Todo lo demás es continuación (incluye guión, coma, sin signo)
+                return True
+
             fusionados = []
-            buf_txt  = []
+            buf_parrafos: list[tuple] = []  # (texto, pnum)
             buf_item = None
 
             def _vaciar():
                 nonlocal buf_item
-                if buf_txt and buf_item is not None:
+                if buf_parrafos and buf_item is not None:
                     merged = dict(buf_item)
-                    merged["contenido"]     = "\n\n".join(buf_txt)
+                    merged["contenido"]     = "\n\n".join(t for t, _ in buf_parrafos)
                     merged["clasificacion"] = "Cuerpo"
                     fusionados.append(merged)
-                buf_txt.clear()
+                buf_parrafos.clear()
                 buf_item = None
 
             for item in bloques_clean:
-                cls = item["clasificacion"]
+                cls  = item["clasificacion"]
+                pnum = item.get("pnum", 0)
+
+                # Imágenes, pies de figura e ignorados del PDF: saltarlos sin
+                # tocar el buffer. El texto antes y después de una imagen en el
+                # PDF debe quedar unido — las imágenes reales se insertan aparte.
+                if cls in ("Imagen", "Ignorar", "Pie de figura"):
+                    continue
+
                 if cls in NO_FUSIONAR:
                     _vaciar()
                     fusionados.append(item)
                 elif cls == "Subencabezado-bajo":
                     if buf_item is None:
                         buf_item = item
-                    buf_txt.append("§SUB§" + item["contenido"])
+                    buf_parrafos.append(("§SUB§" + item["contenido"], pnum))
                 else:
-                    # Cuerpo / Normal / Resumen / Abstract → acumular
                     if buf_item is None:
                         buf_item = item
-                    buf_txt.append(item["contenido"])
+                    txt_nuevo = item["contenido"]
+                    if buf_parrafos:
+                        ultimo_txt, ultimo_pnum = buf_parrafos[-1]
+                        # Nunca fusionar con un §SUB§ anterior (subtítulo 1.1, 4.2…)
+                        if ultimo_txt.startswith("§SUB§"):
+                            buf_parrafos.append((txt_nuevo, pnum))
+                        elif _es_continuacion(ultimo_txt, txt_nuevo, ultimo_pnum, pnum):
+                            t = ultimo_txt.rstrip()
+                            if t.endswith("-"):
+                                buf_parrafos[-1] = (t[:-1] + txt_nuevo.lstrip(), pnum)
+                            else:
+                                buf_parrafos[-1] = (t + " " + txt_nuevo.lstrip(), pnum)
+                        else:
+                            buf_parrafos.append((txt_nuevo, pnum))
+                    else:
+                        buf_parrafos.append((txt_nuevo, pnum))
             _vaciar()
             bloques_utiles = fusionados
 
@@ -1267,6 +1609,61 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         self._sync_pies()
         self._sync_titulos_tablas()
+        self._sync_autores()   # sincronizar autores/ORCID antes de exportar
+
+        # Si hay autores manuales, el bloque de autores del PDF se ignora
+        # y se inyecta el bloque manual justo después del título secundario.
+        # ── Zona de autores del PDF: ignorar TODO entre titulo-secundario y Resumen ──
+        idx_tit_sec = next((i for i, b in enumerate(self.datos_bloques)
+                            if b["menu"].get() == "Título secundario"), None)
+        idx_resumen = next((i for i, b in enumerate(self.datos_bloques)
+                            if b["menu"].get() == "Encabezado sección"
+                            and re.match(r"resumen|abstract",
+                                         b["contenido"].strip().lower())
+                            and (idx_tit_sec is None or i > idx_tit_sec)), None)
+        zona_autores_pdf = set()
+        if idx_tit_sec is not None and idx_resumen is not None:
+            zona_autores_pdf = set(range(idx_tit_sec + 1, idx_resumen))
+
+        # ── Construir HTML de afiliaciones desde .txt ──────────────
+        def _afil_a_html(txt: str) -> str:
+            """Convierte líneas de afiliaciones a HTML con superíndices."""
+            html_lineas = []
+            for linea in txt.splitlines():
+                linea = linea.strip()
+                if not linea: continue
+                # Email: * correo@dominio → link mailto
+                if re.match(r"^\*\s*[\w\.\-]+@[\w\-\.]+\.\w{2,}", linea):
+                    email = re.search(r"[\w\.\-]+@[\w\-\.]+\.\w{2,}", linea)
+                    if email:
+                        e = email.group(0)
+                        html_lineas.append(
+                            f'<p class="email sin-sangria">'
+                            f'* <a href="mailto:{e}">{esc(e)}</a></p>')
+                    continue
+                # Número inicial → superíndice
+                m = re.match(r"^(\d+)\s+(.*)", linea, re.DOTALL)
+                if m:
+                    num, resto = m.group(1), m.group(2).strip()
+                    html_lineas.append(
+                        f'<p class="filiaciones sin-sangria">'
+                        f'<sup>{num}</sup> {esc(resto)}</p>')
+                else:
+                    html_lineas.append(
+                        f'<p class="filiaciones sin-sangria">{esc(linea)}</p>')
+            return "\n".join(html_lineas)
+
+        afil_html = _afil_a_html(self.afiliaciones_txt) if self.afiliaciones_txt else ""
+        afil_inyectado = False
+
+        autores_html_manual = ""
+        autores_inyectado   = False
+        primer_nivel1_emitido = False
+        if self.autores_orcid:
+            autores_html_manual = (
+                f'<p class="autores sin-sangria">'
+                f'{_insertar_orcid("", self.autores_orcid)}</p>'
+            )
 
         # Decidir qué referencias usar
         # Si hay externas → usar esas; los bloques "Referencia" del PDF → ignorar
@@ -1275,9 +1672,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                        else [b["contenido"] for b in self.datos_bloques
                              if b["menu"].get() == "Referencia"])
 
-        # ── Separar bloques ─────────────────────────────────────────
-        # Primero detectamos en qué índice empieza la sección de
-        # Referencias para no recolectar DOIs sueltos de las citas.
+        # ── Separar bloques (saltando zona de autores del PDF) ──────
         idx_refs_start = None
         for i, b in enumerate(self.datos_bloques):
             if b["menu"].get() == "Encabezado sección" and re.search(
@@ -1292,7 +1687,9 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         for i, b in enumerate(self.datos_bloques):
             cls = b["menu"].get()
-            # ¿Este bloque cae dentro de la zona de referencias del PDF?
+            # Saltar zona entre titulo-secundario y Resumen (autores rotos del PDF)
+            if i in zona_autores_pdf:
+                continue
             dentro_de_refs = (idx_refs_start is not None and i > idx_refs_start)
 
             if cls == "Cómo citar":
@@ -1348,10 +1745,16 @@ class LimpiadorEditorialApp(ctk.CTk):
                 lineas.append(f'<h1 class="titulo-principal">{texto}</h1>')
             elif cls == "Título secundario":
                 lineas.append(f'<h2 class="titulo-secundario">{texto}</h2>')
+                if autores_html_manual and not autores_inyectado:
+                    lineas.append(autores_html_manual)
+                    autores_inyectado = True
+                # Inyectar afiliaciones del txt justo después de los autores
+                if afil_html and not afil_inyectado:
+                    lineas.append(afil_html)
+                    afil_inyectado = True
             elif cls == "Autores":
-                # Pasar el contenido crudo (sin escapar) para que _insertar_orcid
-                # pueda dividir correctamente por ";" y luego escapar por dentro
-                lineas.append(f'<p class="autores sin-sangria">{_insertar_orcid(b["contenido"])}</p>')
+                if not autores_html_manual:
+                    lineas.append(f'<p class="autores sin-sangria">{_insertar_orcid(b["contenido"], None)}</p>')
             elif cls == "Filiación":
                 lineas.append(f'<p class="filiaciones sin-sangria">{texto}</p>')
             elif cls == "Email / Metadatos":
@@ -1360,14 +1763,27 @@ class LimpiadorEditorialApp(ctk.CTk):
                 lineas.append(f'<p class="email sin-sangria">{txt_link}</p>')
             elif cls == "Encabezado sección":
                 en_refs = bool(re.search(r"referencia|reference", texto, re.I))
-                lineas.append(f'<h2 class="seccion">{texto}</h2>')
+                # Secciones que llevan línea divisora encima
+                _SECCIONES_CON_LINEA = {
+                    "resumen", "abstract", "resumen no técnico", "non-technical abstract",
+                    "referencias", "references", "contribuciones de los autores",
+                    "agradecimientos", "acknowledgements",
+                }
+                con_linea = texto.strip().lower() in _SECCIONES_CON_LINEA
+                clase_h2  = 'seccion con-linea' if con_linea else 'seccion'
+                lineas.append(f'<h2 class="{clase_h2}">{texto}</h2>')
                 if en_refs and refs_a_usar:
                     lineas.append('<ol class="referencias">')
                     for ref in refs_a_usar:
                         lineas.append(f"  <li>{esc(ref)}</li>")
                     lineas.append("</ol>")
             elif cls == "Subencabezado":
-                lineas.append(f'<h3 class="subseccion">{texto}</h3>')
+                # El primer subtítulo numerado (1.) lleva línea divisora
+                if not primer_nivel1_emitido:
+                    lineas.append(f'<h3 class="subseccion primer-nivel1">{texto}</h3>')
+                    primer_nivel1_emitido = True
+                else:
+                    lineas.append(f'<h3 class="subseccion">{texto}</h3>')
             elif cls == "Subencabezado-bajo":
                 lineas.append(f'<h3 class="subseccion-bajo">{texto}</h3>')
             elif cls == "Resumen / Abstract":
@@ -1483,28 +1899,61 @@ class LimpiadorEditorialApp(ctk.CTk):
                 )
                 html_body = html_body.replace("</article>", seccion + "</article>", 1)
 
-        # Figuras manuales al final — insertar antes de </article>
+        # Figuras: inline por ancla, o al final las que no tienen
         figs = self.figuras_manuales
         if figs:
-            figs_html = '\n<div class="figuras-finales">\n<h2>Figuras</h2>\n'
-            pie_idx = 0
-            for i, fig in enumerate(figs, 1):
-                pie_txt = fig.get("pie", "") or next(
-                    (pies_pendientes[pie_idx + k]
-                     for k in range(len(pies_pendientes) - pie_idx)
-                     if pie_idx + k < len(pies_pendientes)),
-                    "")
+            def _fig_html(i, fig):
+                pie_txt = fig.get("pie", "")
                 try:
                     src = _img_to_base64(fig["ruta"])
                 except Exception:
                     src = "imagen.jpg"
-                figs_html += f'<figure id="fig{i}">\n'
-                figs_html += f'  <img src="{src}" alt="Figura {i}">\n'
-                cap = f"<strong>Figura {i}.</strong> {esc(pie_txt)}" if pie_txt \
-                      else f"<strong>Figura {i}.</strong>"
-                figs_html += f"  <figcaption>{cap}</figcaption>\n</figure>\n"
-            figs_html += "</div>\n"
-            html_body = html_body.replace("</article>", figs_html + "</article>", 1)
+                cap = (f"<strong>Figura {i}.</strong> {esc(pie_txt)}"
+                       if pie_txt else f"<strong>Figura {i}.</strong>")
+                return (f'<figure id="fig{i}" style="margin:18px auto;text-align:center;">\n'
+                        f'  <img src="{src}" alt="Figura {i}" '
+                        f'style="max-width:100%;border:1px solid #bbb;">\n'
+                        f'  <figcaption style="font-size:9pt;color:#555;'
+                        f'margin-top:5px;text-align:left;">{cap}</figcaption>\n'
+                        f'</figure>')
+
+            figs_inline  = []   # (pos, bloque_html)
+            figs_al_final = []
+
+            def _buscar_ancla_html(ancla, html):
+                if not ancla: return -1
+                ancla_norm = re.sub(r"­", "", ancla)
+                ancla_norm = re.sub(r"-\s+", "", ancla_norm)
+                ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
+                muestra = ancla_norm[-60:].strip()
+                escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
+                pattern = re.sub(r"\\ ", r"(?:(?:­|-)?\\s*(?:<[^>]+>)?\\s*)+", escaped)
+                m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
+                if m:
+                    cierre = html.find("</p>", m.end())
+                    return cierre + 4 if cierre != -1 else -1
+                return -1
+
+            for i, fig in enumerate(figs, 1):
+                ancla = fig.get("ancla", "").strip()
+                bloque = "\n" + _fig_html(i, fig) + "\n"
+                pos = _buscar_ancla_html(ancla, html_body)
+                if pos != -1:
+                    figs_inline.append((pos, bloque))
+                else:
+                    figs_al_final.append((i, fig))
+
+            # Insertar inline de mayor a menor posición
+            for pos, bloque in sorted(figs_inline, key=lambda x: -x[0]):
+                html_body = html_body[:pos] + bloque + html_body[pos:]
+
+            # Las sin ancla van al final
+            if figs_al_final:
+                figs_html = '\n<div class="figuras-finales">\n<h2>Figuras</h2>\n'
+                for i, fig in figs_al_final:
+                    figs_html += _fig_html(i, fig) + "\n"
+                figs_html += "</div>\n"
+                html_body = html_body.replace("</article>", figs_html + "</article>", 1)
 
         with open(ruta, "w", encoding="utf-8") as f:
             f.write(html_body)
