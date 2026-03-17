@@ -193,7 +193,17 @@ def _parsear_referencias(texto: str) -> list[str]:
 
 
 def _es_como_citar(t: str) -> bool:
-    return bool(re.match(r"(cómo citar|how to cite)", t.strip().lower()))
+    # Detección directa del prefijo
+    if re.match(r"(cómo citar|how to cite)", t.strip().lower()):
+        return True
+    # Continuación de cita: bloque corto que termina con patrón de revista
+    # Ej: "Título del artículo. Paleontología Mexicana, 15(1), 85–108."
+    # Contiene ", vol(num), pp–pp." sin ser una referencia larga
+    if (len(t) < 400 and
+            re.search(r",\s*\d+\s*\(\d+\)\s*,\s*\d+\s*[–\-]\s*\d+", t) and
+            not re.search(r"https?://", t)):
+        return True
+    return False
 
 
 def _es_fecha_mss(t: str) -> bool:
@@ -278,6 +288,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         self.autores_orcid:        list[dict] = []
         self.afiliaciones_txt:     str        = ""
         self._vista_estructura:    bool       = True
+        self._cc_pendiente:        dict|None  = None
 
         # ══════════════════════════════════════════════════════════
         # BARRA SUPERIOR — logo + título + exportar
@@ -559,8 +570,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "Carga un .txt con las afiliaciones, una por línea:\n"
                 "    1 Colección de Paleontología, Facultad...\n"
                 "    2 Departamento de Paleontología, Instituto...\n"
-                "    * correo@unam.mx\n"
-                "Los correos se vinculan automáticamente."
+                "    * pativel@unam.mx\n"
+                "El número inicial se convierte en superíndice. Los correos se vinculan automáticamente."
             ),
             font=ctk.CTkFont(size=15), justify="left", text_color="#aaa"
         ).pack(anchor="w", padx=14, pady=(12, 6))
@@ -671,6 +682,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             text=(
                 "Carga un .txt con las referencias numeradas.\n"
                 "Formatos aceptados:   1. Texto...   |   1) Texto...   |   [1] Texto...\n"
+                "Si cargas referencias aquí, los bloques 'Referencia' del PDF se ignorarán automáticamente."
             ),
             font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info.pack(anchor="w", padx=12, pady=(12, 6))
@@ -722,7 +734,8 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         info_f = ctk.CTkLabel(
             self._panel_figs,
-            text="Agrega imágenes con pie de figura. Numeración automática (Figura 1, 2…).\n",
+            text="Agrega imágenes con pie de figura. Numeración automática (Figura 1, 2…).\n"
+                 "Se insertan al final del HTML como en InDesign.",
             font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info_f.pack(anchor="w", padx=12, pady=(4, 6))
 
@@ -751,7 +764,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         info_t = ctk.CTkLabel(
             self._panel_tabs,
             text="Importa archivos Excel (.xlsx). Numeración automática (Tabla 1, 2…).\n"
-                 "Escribe el pie de la tabla y el texto del cuerpo correspondiente a insertar.",
+                 "Escribe el título de la tabla. Para insertar en el cuerpo usa el marcador [Tabla N].",
             font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info_t.pack(anchor="w", padx=12, pady=(4, 6))
 
@@ -1330,10 +1343,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "resumen", "abstract", "resumen no técnico",
                 "non-technical abstract", "palabras clave", "keywords",
                 "referencias", "references", "conclusiones", "conclusions",
-                "agradecimientos", "acknowledgements", "discusión",
-                "resultados", "introducción", "metodología",
-                "contribuciones de los autores",
+                "agradecimientos", "acknowledgements", "acknowledgments",
+                "discusión", "discussion", "resultados", "results",
+                "introducción", "introduction", "metodología", "methods",
+                "materials and methods", "materiales y métodos",
+                "contribuciones de los autores", "author contributions",
                 "conflicto de intereses", "conflict of interest",
+                "conflicts of interest", "declaración de conflictos",
             }
 
             zona_b_inicio = None   # índice en raw donde empieza el cuerpo
@@ -1386,12 +1402,15 @@ class LimpiadorEditorialApp(ctk.CTk):
                         cls = "Cómo citar"
                     elif _es_fecha_mss(texto) or _es_doi(texto):
                         cls = "Fecha manuscrito"
-                    elif t_low in _SECCIONES_EXACTAS:
+                    elif (t_low in _SECCIONES_EXACTAS
+                          and len(texto.strip()) < 60       # muy corto: solo el nombre
+                          and r["bold"]                      # DEBE ser negrita
+                          and round(r["size"]) >= 9):        # y tamaño razonable
                         cls = "Encabezado sección"
                     elif re.search(r"\btabla\s+\d+[\.\:\s]", t_low):
                         cls = "Título tabla"
                     elif re.match(r"^figura\s+\d+[\.\:\s]", t_low):
-                        cls = "Pie de figura"   # pie de foto del PDF → ignorar en HTML
+                        cls = "Pie de figura"
                     else:
                         cls = "Cuerpo"
                 else:
@@ -1412,6 +1431,36 @@ class LimpiadorEditorialApp(ctk.CTk):
                     "pnum": r.get("pnum", 0),
                 })
 
+            # Post-proceso Zona A: gestionar dos títulos (bilingüe)
+            # Caso 1: ambos clasificados como Título principal → demote el 2do
+            titulos_principales = [(i, b) for i, b in enumerate(bloques_raw)
+                                   if b["clasificacion"] == "Título principal"]
+            if len(titulos_principales) >= 2:
+                for idx, b in titulos_principales[1:]:
+                    bloques_raw[idx] = dict(b)
+                    bloques_raw[idx]["clasificacion"] = "Título secundario"
+
+            # Caso 2: un solo Título principal y el siguiente bloque es Cuerpo
+            # bold y corto (<300 chars) → es el título traducido con fuente ligeramente menor
+            elif len(titulos_principales) == 1:
+                idx_tit = titulos_principales[0][0]
+                # Buscar el primer bloque no-meta después del título
+                for j in range(idx_tit + 1, min(idx_tit + 4, len(bloques_raw))):
+                    b_next = bloques_raw[j]
+                    if b_next["clasificacion"] in ("Cuerpo", "Normal", "Título principal"):
+                        txt_next = b_next["contenido"].strip()
+                        # Es título si: bold, corto, no tiene punto al final de oración larga
+                        if (b_next.get("bold", False)
+                                and len(txt_next) < 400
+                                and not re.search(r"\(\d{4}\)", txt_next)  # no es cita
+                                and b_next["clasificacion"] != "Título principal"):
+                            bloques_raw[j] = dict(b_next)
+                            bloques_raw[j]["clasificacion"] = "Título secundario"
+                            break
+                    elif b_next["clasificacion"] in ("Autores", "Filiación",
+                                                      "Encabezado sección"):
+                        break
+
             # ─── PASO 3b: suprimir filas de tabla del PDF ─────────────────
             # Regla universal para todas las revistas:
             # 1. Al detectar "Título tabla" → activar modo tabla
@@ -1420,20 +1469,39 @@ class LimpiadorEditorialApp(ctk.CTk):
             # 3. Salir del modo cuando aparece un párrafo real (>200 chars + punto final)
             #    o un encabezado/subencabezado
 
-            # Patrón universal de fila de tabla académica:
-            # SOLO activar proactivamente si empieza con año (1800-2099).
-            # La supresión genérica de bloques cortos causaba falsos positivos
-            # con párrafos partidos por columnas del PDF.
-            _pat_fila_tabla = re.compile(
-                r"^(1[89]\d{2}|20\d{2})\s+\S"   # año AAAA + contenido
+            # Patrón 1: fila de datos — empieza con año 1800-2099
+            _pat_fila_año = re.compile(r"^(1[89]\d{2}|20\d{2})\s+\S")
+
+            # Patrón 2: encabezado de columnas de tabla — varias palabras cortas
+            # separadas por espacios, sin signos de puntuación de oración (.,:;?)
+            # Ej: "Título Año Autoría Ilustración n"
+            _pat_encabezado_tabla = re.compile(
+                r"^(?:[A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ]{0,15}"   # palabra corta
+                r"|\bn\b|\bN°?\b|\bNo\.?\b"                       # "n", "N°", "No."
+                r")(?:\s+(?:[A-ZÁÉÍÓÚÑA-Za-z]{1,20}|\d{1,5}))+$" # más tokens
             )
 
             def _parece_fila_tabla(item):
                 t   = item["contenido"].strip()
                 cls = item["clasificacion"]
                 if cls != "Cuerpo": return False
-                # Solo suprimir proactivamente si empieza con año de 4 dígitos
-                if _pat_fila_tabla.match(t): return True
+                # Fila de datos que empieza con año
+                if _pat_fila_año.match(t): return True
+                # Sin puntuación de oración → candidato a fila de tabla
+                if re.search(r"[,\.;:\?]", t):
+                    return False
+                tokens = t.split()
+                n_tokens = len(tokens)
+                if n_tokens < 3 or len(t) > 200:
+                    return False
+                # Encabezado de columnas: todas las palabras cortas (≤20 chars)
+                if all(len(tk) <= 20 for tk in tokens):
+                    # Al menos una palabra en mayúscula o es "n"/"N"
+                    if any(tk[0].isupper() or tk in ("n", "N") for tk in tokens):
+                        return True
+                # Fila de datos: contiene al menos un número
+                if any(tk.isdigit() for tk in tokens) and n_tokens <= 20:
+                    return True
                 return False
 
             bloques_sin_tabla_pdf = []
@@ -1475,11 +1543,16 @@ class LimpiadorEditorialApp(ctk.CTk):
             HEADERS_EMBEBIDOS = [
                 "Non-technical Abstract", "Non-Technical Abstract",
                 "Resumen no técnico", "Resumen no Técnico",
+                "Acknowledgments", "Acknowledgements", "Agradecimientos",
+                "Conflicts of interest", "Conflict of interest",
+                "Conflicto de intereses",
+                "Author contributions", "Contribuciones de los autores",
                 # "Abstract" se maneja por separado con regex (ver abajo)
             ]
             # Detectar "Abstract" sola sin cortar "Non-technical Abstract"
+            # ni palabras como "abstracto", "abstracts", "abstraction", etc.
             _pat_abstract_solo = re.compile(
-                r'(?<!\w)(Abstract)(?!\s+\w)',   # no precedida ni seguida de palabra
+                r'(?<!\w)(Abstract)(?![a-záéíóúüñ\w])',
                 re.IGNORECASE
             )
             # Patrón que identifica títulos de tabla embebidos en un bloque mayor.
@@ -1491,9 +1564,20 @@ class LimpiadorEditorialApp(ctk.CTk):
             )
 
             bloques_clean = []
+            en_zona_c = False   # True después del encabezado "Referencias"
             for item in bloques_raw:
                 txt    = item["contenido"]
                 partido = False
+
+                # Detectar entrada a Zona C (referencias)
+                if item["clasificacion"] == "Encabezado sección" and re.match(
+                        r"referencia|reference", txt.strip().lower()):
+                    en_zona_c = True
+
+                # En Zona C solo agregar el bloque sin ninguna detección de encabezados
+                if en_zona_c and item["clasificacion"] != "Encabezado sección":
+                    bloques_clean.append(item)
+                    continue
 
                 # 1. Separar encabezados de sección embebidos
                 for hdr in HEADERS_EMBEBIDOS:
@@ -1522,13 +1606,21 @@ class LimpiadorEditorialApp(ctk.CTk):
                     continue
 
                 # 1b. "Abstract" sola pegada al texto anterior
-                if not partido:
+                # No aplicar a referencias bibliográficas donde "abstract" es parte de una cita
+                if (not partido
+                        and item["clasificacion"] not in ("Referencia", "Cómo citar",
+                                                          "Fecha manuscrito")):
                     m_abs = _pat_abstract_solo.search(txt)
                     # Solo aplicar si no es parte de "Non-technical Abstract"
+                    # ni de palabras como "abstracto", "abstracts"
                     if m_abs and m_abs.start() > 0:
                         ctx_antes = txt[max(0, m_abs.start()-20):m_abs.start()].lower()
+                        # No cortar si viene precedido de "(" o "," → es cita bibliográfica
+                        char_antes = txt[m_abs.start()-1] if m_abs.start() > 0 else ""
                         es_non_technical = "technical" in ctx_antes or "técnico" in ctx_antes
-                        if not es_non_technical:
+                        es_cita = char_antes in ("(", ",", ".", " ") and re.search(
+                            r"(in\s+|en\s+|p\.\s*\d|\d{4})", ctx_antes)
+                        if not es_non_technical and not es_cita:
                             antes = txt[:m_abs.start()].strip()
                             despues = txt[m_abs.end():].strip()
                             if antes:
@@ -1548,7 +1640,25 @@ class LimpiadorEditorialApp(ctk.CTk):
                                 bloques_clean.append(b3)
                             partido = True
 
-                # 2. Separar títulos de tabla embebidos en bloques Cuerpo
+                # 1c. "Cómo citar / How to cite:" embebido al final del párrafo anterior
+                if not partido:
+                    _pat_como_citar = re.compile(
+                        r'(Cómo\s+citar\s*/\s*How\s+to\s+cite'
+                        r'|Cómo\s+citar'
+                        r'|How\s+to\s+cite)',
+                        re.IGNORECASE)
+                    m_cc = _pat_como_citar.search(txt)
+                    if m_cc and m_cc.start() > 0:
+                        antes = txt[:m_cc.start()].strip()
+                        despues = txt[m_cc.start():].strip()
+                        if antes:
+                            b1 = dict(item); b1["contenido"] = antes
+                            bloques_clean.append(b1)
+                        if despues:
+                            b2 = dict(item); b2["contenido"] = despues
+                            b2["clasificacion"] = "Cómo citar"
+                            bloques_clean.append(b2)
+                        partido = True
                 #    Ej: "...texto previo. Tabla 1. Lista de trabajos…\nTexto sig."
                 if item["clasificacion"] == "Cuerpo":
                     m = _pat_tabla_embebida.search(txt)
@@ -1625,20 +1735,43 @@ class LimpiadorEditorialApp(ctk.CTk):
                 pnum = item.get("pnum", 0)
 
                 # Imágenes, pies de figura, ignorados y TABLAS del PDF: añadir
-                # a fusionados sin tocar el buffer de texto. Así el texto antes
-                # y después de una tabla/imagen queda unido en el mismo párrafo.
-                if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla"):
-                    fusionados.append(item)   # la tabla aparece en su posición
-                    continue                  # pero NO interrumpe el flujo de texto
+                # a fusionados sin tocar el buffer de texto.
+                # Cómo citar y Fecha manuscrito también: aunque están en NO_FUSIONAR
+                # para el dropdown, no deben cortar el flujo del texto del artículo.
+                if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla",
+                           "Cómo citar", "Fecha manuscrito"):
+                    fusionados.append(item)
+                    # Marcar pendiente si la oración no terminó
+                    if cls in ("Cómo citar", "Fecha manuscrito"):
+                        self._cc_pendiente = (
+                            item
+                            if not item["contenido"].rstrip().endswith((".", ")", "\""))
+                            else None
+                        )
+                    continue
 
                 if cls in NO_FUSIONAR:
                     _vaciar()
                     fusionados.append(item)
+                    self._cc_pendiente = None
                 elif cls == "Subencabezado-bajo":
                     if buf_item is None:
                         buf_item = item
                     buf_parrafos.append(("§SUB§" + item["contenido"], pnum))
                 else:
+                    # Si hay un Cómo citar/Fecha pendiente de continuación, adjuntar
+                    if getattr(self, "_cc_pendiente", None) is not None:
+                        pending = self._cc_pendiente
+                        txt_cont = item["contenido"].lstrip()
+                        txt_prev = pending["contenido"].rstrip()
+                        if txt_prev.endswith("-"):
+                            pending["contenido"] = txt_prev[:-1] + txt_cont
+                        else:
+                            pending["contenido"] = txt_prev + " " + txt_cont
+                        # Si ahora termina en punto, ya no hay más continuación
+                        if pending["contenido"].rstrip().endswith((".", ")", "\"")):
+                            self._cc_pendiente = None
+                        continue   # bloque absorbido, no va al buffer
                     if buf_item is None:
                         buf_item = item
                     txt_nuevo = item["contenido"]
@@ -1737,7 +1870,9 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         # Si hay autores manuales, el bloque de autores del PDF se ignora
         # y se inyecta el bloque manual justo después del título secundario.
-        # ── Zona de autores del PDF: ignorar TODO entre titulo-secundario y Resumen ──
+        # ── Zona de autores del PDF: ignorar fragmentos entre titulo-secundario y Resumen ──
+        # Se conservan: Título principal, Título secundario, Filiación, Email
+        # Se eliminan: Autores rotos, fragmentos con superíndices, etc.
         idx_tit_sec = next((i for i, b in enumerate(self.datos_bloques)
                             if b["menu"].get() == "Título secundario"), None)
         idx_resumen = next((i for i, b in enumerate(self.datos_bloques)
@@ -1745,9 +1880,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                             and re.match(r"resumen|abstract",
                                          b["contenido"].strip().lower())
                             and (idx_tit_sec is None or i > idx_tit_sec)), None)
+        _CONSERVAR_EN_ZONA = {"Título principal", "Título secundario", "Filiación"}
         zona_autores_pdf = set()
         if idx_tit_sec is not None and idx_resumen is not None:
-            zona_autores_pdf = set(range(idx_tit_sec + 1, idx_resumen))
+            zona_autores_pdf = {
+                i for i in range(idx_tit_sec + 1, idx_resumen)
+                if self.datos_bloques[i]["menu"].get() not in _CONSERVAR_EN_ZONA
+            }
 
         # ── Construir HTML de afiliaciones desde .txt ──────────────
         def _afil_a_html(txt: str) -> str:
@@ -1782,8 +1921,10 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         autores_html_manual = ""
         autores_inyectado   = False
-        primer_nivel1_emitido = False
-        en_abstract_ingles  = False   # True dentro de Abstract / Non-technical Abstract
+        primer_nivel1_emitido  = False
+        en_abstract_secundario = False
+        _en_cuerpo_secundario  = False
+        primer_abstract_visto  = None
         if self.autores_orcid:
             autores_html_manual = (
                 f'<p class="autores sin-sangria">'
@@ -1797,9 +1938,13 @@ class LimpiadorEditorialApp(ctk.CTk):
         usar_refs_externas = bool(self.referencias_externas)
         refs_a_usar = self.referencias_externas if usar_refs_externas else []
 
-        # ── Separar bloques (saltando zona de autores del PDF) ──────
+        # ── Pre-pase: bloques_export = datos_bloques sin modificar ──
+        # (la clasificación ya detecta continuaciones de Cómo citar en _es_como_citar)
+        bloques_export = list(self.datos_bloques)
+
+        # ── Separar bloques ──────────────────────────────────────────
         idx_refs_start = None
-        for i, b in enumerate(self.datos_bloques):
+        for i, b in enumerate(bloques_export):
             if b["menu"].get() == "Encabezado sección" and re.search(
                     r"referencia|reference", b["contenido"], re.I):
                 idx_refs_start = i
@@ -1808,25 +1953,24 @@ class LimpiadorEditorialApp(ctk.CTk):
         cuerpo_bloques = []
         como_citar_lst = []
         fechas_mss_lst = []
-        pies_pendientes= []
+        pies_pendientes = []
 
-        for i, b in enumerate(self.datos_bloques):
+        for i, b in enumerate(bloques_export):
             cls = b["menu"].get()
-            # Saltar zona entre titulo-secundario y Resumen (autores rotos del PDF)
             if i in zona_autores_pdf:
                 continue
             dentro_de_refs = (idx_refs_start is not None and i > idx_refs_start)
 
             if cls == "Cómo citar":
-                if not dentro_de_refs:      # ignorar si viene de dentro de refs
+                if not dentro_de_refs:
                     como_citar_lst.append(b)
             elif cls == "Fecha manuscrito":
-                if not dentro_de_refs:      # idem – evita DOIs de las citas
+                if not dentro_de_refs:
                     fechas_mss_lst.append(b)
             elif cls == "Imagen":
-                pass                        # imágenes del PDF siempre ignoradas
+                pass
             elif cls == "Referencia" and usar_refs_externas:
-                pass                        # ignorar duplicados cuando hay .txt
+                pass
             else:
                 cuerpo_bloques.append(b)
 
@@ -1841,7 +1985,15 @@ class LimpiadorEditorialApp(ctk.CTk):
         como_citar_lst = _dedup(como_citar_lst)
         fechas_mss_lst = _dedup(fechas_mss_lst)
 
-        # Generar HTML
+        # Regex para eliminar pies de figura y títulos de tabla embebidos en párrafos
+        _pat_strip_caption = re.compile(
+            r'\s*(?:Figure|Fig\.|Figura|Table|Tabla)\s+\d+[\.\:\s][^\n]*',
+            re.IGNORECASE
+        )
+
+        def _limpiar_cuerpo(texto: str) -> str:
+            """Elimina pies de figura y títulos de tabla embebidos en un párrafo."""
+            return _pat_strip_caption.sub("", texto).strip()
         lineas = [
             "<!DOCTYPE html>", '<html lang="es">',
             "<head>",
@@ -1911,19 +2063,49 @@ class LimpiadorEditorialApp(ctk.CTk):
                 # Secciones con línea divisora
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-                    "referencias", "references", "contribuciones de los autores",
-                    "agradecimientos", "acknowledgements",
-                    "conflicto de intereses", "conflict of interest",
+                    "referencias", "references",
+                    "contribuciones de los autores", "author contributions",
+                    "agradecimientos", "acknowledgements", "acknowledgments",
+                    "conflicto de intereses", "conflict of interest", "conflicts of interest",
                 }
                 txt_low = texto.strip().lower()
-                es_gris   = txt_low in _SECCIONES_GRISES
+                es_gris   = False
                 con_linea = txt_low in _SECCIONES_CON_LINEA
-                # Detectar si entramos/salimos de Abstract en inglés
-                _ABSTRACT_INGLES = {"abstract", "non-technical abstract"}
-                if txt_low in _ABSTRACT_INGLES:
-                    en_abstract_ingles = True
-                elif txt_low not in _SECCIONES_GRISES:
-                    en_abstract_ingles = False
+
+                # Determinar si este encabezado es primario (negro) o secundario (gris cursiva)
+                _ABSTRACTS = {"resumen", "abstract", "resumen no técnico",
+                              "non-technical abstract", "keywords", "palabras clave"}
+                if txt_low in _ABSTRACTS:
+                    if primer_abstract_visto is None:
+                        # Primera vez que aparece un abstract → primario (negro)
+                        primer_abstract_visto = txt_low
+                        en_abstract_secundario = False
+                    else:
+                        # ¿Es la "pareja" del primero? Resumen↔Abstract, RnT↔NtA
+                        _PARES = {
+                            "resumen": "abstract",
+                            "abstract": "resumen",
+                            "resumen no técnico": "non-technical abstract",
+                            "non-technical abstract": "resumen no técnico",
+                            "palabras clave": "keywords",
+                            "keywords": "palabras clave",
+                        }
+                        if txt_low == _PARES.get(primer_abstract_visto):
+                            en_abstract_secundario = True
+                        elif txt_low == primer_abstract_visto:
+                            # Mismo idioma de nuevo (Non-technical en el mismo idioma)
+                            en_abstract_secundario = False
+                            primer_abstract_visto = txt_low
+                    es_gris = en_abstract_secundario
+                else:
+                    # Salimos de la zona de resúmenes
+                    en_abstract_secundario = False
+
+                # Detectar si estamos dentro del cuerpo del abstract secundario
+                if txt_low in {"abstract", "non-technical abstract",
+                               "resumen", "resumen no técnico"}:
+                    # Actualizar flag de cuerpo secundario
+                    _en_cuerpo_secundario = en_abstract_secundario
                 if _es_meta:
                     clase_h2 = 'seccion meta'
                 elif con_linea and es_gris:
@@ -1941,7 +2123,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                         lineas.append(f"  <li>{esc(ref)}</li>")
                     lineas.append("</ol>")
             elif cls == "Subencabezado":
-                en_abstract_ingles = False
+                en_abstract_secundario = False
+                _en_cuerpo_secundario  = False
                 if not primer_nivel1_emitido:
                     lineas.append(f'<h3 class="subseccion primer-nivel1">{texto}</h3>')
                     primer_nivel1_emitido = True
@@ -1960,6 +2143,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                     lambda m: f"<strong>{m.group(0).rstrip()}</strong> ",
                     t_kw, count=1, flags=re.IGNORECASE)
                 lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
+            elif cls in ("Cómo citar", "Fecha manuscrito"):
+                pass   # siempre van al post-referencias, nunca inline
             elif cls in ("Normal", "Cuerpo"):
                 if en_refs:
                     # Dentro de la sección Referencias del PDF → ignorar siempre
@@ -1993,23 +2178,27 @@ class LimpiadorEditorialApp(ctk.CTk):
                             lineas.append(f'<h3 class="subseccion-bajo">{esc(parte[5:])}</h3>')
                         else:
                             tag_p = 'class="cuerpo"' if cls == "Cuerpo" else ""
-                            # Cuerpo dentro de Abstract/Non-technical Abstract → cursiva gris
-                            if en_abstract_ingles:
-                                lineas.append(f'<p class="abstract sin-sangria">{esc(parte)}</p>')
+                            parte_limpia = _limpiar_cuerpo(parte)
+                            if not parte_limpia:
+                                continue
+                            if _en_cuerpo_secundario:
+                                lineas.append(f'<p class="abstract sin-sangria">{esc(parte_limpia)}</p>')
                             else:
-                                lineas.append(f'<p {tag_p}>{esc(parte)}</p>'.replace("  >", ">"))
+                                lineas.append(f'<p {tag_p}>{esc(parte_limpia)}</p>'.replace("  >", ">"))
             elif cls == "Referencia":
                 lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{texto}</p>')
             elif cls == "Título tabla":
                 pass   # suprimido del flujo inline — las tablas van por ancla
-            elif cls == "Pie de figura":
-                pies_pendientes.append(texto)
+            elif cls in ("Pie de figura", "Título tabla"):
+                pass   # suprimidos — figuras y tablas se insertan desde las pestañas
 
         # Post-referencias
         if como_citar_lst or fechas_mss_lst:
             lineas.append('<div class="post-referencias">')
-            for b in como_citar_lst:
-                lineas.append(f'<p class="como-citar">{esc(b["contenido"])}</p>')
+            if como_citar_lst:
+                # Fusionar todos los bloques Cómo citar en uno solo
+                texto_completo = " ".join(b["contenido"].strip() for b in como_citar_lst)
+                lineas.append(f'<p class="como-citar">{esc(texto_completo)}</p>')
             if fechas_mss_lst:
                 lineas.append('<div class="fechas-manuscrito"><ul>')
                 doi_items = []
@@ -2054,12 +2243,15 @@ class LimpiadorEditorialApp(ctk.CTk):
                     ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
                     ancla_norm = re.sub(r"-\s+", "", ancla_norm)
                     ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
-                    muestra = ancla_norm[-60:].strip()
+                    muestra = ancla_norm[-80:].strip()
                     escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
                     _spacer = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
                     pattern = escaped.replace("\\ ", _spacer)
-                    m = re.search(pattern, html_body, re.IGNORECASE | re.DOTALL)
-                    if m:
+                    # Usar la ÚLTIMA ocurrencia — la tabla va DESPUÉS del párrafo
+                    matches = list(re.finditer(pattern, html_body,
+                                               re.IGNORECASE | re.DOTALL))
+                    if matches:
+                        m = matches[-1]
                         cierre = html_body.find("</p>", m.end())
                         pos = cierre + 4 if cierre != -1 else -1
                 tablas_ordenadas.append((pos, idx_t, bloque))
@@ -2104,18 +2296,17 @@ class LimpiadorEditorialApp(ctk.CTk):
 
             def _buscar_ancla_html(ancla, html):
                 if not ancla: return -1
-                # Normalizar ancla: quitar soft-hyphens (U+00AD, U+FFFC), guiones de corte
                 ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
                 ancla_norm = re.sub(r"-\s+", "", ancla_norm)
                 ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
                 muestra = ancla_norm[-80:].strip()
-                # Escapar y hacer tolerante a tags HTML y soft-hyphens en el HTML
                 escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
-                # Espacios → tolerantes a soft-hyphens, tags, saltos
                 spacer  = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
                 pattern = escaped.replace("\\ ", spacer)
-                m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
-                if m:
+                # Usar la ÚLTIMA ocurrencia para evitar coincidencias en el resumen
+                matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
+                if matches:
+                    m = matches[-1]
                     cierre = html.find("</p>", m.end())
                     return cierre + 4 if cierre != -1 else -1
                 return -1
