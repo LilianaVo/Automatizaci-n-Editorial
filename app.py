@@ -35,22 +35,23 @@ HTML_CSS = """
   .autores a.orcid-autor { color:#1a3a5c; text-decoration:underline; text-underline-offset:3px; text-decoration-color:#A6CE39; text-decoration-thickness:2px; }
   .autores a.orcid-autor:hover { text-decoration-color:#1a3a5c; }
   .autores .orcid-icon img { width:16px; height:16px; vertical-align:middle; margin-left:2px; }
-  .filiaciones { font-family:var(--serif); font-size:9pt; font-weight:400; font-style:normal; color:var(--gris); margin:2px 0; line-height:1.5; }
+  .filiaciones { font-family:var(--serif); font-size:9pt; font-weight:400; font-style:normal; color:#666; margin:2px 0; line-height:1.5; }
   .email       { font-family:var(--serif); font-size:9pt;  font-style:italic; color:#1a5276; margin-bottom:6px; }
   h2.seccion { font-family:var(--serif); font-size:13pt; font-weight:700; text-align:center; margin:24px 0 10px; }
+  h2.seccion.meta { font-size:9pt; font-weight:400; margin:3px 0; }
   h2.seccion.con-linea { border-top:1px solid var(--linea); padding-top:18px; margin-top:32px; }
-  /* Subtítulos nivel 1 (1. 2. 3.) — negritas */
+  /* Solo Abstract y Non-technical Abstract en gris */
+  h2.seccion.gris { color:#666; }
   h3.subseccion { font-family:var(--serif); font-size:12pt; font-weight:700; margin:20px 0 8px; }
   h3.subseccion.primer-nivel1 { border-top:1px solid var(--linea); padding-top:18px; margin-top:32px; }
-  h3.subseccion-bajo{ font-family:var(--serif); font-size:12pt; font-weight:700; font-style:italic;  margin:16px 0 6px; }
-  p.resumen { font-family:var(--serif); font-size:9pt; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
-  p.abstract { font-family:var(--tnr); font-size:9pt; font-style:italic; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
+  h3.subseccion-bajo{ font-family:var(--serif); font-size:12pt; font-weight:700; font-style:italic; margin:16px 0 6px; }
+  p.resumen  { font-family:var(--serif); font-size:9pt; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
+  p.abstract { font-family:var(--tnr);   font-size:12pt; color:#666; font-style:italic; text-align:justify; text-indent:1.2em; margin-bottom:7px; }
   p { font-family:var(--serif); font-size:10pt; text-align:justify; text-indent:1.4em; margin-bottom:8px; font-style:normal; }
   p.sin-sangria { text-indent:0; }
-  /* NO aplicar cursiva automática a párrafos de cuerpo */
-  /* Cuerpo del artículo: Source Serif Pro 12pt (10+2), desde sección 1 hasta Referencias */
   p.cuerpo { font-family:var(--serif); font-size:12pt; font-style:normal !important; font-weight:normal; text-align:justify; text-indent:1.4em; margin-bottom:9px; color:var(--texto); }
   .keywords { font-family:var(--serif); font-size:9pt; margin:4px 0 16px; text-indent:0; }
+  .keywords strong { font-weight:700; }
   ol.referencias { padding-left:2em; margin:8px 0 16px; }
   ol.referencias li { font-family:var(--serif); font-size:10pt; margin-bottom:6px; line-height:1.5; }
   .post-referencias { margin-top:28px; border-top:1px solid var(--linea); padding-top:14px; }
@@ -62,10 +63,11 @@ HTML_CSS = """
   .figuras-finales h2 { font-family:var(--serif); font-size:10pt; font-weight:700; text-align:center; margin-bottom:14px; text-transform:uppercase; letter-spacing:0.05em; }
   figure { margin:18px auto; text-align:center; }
   figure img { max-width:100%; border:1px solid var(--linea); }
-  figcaption { font-family:var(--serif); font-size:9pt; color:var(--gris); margin-top:5px; text-align:left; line-height:1.4; }
+  figcaption { font-family:var(--serif); font-size:9pt; color:#1a1a1a; margin-top:5px; text-align:left; line-height:1.4; }
   /* ── Tablas ── */
   .tabla-wrapper { margin:20px auto 24px; overflow-x:auto; }
-  .tabla-titulo { font-family:var(--serif); font-size:9pt; font-weight:700; margin-bottom:6px; }
+  .tabla-titulo { font-family:var(--serif); font-size:9pt; font-weight:400; color:#666; margin-bottom:6px; }
+  .tabla-titulo strong { font-weight:700; }
   table.pm-tabla { border-collapse:collapse; width:100%; font-family:var(--serif); font-size:9pt; }
   table.pm-tabla thead tr th { background:#1b5e9a; color:#fff; font-weight:700; padding:6px 10px; border:1px solid #155080; text-align:center; }
   table.pm-tabla tbody tr td { background:#cbeefb; color:#1a1a1a; padding:4px 10px; border:1px solid #9fd8f0; vertical-align:top; }
@@ -799,10 +801,11 @@ class LimpiadorEditorialApp(ctk.CTk):
     # ═════════════════════════════════════════════════════════════
 
     def _agregar_figura(self):
+        self._sync_pies()   # guardar pie y ancla actuales antes de reconstruir
         rutas = filedialog.askopenfilenames(
             title="Selecciona imagen(es)",
             filetypes=[
-                ("Imágenes", "*.jpg *.jpeg *.png *.gif *.webp *.tif *.tiff"),
+                ("Imágenes", "*.jpg *.jpeg *.png *.gif *.webp *.bmp *.tiff"),
                 ("Todos", "*.*"),
             ])
         if not rutas: return
@@ -1207,6 +1210,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "agradecimientos", "acknowledgements", "discusión",
                 "resultados", "introducción", "metodología",
                 "contribuciones de los autores",
+                "conflicto de intereses", "conflict of interest",
             }
 
             zona_b_inicio = None   # índice en raw donde empieza el cuerpo
@@ -1461,24 +1465,22 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "Filiación", "Email / Metadatos", "Cómo citar",
                 "Fecha manuscrito", "Encabezado sección",
                 "Subencabezado",
-                "Palabras clave", "Referencia", "Título tabla",
-                # "Pie de figura", "Imagen", "Ignorar" se saltan arriba sin flush
+                "Palabras clave", "Referencia",
+                # "Título tabla" se maneja abajo sin flush para no cortar el texto
+                # "Pie de figura", "Imagen", "Ignorar" se saltan sin flush
             }
 
             def _es_continuacion(anterior: str, siguiente: str,
                                   pnum_ant: int, pnum_sig: int) -> bool:
-                """Une bloques de la misma oración cortada por salto de página/columna.
-                Regla universal: si el anterior no termina en punto/signo de cierre,
-                es continuación. Seguro porque el orden de columnas ya es correcto."""
-                if abs(pnum_sig - pnum_ant) > 1:
+                """Une bloques de la misma oración cortada por salto de página/columna."""
+                # Hasta 5 páginas de diferencia (cubre tablas de varias páginas)
+                if abs(pnum_sig - pnum_ant) > 5:
                     return False
                 ant = anterior.rstrip()
                 if not ant:
                     return False
-                # Termina en signo de cierre → párrafo completo, no unir
                 if ant[-1] in ".?!:":
                     return False
-                # Todo lo demás es continuación (incluye guión, coma, sin signo)
                 return True
 
             fusionados = []
@@ -1499,11 +1501,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                 cls  = item["clasificacion"]
                 pnum = item.get("pnum", 0)
 
-                # Imágenes, pies de figura e ignorados del PDF: saltarlos sin
-                # tocar el buffer. El texto antes y después de una imagen en el
-                # PDF debe quedar unido — las imágenes reales se insertan aparte.
-                if cls in ("Imagen", "Ignorar", "Pie de figura"):
-                    continue
+                # Imágenes, pies de figura, ignorados y TABLAS del PDF: añadir
+                # a fusionados sin tocar el buffer de texto. Así el texto antes
+                # y después de una tabla/imagen queda unido en el mismo párrafo.
+                if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla"):
+                    fusionados.append(item)   # la tabla aparece en su posición
+                    continue                  # pero NO interrumpe el flujo de texto
 
                 if cls in NO_FUSIONAR:
                     _vaciar()
@@ -1659,6 +1662,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         autores_html_manual = ""
         autores_inyectado   = False
         primer_nivel1_emitido = False
+        en_abstract_ingles  = False   # True dentro de Abstract / Non-technical Abstract
         if self.autores_orcid:
             autores_html_manual = (
                 f'<p class="autores sin-sangria">'
@@ -1763,14 +1767,52 @@ class LimpiadorEditorialApp(ctk.CTk):
                 lineas.append(f'<p class="email sin-sangria">{txt_link}</p>')
             elif cls == "Encabezado sección":
                 en_refs = bool(re.search(r"referencia|reference", texto, re.I))
-                # Secciones que llevan línea divisora encima
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
                     "referencias", "references", "contribuciones de los autores",
                     "agradecimientos", "acknowledgements",
                 }
-                con_linea = texto.strip().lower() in _SECCIONES_CON_LINEA
-                clase_h2  = 'seccion con-linea' if con_linea else 'seccion'
+                # Metadatos de cabecera: ISSN, volumen, fechas → letra pequeña
+                _es_meta = bool(re.search(
+                    r"issn|volumen\s+\d|vol\.\s*\d|núm\.\s*\d|p\.\s*\d{2,}"
+                    r"|enero|febrero|marzo|abril|mayo|junio|julio|agosto"
+                    r"|septiembre|octubre|noviembre|diciembre"
+                    r"|january|february|march|april|june|july|august"
+                    r"|september|october|november|december"
+                    r"|\(\d{4}\)",
+                    texto, re.I
+                )) or re.match(r"^paleontolog[íi]a mexicana$", texto.strip(), re.I)
+                # Solo Abstract y Non-technical Abstract en gris (inglés)
+                _SECCIONES_GRISES = {
+                    "abstract", "non-technical abstract",
+                    "keywords",
+                }
+                # Secciones con línea divisora
+                _SECCIONES_CON_LINEA = {
+                    "resumen", "abstract", "resumen no técnico", "non-technical abstract",
+                    "referencias", "references", "contribuciones de los autores",
+                    "agradecimientos", "acknowledgements",
+                    "conflicto de intereses", "conflict of interest",
+                }
+                txt_low = texto.strip().lower()
+                es_gris   = txt_low in _SECCIONES_GRISES
+                con_linea = txt_low in _SECCIONES_CON_LINEA
+                # Detectar si entramos/salimos de Abstract en inglés
+                _ABSTRACT_INGLES = {"abstract", "non-technical abstract"}
+                if txt_low in _ABSTRACT_INGLES:
+                    en_abstract_ingles = True
+                elif txt_low not in _SECCIONES_GRISES:
+                    en_abstract_ingles = False
+                if _es_meta:
+                    clase_h2 = 'seccion meta'
+                elif con_linea and es_gris:
+                    clase_h2 = 'seccion con-linea gris'
+                elif con_linea:
+                    clase_h2 = 'seccion con-linea'
+                elif es_gris:
+                    clase_h2 = 'seccion gris'
+                else:
+                    clase_h2 = 'seccion'
                 lineas.append(f'<h2 class="{clase_h2}">{texto}</h2>')
                 if en_refs and refs_a_usar:
                     lineas.append('<ol class="referencias">')
@@ -1778,7 +1820,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                         lineas.append(f"  <li>{esc(ref)}</li>")
                     lineas.append("</ol>")
             elif cls == "Subencabezado":
-                # El primer subtítulo numerado (1.) lleva línea divisora
+                en_abstract_ingles = False
                 if not primer_nivel1_emitido:
                     lineas.append(f'<h3 class="subseccion primer-nivel1">{texto}</h3>')
                     primer_nivel1_emitido = True
@@ -1790,7 +1832,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                 tag = "abstract" if ital else "resumen"
                 lineas.append(f'<p class="{tag} sin-sangria">{texto}</p>')
             elif cls == "Palabras clave":
-                lineas.append(f'<p class="keywords sin-sangria">{texto}</p>')
+                # "Palabras clave:" / "Keywords:" en negrita, resto normal
+                t_kw = esc(b["contenido"])
+                t_kw = re.sub(
+                    r"^(Palabras\s+clave|Keywords)\s*[:\.]?\s*",
+                    lambda m: f"<strong>{m.group(0).rstrip()}</strong> ",
+                    t_kw, count=1, flags=re.IGNORECASE)
+                lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
             elif cls in ("Normal", "Cuerpo"):
                 if en_refs and not usar_refs_externas:
                     for parte in b["contenido"].split("\n\n"):
@@ -1798,18 +1846,42 @@ class LimpiadorEditorialApp(ctk.CTk):
                         if parte:
                             lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{esc(parte)}</p>')
                 else:
-                    for parte in b["contenido"].split("\n\n"):
+                    # Re-fusionar partes que siguen siendo continuación
+                    # (§SUB§ siempre se trata aparte)
+                    partes_raw = b["contenido"].split("\n\n")
+                    partes_unidas = []
+                    for parte in partes_raw:
                         parte = parte.strip()
                         if not parte: continue
+                        if parte.startswith("§SUB§"):
+                            partes_unidas.append(parte)
+                        elif partes_unidas and not partes_unidas[-1].startswith("§SUB§"):
+                            prev = partes_unidas[-1].rstrip()
+                            if prev and prev[-1] not in ".?!:":
+                                # Continuación — unir
+                                if prev.endswith("-"):
+                                    partes_unidas[-1] = prev[:-1] + parte
+                                else:
+                                    partes_unidas[-1] = prev + " " + parte
+                            else:
+                                partes_unidas.append(parte)
+                        else:
+                            partes_unidas.append(parte)
+
+                    for parte in partes_unidas:
                         if parte.startswith("§SUB§"):
                             lineas.append(f'<h3 class="subseccion-bajo">{esc(parte[5:])}</h3>')
                         else:
                             tag_p = 'class="cuerpo"' if cls == "Cuerpo" else ""
-                            lineas.append(f'<p {tag_p}>{esc(parte)}</p>'.replace("  >", ">"))
+                            # Cuerpo dentro de Abstract/Non-technical Abstract → cursiva gris
+                            if en_abstract_ingles:
+                                lineas.append(f'<p class="abstract sin-sangria">{esc(parte)}</p>')
+                            else:
+                                lineas.append(f'<p {tag_p}>{esc(parte)}</p>'.replace("  >", ">"))
             elif cls == "Referencia":
                 lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{texto}</p>')
             elif cls == "Título tabla":
-                pass   # suprimido del flujo inline — las tablas van al final
+                pass   # suprimido del flujo inline — las tablas van por ancla
             elif cls == "Pie de figura":
                 pies_pendientes.append(texto)
 
@@ -1842,13 +1914,11 @@ class LimpiadorEditorialApp(ctk.CTk):
                 lineas.append("</ul></div>")
             lineas.append("</div>")
 
-        # ── Tablas: inserción inline o al final ──────────────────────────
-        # Primero cerramos el article para tener el HTML completo del cuerpo.
+        # ── Tablas: posicionadas por ancla, o al final si no tienen ancla ──
         lineas.append("</article></body></html>")
         html_body = "\n".join(lineas)
 
         if self.tablas_manuales:
-            # Ordenar las tablas por posición de su ancla en el HTML
             tablas_ordenadas = []
             for idx_t, t_item in enumerate(self.tablas_manuales, 1):
                 ancla  = t_item.get("ancla", "").strip()
@@ -1856,39 +1926,31 @@ class LimpiadorEditorialApp(ctk.CTk):
                 thtml  = _excel_a_html_tabla(t_item["ruta"])
                 bloque = (
                     f'\n<div class="tabla-wrapper">\n'
-                    f'<p class="tabla-titulo">Tabla {idx_t}. {esc(titulo)}</p>\n'
+                    f'<p class="tabla-titulo"><strong>Tabla {idx_t}.</strong> {esc(titulo)}</p>\n'
                     f'{thtml}\n</div>\n'
                 )
                 pos = -1
                 if ancla:
-                    # Normalizar: quitar soft-hyphens, guiones de corte + salto, espacios
-                    ancla_norm = re.sub(r"­", "", ancla)          # soft-hyphen Unicode
-                    ancla_norm = re.sub(r"-\s+", "", ancla_norm)  # guion + espacio (corte PDF)
+                    ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
+                    ancla_norm = re.sub(r"-\s+", "", ancla_norm)
                     ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
-                    # Usar los ÚLTIMOS 60 chars: fin del párrafo = posición exacta
-                    # de inserción, evita que el PDF haya partido el bloque antes
                     muestra = ancla_norm[-60:].strip()
-                    # Regex tolerante a tags HTML y soft-hyphens embebidos
                     escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
-                    pattern = re.sub(r"\\ ", r"(?:(?:­|-)?\\s*(?:<[^>]+>)?\\s*)+", escaped)
+                    _spacer = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
+                    pattern = escaped.replace("\\ ", _spacer)
                     m = re.search(pattern, html_body, re.IGNORECASE | re.DOTALL)
                     if m:
                         cierre = html_body.find("</p>", m.end())
                         pos = cierre + 4 if cierre != -1 else -1
                 tablas_ordenadas.append((pos, idx_t, bloque))
 
-            # Ordenar: primero las que tienen ancla (por posición asc), luego sin ancla
             tablas_ordenadas.sort(key=lambda x: (x[0] == -1, x[0], x[1]))
-
-            # Insertar de atrás para adelante para no desplazar posiciones
-            tablas_inline  = [(p, b) for p, _, b in tablas_ordenadas if p != -1]
+            tablas_inline   = [(p, b) for p, _, b in tablas_ordenadas if p != -1]
             tablas_al_final = [b for p, _, b in tablas_ordenadas if p == -1]
 
-            # Insertar inline de mayor a menor posición
             for pos, bloque in sorted(tablas_inline, key=lambda x: -x[0]):
                 html_body = html_body[:pos] + bloque + html_body[pos:]
 
-            # Las que no tuvieron ancla van antes del cierre </article>
             if tablas_al_final:
                 seccion = (
                     '\n<div class="figuras-finales">\n'
@@ -1898,7 +1960,6 @@ class LimpiadorEditorialApp(ctk.CTk):
                     + "</div>\n"
                 )
                 html_body = html_body.replace("</article>", seccion + "</article>", 1)
-
         # Figuras: inline por ancla, o al final las que no tienen
         figs = self.figuras_manuales
         if figs:
@@ -1912,22 +1973,27 @@ class LimpiadorEditorialApp(ctk.CTk):
                        if pie_txt else f"<strong>Figura {i}.</strong>")
                 return (f'<figure id="fig{i}" style="margin:18px auto;text-align:center;">\n'
                         f'  <img src="{src}" alt="Figura {i}" '
-                        f'style="max-width:100%;border:1px solid #bbb;">\n'
-                        f'  <figcaption style="font-size:9pt;color:#555;'
+                        f'style="max-width:60%;max-height:420px;border:1px solid #bbb;">\n'
+                        f'  <figcaption style="font-size:9pt;color:#1a1a1a;'
                         f'margin-top:5px;text-align:left;">{cap}</figcaption>\n'
                         f'</figure>')
 
-            figs_inline  = []   # (pos, bloque_html)
+            # (pos, fig_index, bloque)
+            figs_inline  = []
             figs_al_final = []
 
             def _buscar_ancla_html(ancla, html):
                 if not ancla: return -1
-                ancla_norm = re.sub(r"­", "", ancla)
+                # Normalizar ancla: quitar soft-hyphens (U+00AD, U+FFFC), guiones de corte
+                ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
                 ancla_norm = re.sub(r"-\s+", "", ancla_norm)
                 ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
-                muestra = ancla_norm[-60:].strip()
+                muestra = ancla_norm[-80:].strip()
+                # Escapar y hacer tolerante a tags HTML y soft-hyphens en el HTML
                 escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
-                pattern = re.sub(r"\\ ", r"(?:(?:­|-)?\\s*(?:<[^>]+>)?\\s*)+", escaped)
+                # Espacios → tolerantes a soft-hyphens, tags, saltos
+                spacer  = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
+                pattern = escaped.replace("\\ ", spacer)
                 m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
                 if m:
                     cierre = html.find("</p>", m.end())
@@ -1939,20 +2005,26 @@ class LimpiadorEditorialApp(ctk.CTk):
                 bloque = "\n" + _fig_html(i, fig) + "\n"
                 pos = _buscar_ancla_html(ancla, html_body)
                 if pos != -1:
-                    figs_inline.append((pos, bloque))
+                    figs_inline.append((pos, i, bloque))
                 else:
                     figs_al_final.append((i, fig))
 
-            # Insertar inline de mayor a menor posición
-            for pos, bloque in sorted(figs_inline, key=lambda x: -x[0]):
-                html_body = html_body[:pos] + bloque + html_body[pos:]
+            # Agrupar por posición: misma posición → concatenar en orden de figura
+            # Insertar grupos de mayor a menor posición (para no desplazar)
+            from collections import defaultdict
+            grupos = defaultdict(list)
+            for pos, idx, bloque in sorted(figs_inline, key=lambda x: (x[0], x[1])):
+                grupos[pos].append(bloque)
 
-            # Las sin ancla van al final
+            for pos in sorted(grupos.keys(), reverse=True):
+                bloque_conjunto = "".join(grupos[pos])
+                html_body = html_body[:pos] + bloque_conjunto + html_body[pos:]
+
+            # Las sin ancla van al final (sin encabezado de sección)
             if figs_al_final:
-                figs_html = '\n<div class="figuras-finales">\n<h2>Figuras</h2>\n'
+                figs_html = '\n'
                 for i, fig in figs_al_final:
                     figs_html += _fig_html(i, fig) + "\n"
-                figs_html += "</div>\n"
                 html_body = html_body.replace("</article>", figs_html + "</article>", 1)
 
         with open(ruta, "w", encoding="utf-8") as f:
