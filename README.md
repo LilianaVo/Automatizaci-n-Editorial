@@ -155,7 +155,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 
 - Ileana Verónica Lee Obando - Ingeniería en Computación
 - David Alejandro Galicia Cárdenas - Licenciatura en Informática
-- Erick -  Ingeniería en Computación
+- Erick Isaac Echeverria Goicochea -  Ingeniería en Computación
 
 Servicio Social de Programación Editorial  
 Instituto de Geología, Universidad Nacional Autónoma de México (UNAM)
