@@ -77,32 +77,42 @@ HTML_CSS = """
 
 # ─── Clasificaciones ──────────────────────────────────────────────────────────
 OPCIONES = [
-    "Normal", "Cuerpo", "Título principal", "Título secundario", "Autores",
-    "Filiación", "Email / Metadatos", "Cómo citar", "Fecha manuscrito",
-    "Encabezado sección", "Subencabezado", "Subencabezado-bajo",
-    "Resumen / Abstract", "Palabras clave", "Referencia",
-    "Título tabla", "Pie de figura", "Imagen", "Ignorar",
+    "Cuerpo",
+    "Título principal", "Título secundario",
+    "Encabezado sección",
+    "Subencabezado", "Subencabezado-bajo",
+    "Palabras clave",
+    "Referencia",
+    "Cómo citar", "Fecha manuscrito",
+    "Título tabla", "Pie de figura",
+    "Filiación", "Email / Metadatos",
+    "Ignorar",
 ]
 
+# Mapeo de clases antiguas que ya no existen → clase equivalente
+_CLASE_COMPAT = {
+    "Normal":            "Cuerpo",
+    "Autores":           "Cuerpo",        # autores vienen de la pestaña ORCID
+    "Resumen / Abstract":"Cuerpo",        # el estilo lo da el Encabezado sección
+    "Imagen":            "Ignorar",
+}
+
 COLORES_UI = [
-    ("Título principal",   "#1a3a5c", "Azul oscuro"),
-    ("Título secundario",  "#1e5f74", "Azul medio"),
-    ("Autores",            "#145a32", "Verde oscuro"),
-    ("Filiación",          "#1d4e1d", "Verde musgo"),
-    ("Email / Metadatos",  "#1d3d1d", "Verde bajo"),
-    ("Cómo citar",         "#4a3000", "Café dorado"),
-    ("Fecha manuscrito",   "#3d2800", "Café oscuro"),
-    ("Encabezado sección", "#1f538d", "Azul índigo"),
-    ("Subencabezado",      "#2471a3", "Azul cielo — bold"),
-    ("Subencabezado-bajo", "#1a6e9e", "Azul cielo — sin bold"),
-    ("Resumen / Abstract", "#5a3a1d", "Siena"),
-    ("Palabras clave",     "#4a235a", "Morado"),
-    ("Referencia",         "#3a3030", "Gris oscuro"),
-    ("Título tabla",       "#1b3a5c", "Azul tabla"),
-    ("Cuerpo",             "#1a2a1a", "Verde muy oscuro — cuerpo art."),
-    ("Pie de figura",      "#3a3a1b", "Oliva"),
-    ("Imagen",             "#2b3a2b", "Verde gris"),
-    ("Ignorar",            "#3a2b2b", "Rojo oscuro"),
+    ("Título principal",   "#1a237e", "Azul marino"),
+    ("Título secundario",  "#283593", "Azul índigo"),
+    ("Encabezado sección", "#0277bd", "Azul"),
+    ("Subencabezado",      "#00695c", "Verde azulado"),
+    ("Subencabezado-bajo", "#00796b", "Verde azulado claro"),
+    ("Cuerpo",             "#212121", "Negro"),
+    ("Palabras clave",     "#6a1b9a", "Morado"),
+    ("Referencia",         "#424242", "Gris"),
+    ("Cómo citar",         "#e65100", "Naranja"),
+    ("Fecha manuscrito",   "#bf360c", "Rojo ladrillo"),
+    ("Título tabla",       "#1565c0", "Azul tabla"),
+    ("Pie de figura",      "#558b2f", "Verde oliva"),
+    ("Filiación",          "#2e7d32", "Verde"),
+    ("Email / Metadatos",  "#388e3c", "Verde medio"),
+    ("Ignorar",            "#c62828", "Rojo"),
 ]
 COLOR_POR_CLASE = {c: col for c, col, _ in COLORES_UI}
 
@@ -194,7 +204,17 @@ def _es_fecha_mss(t: str) -> bool:
 
 
 def _es_doi(t: str) -> bool:
-    return bool(re.search(r"https?://doi\.org/", t))
+    """Solo marca como fecha/DOI si es un bloque pequeño de metadatos,
+    NO si es una referencia bibliográfica (bloques largos con autores y títulos)."""
+    if not re.search(r"https?://doi\.org/", t):
+        return False
+    # Referencia bibliográfica: tiene patrón Apellido, Inicial. o más de 120 chars
+    # sin palabras clave de fecha → NO es fecha manuscrito
+    if len(t) > 200:
+        return False
+    if re.search(r"\.\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]", t) and not _es_fecha_mss(t):
+        return False
+    return True
 
 
 def _img_to_base64(path: str) -> str:
@@ -207,21 +227,20 @@ def _img_to_base64(path: str) -> str:
     return f"data:image/{mime};base64,{data}"
 
 
-def _excel_a_html_tabla(ruta: str) -> str:
+def _excel_a_html_tabla(ruta: str, hoja: str = None) -> str:
     """
-    Convierte la primera hoja de un .xlsx en una tabla HTML.
-    Requiere openpyxl (pip install openpyxl).
+    Convierte una hoja de un .xlsx en tabla HTML con estilos PM.
+    Si hoja=None usa la hoja activa (primera).
     """
     try:
         import openpyxl
         wb = openpyxl.load_workbook(ruta, data_only=True)
-        ws = wb.active
+        ws = wb[hoja] if hoja and hoja in wb.sheetnames else wb.active
         filas = list(ws.iter_rows(values_only=True))
         if not filas:
             return "<p><em>[Tabla vacía]</em></p>"
 
         html = ['<table class="pm-tabla">']
-        # Primera fila como encabezado
         html.append("<thead><tr>")
         for celda in filas[0]:
             val = "" if celda is None else str(celda)
@@ -229,7 +248,7 @@ def _excel_a_html_tabla(ruta: str) -> str:
         html.append("</tr></thead><tbody>")
         for fila in filas[1:]:
             if all(c is None for c in fila):
-                continue   # saltar filas vacías
+                continue
             html.append("<tr>")
             for celda in fila:
                 val = "" if celda is None else str(celda)
@@ -238,7 +257,7 @@ def _excel_a_html_tabla(ruta: str) -> str:
         html.append("</tbody></table>")
         return "\n".join(html)
     except ImportError:
-        return "<p><em>[Instala openpyxl para renderizar tablas: pip install openpyxl]</em></p>"
+        return "<p><em>[Instala openpyxl: pip install openpyxl]</em></p>"
     except Exception as e:
         return f"<p><em>[Error al leer tabla: {esc(str(e))}]</em></p>"
 
@@ -247,45 +266,88 @@ def _excel_a_html_tabla(ruta: str) -> str:
 class LimpiadorEditorialApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Limpiador Editorial Pro - UNAM")
-        self.geometry("1180x920")
-        self.minsize(980, 660)
+        self.title("Paleontología Mexicana — Editor Semántico")
+        self.geometry("1280x940")
+        self.minsize(1024, 700)
+        self.configure(fg_color="#0f1117")
 
         self.datos_bloques:        list[dict] = []
         self.referencias_externas: list[str]  = []
         self.figuras_manuales:     list[dict] = []
         self.tablas_manuales:      list[dict] = []
         self.autores_orcid:        list[dict] = []
-        self.afiliaciones_txt:     str        = ""   # texto crudo del .txt de afiliaciones
+        self.afiliaciones_txt:     str        = ""
+        self._vista_estructura:    bool       = True
 
-        # ── Encabezado ──────────────────────────────────────────
-        top = ctk.CTkFrame(self, fg_color="transparent")
-        top.pack(fill="x", padx=20, pady=(14, 0))
-        ctk.CTkLabel(top, text="Extractor de PDF Semántico",
-                     font=ctk.CTkFont(size=22, weight="bold")).pack(side="left")
+        # ══════════════════════════════════════════════════════════
+        # BARRA SUPERIOR — logo + título + exportar
+        # ══════════════════════════════════════════════════════════
+        topbar = ctk.CTkFrame(self, fg_color="#16213e", corner_radius=0, height=64)
+        topbar.pack(fill="x", side="top")
+        topbar.pack_propagate(False)
 
-        # ── Botones de exportar (siempre visibles) ───────────────
-        exp_f = ctk.CTkFrame(self, fg_color="transparent")
-        exp_f.pack(pady=(6, 2))
-        for texto, cmd, fg, hv in [
-            ("🌐  HTML",  self.evento_exportar_html,  "#28a745", "#1e7a35"),
-            ("📄  XML",   self.evento_exportar_xml,   "#e67e22", "#b35a00"),
-            ("📚  EPUB",  self.evento_exportar_epub,  "#8e44ad", "#6c1f8a"),
+        # Logo / nombre
+        brand = ctk.CTkFrame(topbar, fg_color="transparent")
+        brand.pack(side="left", padx=20, pady=10)
+
+        ctk.CTkLabel(brand,
+                     text="◈",
+                     font=ctk.CTkFont(size=28, weight="bold"),
+                     text_color="#3b82f6").pack(side="left", padx=(0, 8))
+
+        title_block = ctk.CTkFrame(brand, fg_color="transparent")
+        title_block.pack(side="left")
+        ctk.CTkLabel(title_block,
+                     text="Editor Semántico",
+                     font=ctk.CTkFont(size=17, weight="bold"),
+                     text_color="#f1f5f9").pack(anchor="w")
+        ctk.CTkLabel(title_block,
+                     text="Paleontología Mexicana · UNAM",
+                     font=ctk.CTkFont(size=15),
+                     text_color="#64748b").pack(anchor="w")
+
+        # Botones exportar — derecha de la topbar
+        export_bar = ctk.CTkFrame(topbar, fg_color="transparent")
+        export_bar.pack(side="right", padx=20, pady=12)
+
+        ctk.CTkLabel(export_bar,
+                     text="EXPORTAR",
+                     font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color="#64748b").pack(side="left", padx=(0, 10))
+
+        for texto, cmd, fg, hv, w in [
+            ("⬡  HTML",  self.evento_exportar_html,  "#16a34a", "#15803d", 110),
+            ("◻  XML",   self.evento_exportar_xml,   "#334155", "#475569", 90),
+            ("◻  EPUB",  self.evento_exportar_epub,  "#334155", "#475569", 90),
         ]:
-            ctk.CTkButton(exp_f, text=texto, command=cmd,
+            ctk.CTkButton(export_bar, text=texto, command=cmd,
                           fg_color=fg, hover_color=hv,
-                          width=140, font=ctk.CTkFont(size=12)
-                          ).pack(side="left", padx=5)
+                          width=w, height=34,
+                          corner_radius=6,
+                          font=ctk.CTkFont(size=15, weight="bold")
+                          ).pack(side="left", padx=3)
 
-        # ── Pestañas ─────────────────────────────────────────────
-        self.tabs = ctk.CTkTabview(self)
-        self.tabs.pack(fill="both", expand=True, padx=14, pady=(4, 2))
+        # ══════════════════════════════════════════════════════════
+        # CONTENIDO PRINCIPAL — Pestañas
+        # ══════════════════════════════════════════════════════════
+        main = ctk.CTkFrame(self, fg_color="#0f1117", corner_radius=0)
+        main.pack(fill="both", expand=True, padx=0, pady=0)
 
-        self.tabs.add("📄  PDF")
-        self.tabs.add("👥  Autores")
-        self.tabs.add("🏛️  Afiliaciones")
-        self.tabs.add("📋  Referencias")
-        self.tabs.add("🖼️  Figuras")
+        self.tabs = ctk.CTkTabview(main,
+                                   fg_color="#161b27",
+                                   segmented_button_fg_color="#1e2535",
+                                   segmented_button_selected_color="#3b82f6",
+                                   segmented_button_selected_hover_color="#2563eb",
+                                   segmented_button_unselected_color="#1e2535",
+                                   segmented_button_unselected_hover_color="#2a3347",
+                                   text_color="#94a3b8",
+                                   text_color_disabled="#475569",
+                                   corner_radius=10)
+        self.tabs.pack(fill="both", expand=True, padx=14, pady=(8, 0))
+
+        for nombre in ["📄  PDF", "👥  Autores", "🏛️  Afiliaciones",
+                        "📋  Referencias", "🖼️  Figuras"]:
+            self.tabs.add(nombre)
 
         self._construir_tab_pdf()
         self._construir_tab_autores()
@@ -293,11 +355,22 @@ class LimpiadorEditorialApp(ctk.CTk):
         self._construir_tab_referencias()
         self._construir_tab_figuras()
 
-        # ── Status bar ───────────────────────────────────────────
+        # ══════════════════════════════════════════════════════════
+        # STATUS BAR
+        # ══════════════════════════════════════════════════════════
+        statusbar = ctk.CTkFrame(self, fg_color="#0d1117", corner_radius=0, height=34)
+        statusbar.pack(fill="x", side="bottom")
+        statusbar.pack_propagate(False)
+
         self._status = ctk.CTkLabel(
-            self, text="Listo.", anchor="w",
-            font=ctk.CTkFont(size=10), text_color="#888")
-        self._status.pack(fill="x", padx=16, pady=(0, 6))
+            statusbar, text="Listo  ·  Carga un PDF para comenzar",
+            anchor="w", font=ctk.CTkFont(size=15), text_color="#475569")
+        self._status.pack(side="left", padx=14, pady=4)
+
+        ctk.CTkLabel(statusbar,
+                     text="v2.0",
+                     font=ctk.CTkFont(size=15),
+                     text_color="#1e293b").pack(side="right", padx=12)
 
     # ═════════════════════════════════════════════════════════════
     # TAB 1 — PDF
@@ -306,67 +379,65 @@ class LimpiadorEditorialApp(ctk.CTk):
     def _construir_tab_pdf(self):
         tab = self.tabs.tab("📄  PDF")
 
-        # ── Fila 1: botones de acción ─────────────────────────────
-        btn_f = ctk.CTkFrame(tab, fg_color="transparent")
-        btn_f.pack(fill="x", pady=(6, 2))
+        # ── Toolbar ───────────────────────────────────────────────
+        toolbar = ctk.CTkFrame(tab, fg_color="#1e2535", corner_radius=8, height=48)
+        toolbar.pack(fill="x", padx=4, pady=(6, 4))
+        toolbar.pack_propagate(False)
 
         self._btn_cargar = ctk.CTkButton(
-            btn_f, text="📂  Cargar PDF",
+            toolbar, text="📂  Cargar PDF",
             command=self.evento_cargar_archivo,
-            fg_color="#2e86c1", hover_color="#1a5276",
-            width=160, font=ctk.CTkFont(size=12))
-        self._btn_cargar.pack(side="left", padx=5)
+            fg_color="#3b82f6", hover_color="#2563eb",
+            width=150, height=34, corner_radius=6,
+            font=ctk.CTkFont(size=15, weight="bold"))
+        self._btn_cargar.pack(side="left", padx=(8, 4), pady=7)
 
-        ctk.CTkButton(btn_f, text="🎨  Leyenda",
+        ctk.CTkButton(toolbar, text="Leyenda",
                       command=self._toggle_leyenda,
-                      fg_color="#3a3a3a", hover_color="#555",
-                      width=100, height=28, font=ctk.CTkFont(size=11)
-                      ).pack(side="left", padx=5)
+                      fg_color="#334155", hover_color="#475569",
+                      width=80, height=34, corner_radius=6,
+                      font=ctk.CTkFont(size=15)
+                      ).pack(side="left", padx=4, pady=7)
+
+        # Separador visual
+        ctk.CTkFrame(toolbar, width=1, height=34, fg_color="#334155").pack(
+            side="left", padx=8, pady=10)
+
+        ctk.CTkLabel(toolbar, text="Filtrar:",
+                     font=ctk.CTkFont(size=15),
+                     text_color="#94a3b8").pack(side="left", padx=(0, 4), pady=7)
+        self._filtro_menu = ctk.CTkOptionMenu(
+            toolbar, values=["Todos"] + OPCIONES,
+            command=self._aplicar_filtro,
+            fg_color="#334155", button_color="#3b82f6",
+            button_hover_color="#2563eb",
+            width=190, height=34, corner_radius=6,
+            font=ctk.CTkFont(size=15))
+        self._filtro_menu.set("Todos")
+        self._filtro_menu.pack(side="left", padx=4, pady=7)
 
         self._stats_lbl = ctk.CTkLabel(
-            btn_f, text="", font=ctk.CTkFont(size=10), text_color="#999")
-        self._stats_lbl.pack(side="left", padx=10)
-
-        # ── Fila 2: zona segmentada + filtro fino ─────────────────
-        nav_f = ctk.CTkFrame(tab, fg_color="transparent")
-        nav_f.pack(fill="x", pady=(0, 3))
-
-        # Zonas principales — segmented button
-        self._zona_seg = ctk.CTkSegmentedButton(
-            nav_f,
-            values=["📋 Portada", "📖 Cuerpo", "🖼 Medios"],
-            command=self._cambiar_zona,
-            font=ctk.CTkFont(size=12),
-            width=320,
-        )
-        self._zona_seg.set("📋 Portada")
-        self._zona_seg.pack(side="left", padx=(4, 12))
-
-        ctk.CTkLabel(nav_f, text="Filtro:",
-                     font=ctk.CTkFont(size=11)).pack(side="left", padx=(0, 2))
-        self._filtro_menu = ctk.CTkOptionMenu(
-            nav_f, values=["Todos"] + OPCIONES,
-            command=self._aplicar_filtro, width=170,
-            font=ctk.CTkFont(size=11))
-        self._filtro_menu.set("Todos")
-        self._filtro_menu.pack(side="left", padx=4)
+            toolbar, text="", font=ctk.CTkFont(size=15), text_color="#64748b")
+        self._stats_lbl.pack(side="left", padx=12)
 
         # ── Leyenda (oculta) ──────────────────────────────────────
         self._leyenda_visible = False
-        self._leyenda_panel   = ctk.CTkFrame(tab, fg_color="#1e1e1e", corner_radius=8)
+        self._leyenda_panel   = ctk.CTkFrame(tab, fg_color="#1e2535", corner_radius=8)
         self._construir_leyenda(tab)
 
         # ── Banner de completado ──────────────────────────────────
         self._banner = ctk.CTkLabel(
             tab, text="",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="#1b5e20", fg_color="#c8e6c9",
-            corner_radius=6, height=34, anchor="center")
+            font=ctk.CTkFont(size=15, weight="bold"),
+            text_color="#f0fdf4", fg_color="#166534",
+            corner_radius=6, height=36, anchor="center")
 
         # ── Scroll de bloques ─────────────────────────────────────
         self.frame_scroll = ctk.CTkScrollableFrame(
-            tab, label_text="Bloques extraídos")
-        self.frame_scroll.pack(fill="both", expand=True, padx=0, pady=(0, 2))
+            tab, fg_color="#161b27", label_text="",
+            scrollbar_button_color="#334155",
+            scrollbar_button_hover_color="#475569")
+        self.frame_scroll.pack(fill="both", expand=True, padx=4, pady=(0, 4))
 
     # ═════════════════════════════════════════════════════════════
     # TAB 2 — AUTORES / ORCID
@@ -377,8 +448,9 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         ctk.CTkLabel(
             tab,
-            text="Agrega cada autor. Del link ORCID copia solo la parte numérica: 0000-0001-XXXX-XXXX",
-            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa"
+            text="Agrega autores uno a uno  ó  carga un Excel con columnas: Autor | ORCID\n"
+                 "El ORCID puede ser el link completo (https://orcid.org/0000-...) o solo los números.",
+            font=ctk.CTkFont(size=15), justify="left", text_color="#aaa"
         ).pack(anchor="w", padx=14, pady=(10, 4))
 
         bf = ctk.CTkFrame(tab, fg_color="transparent")
@@ -386,14 +458,18 @@ class LimpiadorEditorialApp(ctk.CTk):
         ctk.CTkButton(bf, text="➕  Agregar autor",
                       command=self._agregar_autor,
                       fg_color="#1565c0", hover_color="#0d47a1",
-                      width=160, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+                      width=170, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
+        ctk.CTkButton(bf, text="📂  Cargar Excel",
+                      command=self._cargar_autores_excel,
+                      fg_color="#1b5e20", hover_color="#2e7d32",
+                      width=150, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         ctk.CTkButton(bf, text="🗑  Limpiar todo",
                       command=self._limpiar_autores,
-                      fg_color="#6d4c41", hover_color="#4e342e",
-                      width=120, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=130, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         self._autores_lbl = ctk.CTkLabel(
             bf, text="Sin autores cargados",
-            font=ctk.CTkFont(size=11), text_color="#888")
+            font=ctk.CTkFont(size=15), text_color="#888")
         self._autores_lbl.pack(side="left", padx=10)
 
         # Encabezado columnas
@@ -402,16 +478,16 @@ class LimpiadorEditorialApp(ctk.CTk):
         hdr.columnconfigure(1, weight=2)
         hdr.columnconfigure(2, weight=1)
         ctk.CTkLabel(hdr, text="#", width=36,
-                     font=ctk.CTkFont(size=10, weight="bold"),
+                     font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#aaa").grid(row=0, column=0, padx=6, pady=4)
         ctk.CTkLabel(hdr, text="Apellido, Nombre",
-                     font=ctk.CTkFont(size=10, weight="bold"),
+                     font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#aaa", anchor="w").grid(row=0, column=1, padx=4, pady=4, sticky="ew")
         ctk.CTkLabel(hdr, text="ORCID  (solo números: 0000-0001-2345-6789)",
-                     font=ctk.CTkFont(size=10, weight="bold"),
+                     font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#aaa", anchor="w").grid(row=0, column=2, padx=4, pady=4, sticky="ew")
         ctk.CTkLabel(hdr, text="", width=36,
-                     font=ctk.CTkFont(size=10)).grid(row=0, column=3, padx=6)
+                     font=ctk.CTkFont(size=15)).grid(row=0, column=3, padx=6)
 
         self._autores_scroll = ctk.CTkScrollableFrame(tab)
         self._autores_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 6))
@@ -423,8 +499,13 @@ class LimpiadorEditorialApp(ctk.CTk):
 
     def _sync_autores(self):
         for a in self.autores_orcid:
-            if "_var_nom" in a: a["nombre"] = a["_var_nom"].get()
-            if "_var_orc" in a: a["orcid"]  = a["_var_orc"].get()
+            if "_var_nom" in a:
+                a["nombre"] = a["_var_nom"].get().strip()
+            if "_var_orc" in a:
+                raw = a["_var_orc"].get().strip()
+                # Si pegaron el link completo, extraer solo los números
+                m = re.search(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", raw, re.IGNORECASE)
+                a["orcid"] = m.group(1) if m else raw
 
     def _refrescar_lista_autores(self):
         for w in self._autores_scroll.winfo_children():
@@ -435,28 +516,28 @@ class LimpiadorEditorialApp(ctk.CTk):
             row.columnconfigure(1, weight=2)
             row.columnconfigure(2, weight=1)
             ctk.CTkLabel(row, text=f"{i+1}", width=36,
-                         font=ctk.CTkFont(size=11, weight="bold"),
+                         font=ctk.CTkFont(size=15, weight="bold"),
                          text_color="#7986cb").grid(row=0, column=0, padx=6, pady=6)
             var_nom = ctk.StringVar(value=autor.get("nombre", ""))
             ctk.CTkEntry(row, textvariable=var_nom,
                          placeholder_text="Apellido, Nombre",
-                         font=ctk.CTkFont(size=11), height=32).grid(
+                         font=ctk.CTkFont(size=15), height=38).grid(
                 row=0, column=1, padx=4, pady=6, sticky="ew")
             autor["_var_nom"] = var_nom
             var_orc = ctk.StringVar(value=autor.get("orcid", ""))
             ctk.CTkEntry(row, textvariable=var_orc,
                          placeholder_text="0000-0001-2345-6789",
-                         font=ctk.CTkFont(size=11), height=32).grid(
+                         font=ctk.CTkFont(size=15), height=38).grid(
                 row=0, column=2, padx=4, pady=6, sticky="ew")
             autor["_var_orc"] = var_orc
             def _borrar(idx=i):
                 self._sync_autores()
                 self.autores_orcid.pop(idx)
                 self._refrescar_lista_autores()
-            ctk.CTkButton(row, text="✕", width=28, height=28,
-                          fg_color="#b71c1c", hover_color="#7f0000",
+            ctk.CTkButton(row, text="✕", width=28, height=34,
+                          fg_color="#c62828", hover_color="#8b0000",
                           command=_borrar,
-                          font=ctk.CTkFont(size=11)).grid(row=0, column=3, padx=(0,6), pady=6)
+                          font=ctk.CTkFont(size=15)).grid(row=0, column=3, padx=(0,6), pady=6)
         n = len(self.autores_orcid)
         self._autores_lbl.configure(
             text=f"{n} autor{'es' if n!=1 else ''}" if n else "Sin autores cargados",
@@ -478,10 +559,10 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "Carga un .txt con las afiliaciones, una por línea:\n"
                 "    1 Colección de Paleontología, Facultad...\n"
                 "    2 Departamento de Paleontología, Instituto...\n"
-                "    * pativel@unam.mx\n"
-                "El número inicial se convierte en superíndice. Los correos se vinculan automáticamente."
+                "    * correo@unam.mx\n"
+                "Los correos se vinculan automáticamente."
             ),
-            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa"
+            font=ctk.CTkFont(size=15), justify="left", text_color="#aaa"
         ).pack(anchor="w", padx=14, pady=(12, 6))
 
         bf = ctk.CTkFrame(tab, fg_color="transparent")
@@ -490,14 +571,14 @@ class LimpiadorEditorialApp(ctk.CTk):
         ctk.CTkButton(bf, text="📂  Cargar .txt",
                       command=self._cargar_afiliaciones,
                       fg_color="#1b5e20", hover_color="#2e7d32",
-                      width=160, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+                      width=170, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         ctk.CTkButton(bf, text="🗑  Limpiar",
                       command=self._limpiar_afiliaciones,
-                      fg_color="#6d4c41", hover_color="#4e342e",
-                      width=100, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=110, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         self._afil_lbl = ctk.CTkLabel(
             bf, text="Sin afiliaciones cargadas",
-            font=ctk.CTkFont(size=11), text_color="#888")
+            font=ctk.CTkFont(size=15), text_color="#888")
         self._afil_lbl.pack(side="left", padx=10)
 
         self._afil_scroll = ctk.CTkScrollableFrame(tab, label_text="Afiliaciones cargadas")
@@ -525,7 +606,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         for linea in lineas:
             frame = ctk.CTkFrame(self._afil_scroll, fg_color="#1a2a1a", corner_radius=4)
             frame.pack(fill="x", padx=2, pady=2)
-            ctk.CTkLabel(frame, text=linea, font=ctk.CTkFont(size=11),
+            ctk.CTkLabel(frame, text=linea, font=ctk.CTkFont(size=15),
                          justify="left", anchor="w", wraplength=700).pack(
                 padx=10, pady=5, fill="x")
         n = len(lineas)
@@ -536,6 +617,47 @@ class LimpiadorEditorialApp(ctk.CTk):
     def _limpiar_autores(self):
         self.autores_orcid = []
         self._refrescar_lista_autores()
+
+    def _cargar_autores_excel(self):
+        """Carga autores y ORCIDs desde un Excel con columnas Autor | ORCID."""
+        ruta = filedialog.askopenfilename(
+            title="Selecciona Excel de autores",
+            filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")])
+        if not ruta: return
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(ruta, data_only=True)
+            ws = wb.active
+            filas = list(ws.iter_rows(values_only=True))
+            wb.close()
+        except ImportError:
+            self._set_status("❌ Instala openpyxl: pip install openpyxl"); return
+        except Exception as e:
+            self._set_status(f"❌ Error leyendo Excel: {e}"); return
+
+        self._sync_autores()
+        nuevos = 0
+        for fila in filas:
+            if not fila or all(c is None for c in fila):
+                continue
+            nombre = str(fila[0]).strip() if fila[0] else ""
+            orcid  = str(fila[1]).strip() if len(fila) > 1 and fila[1] else ""
+
+            # Saltar fila de encabezado
+            if nombre.lower() in ("autor", "nombre", "author", "name"):
+                continue
+            if not nombre:
+                continue
+
+            # Extraer solo los números del ORCID si viene como URL completa
+            m = re.search(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", orcid)
+            orcid_limpio = m.group(1) if m else orcid
+
+            self.autores_orcid.append({"nombre": nombre, "orcid": orcid_limpio})
+            nuevos += 1
+
+        self._refrescar_lista_autores()
+        self._set_status(f"✓ {nuevos} autor(es) importados desde Excel.")
 
     # ═════════════════════════════════════════════════════════════
     # TAB 3 — REFERENCIAS
@@ -549,9 +671,8 @@ class LimpiadorEditorialApp(ctk.CTk):
             text=(
                 "Carga un .txt con las referencias numeradas.\n"
                 "Formatos aceptados:   1. Texto...   |   1) Texto...   |   [1] Texto...\n"
-                "Si cargas referencias aquí, los bloques 'Referencia' del PDF se ignorarán automáticamente."
             ),
-            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa")
+            font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info.pack(anchor="w", padx=12, pady=(12, 6))
 
         btn_f = ctk.CTkFrame(tab, fg_color="transparent")
@@ -559,19 +680,19 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         ctk.CTkButton(btn_f, text="📂  Cargar .txt de referencias",
                       command=self.evento_cargar_referencias,
-                      fg_color="#5d4037", hover_color="#3e2723",
-                      width=230, font=ctk.CTkFont(size=12)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=230, font=ctk.CTkFont(size=15)
                       ).pack(side="left", padx=5)
 
         ctk.CTkButton(btn_f, text="🗑  Limpiar",
                       command=self._limpiar_referencias,
-                      fg_color="#6d4c41", hover_color="#4e342e",
-                      width=100, font=ctk.CTkFont(size=11)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=110, font=ctk.CTkFont(size=15)
                       ).pack(side="left", padx=5)
 
         self._refs_count_lbl = ctk.CTkLabel(
             btn_f, text="Sin referencias cargadas",
-            font=ctk.CTkFont(size=11), text_color="#888")
+            font=ctk.CTkFont(size=15), text_color="#888")
         self._refs_count_lbl.pack(side="left", padx=10)
 
         # Lista previa
@@ -591,7 +712,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             tab,
             values=["🖼️  Figuras", "📊  Tablas"],
             command=self._cambiar_panel_media,
-            font=ctk.CTkFont(size=12), width=280)
+            font=ctk.CTkFont(size=15), width=280)
         seg.set("🖼️  Figuras")
         seg.pack(pady=(10, 6))
 
@@ -601,9 +722,8 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         info_f = ctk.CTkLabel(
             self._panel_figs,
-            text="Agrega imágenes con pie de figura. Numeración automática (Figura 1, 2…).\n"
-                 "Se insertan al final del HTML como en InDesign.",
-            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa")
+            text="Agrega imágenes con pie de figura. Numeración automática (Figura 1, 2…).\n",
+            font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info_f.pack(anchor="w", padx=12, pady=(4, 6))
 
         bf = ctk.CTkFrame(self._panel_figs, fg_color="transparent")
@@ -611,13 +731,13 @@ class LimpiadorEditorialApp(ctk.CTk):
         ctk.CTkButton(bf, text="➕  Agregar figura",
                       command=self._agregar_figura,
                       fg_color="#1565c0", hover_color="#0d47a1",
-                      width=160, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+                      width=170, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         ctk.CTkButton(bf, text="🗑  Limpiar",
                       command=self._limpiar_figuras,
-                      fg_color="#6d4c41", hover_color="#4e342e",
-                      width=100, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=110, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         self._figs_count_lbl = ctk.CTkLabel(bf, text="Sin figuras",
-                                             font=ctk.CTkFont(size=11), text_color="#888")
+                                             font=ctk.CTkFont(size=15), text_color="#888")
         self._figs_count_lbl.pack(side="left", padx=10)
 
         self._figs_scroll = ctk.CTkScrollableFrame(
@@ -631,22 +751,22 @@ class LimpiadorEditorialApp(ctk.CTk):
         info_t = ctk.CTkLabel(
             self._panel_tabs,
             text="Importa archivos Excel (.xlsx). Numeración automática (Tabla 1, 2…).\n"
-                 "Escribe el título de la tabla. Para insertar en el cuerpo usa el marcador [Tabla N].",
-            font=ctk.CTkFont(size=11), justify="left", text_color="#aaa")
+                 "Escribe el pie de la tabla y el texto del cuerpo correspondiente a insertar.",
+            font=ctk.CTkFont(size=15), justify="left", text_color="#aaa")
         info_t.pack(anchor="w", padx=12, pady=(4, 6))
 
         bt = ctk.CTkFrame(self._panel_tabs, fg_color="transparent")
         bt.pack(fill="x", padx=10, pady=(0, 6))
         ctk.CTkButton(bt, text="➕  Agregar tabla (.xlsx)",
                       command=self._agregar_tabla,
-                      fg_color="#4a148c", hover_color="#311b92",
-                      width=190, font=ctk.CTkFont(size=12)).pack(side="left", padx=5)
+                      fg_color="#1565c0", hover_color="#0d47a1",
+                      width=190, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         ctk.CTkButton(bt, text="🗑  Limpiar",
                       command=self._limpiar_tablas,
-                      fg_color="#6d4c41", hover_color="#4e342e",
-                      width=100, font=ctk.CTkFont(size=11)).pack(side="left", padx=5)
+                      fg_color="#c62828", hover_color="#8b0000",
+                      width=110, font=ctk.CTkFont(size=15)).pack(side="left", padx=5)
         self._tabs_count_lbl = ctk.CTkLabel(bt, text="Sin tablas",
-                                             font=ctk.CTkFont(size=11), text_color="#888")
+                                             font=ctk.CTkFont(size=15), text_color="#888")
         self._tabs_count_lbl.pack(side="left", padx=10)
 
         self._tabs_scroll = ctk.CTkScrollableFrame(
@@ -670,35 +790,19 @@ class LimpiadorEditorialApp(ctk.CTk):
     # Clases que pertenecen a cada zona del segmented button
     _ZONA_CLASES = {
         "📋 Portada": {
-            "Título principal", "Título secundario", "Autores", "Filiación",
-            "Email / Metadatos", "Cómo citar", "Fecha manuscrito",
-            "Encabezado sección", "Resumen / Abstract", "Palabras clave",
-            "Normal",
+            "Título principal", "Título secundario",
+            "Filiación", "Email / Metadatos",
+            "Cómo citar", "Fecha manuscrito",
+            "Encabezado sección", "Palabras clave",
         },
         "📖 Cuerpo": {
             "Subencabezado", "Subencabezado-bajo", "Cuerpo",
             "Encabezado sección", "Referencia", "Título tabla",
         },
         "🖼 Medios": {
-            "Imagen", "Pie de figura", "Ignorar",
+            "Pie de figura", "Ignorar",
         },
     }
-
-    def _cambiar_zona(self, zona: str):
-        """Muestra solo los bloques de la zona seleccionada."""
-        clases_visibles = self._ZONA_CLASES.get(zona, None)
-        filtro_actual   = self._filtro_menu.get()
-        for b in self.datos_bloques:
-            cls = b["menu"].get()
-            visible = True
-            if clases_visibles is not None:
-                visible = cls in clases_visibles
-            if filtro_actual != "Todos" and cls != filtro_actual:
-                visible = False
-            if visible:
-                b["frame"].pack(fill="x", padx=8, pady=2)
-            else:
-                b["frame"].pack_forget()
 
     def _mostrar_banner(self, msg: str, color_bg="#c8e6c9", color_txt="#1b5e20"):
         """Muestra el banner verde de completado y lo oculta tras 4 segundos."""
@@ -720,13 +824,9 @@ class LimpiadorEditorialApp(ctk.CTk):
             text="  ".join(f"{k[:5]}:{v}" for k, v in c.most_common(6)))
 
     def _aplicar_filtro(self, valor: str):
-        zona = self._zona_seg.get() if hasattr(self, "_zona_seg") else None
-        clases_zona = self._ZONA_CLASES.get(zona) if zona else None
         for b in self.datos_bloques:
             cls = b["menu"].get()
-            en_zona   = (clases_zona is None or cls in clases_zona)
-            en_filtro = (valor == "Todos" or cls == valor)
-            if en_zona and en_filtro:
+            if valor == "Todos" or cls == valor:
                 b["frame"].pack(fill="x", padx=8, pady=2)
             else:
                 b["frame"].pack_forget()
@@ -743,7 +843,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                                fg_color=color, corner_radius=3)
             sw.pack(side="left", padx=(0, 5)); sw.pack_propagate(False)
             ctk.CTkLabel(celda, text=f"{cls}  ({etiqueta})",
-                         font=ctk.CTkFont(size=10),
+                         font=ctk.CTkFont(size=15),
                          text_color="#ddd").pack(side="left")
 
     def _toggle_leyenda(self):
@@ -789,11 +889,11 @@ class LimpiadorEditorialApp(ctk.CTk):
             frame = ctk.CTkFrame(self._refs_scroll, fg_color="#252525", corner_radius=4)
             frame.pack(fill="x", padx=4, pady=2)
             ctk.CTkLabel(frame, text=f"{i}.", width=32,
-                         font=ctk.CTkFont(size=10, weight="bold"),
+                         font=ctk.CTkFont(size=15, weight="bold"),
                          text_color="#aaa").pack(side="left", padx=(6, 2), pady=4)
             ctk.CTkLabel(frame, text=ref[:160] + ("…" if len(ref) > 160 else ""),
                          wraplength=780, justify="left",
-                         font=ctk.CTkFont(size=10)).pack(
+                         font=ctk.CTkFont(size=15)).pack(
                              side="left", padx=4, pady=4, fill="x", expand=True)
 
     # ═════════════════════════════════════════════════════════════
@@ -843,12 +943,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                                             padx=(8, 6), pady=8)
 
             ctk.CTkLabel(frame, text=f"Figura {num}",
-                         font=ctk.CTkFont(size=11, weight="bold"),
+                         font=ctk.CTkFont(size=15, weight="bold"),
                          text_color="#a5d6a7").grid(
                 row=0, column=1, padx=(0, 8), pady=(8, 0), sticky="w")
 
             ctk.CTkLabel(frame, text=os.path.basename(fig["ruta"]),
-                         font=ctk.CTkFont(size=9), text_color="#666").grid(
+                         font=ctk.CTkFont(size=15), text_color="#666").grid(
                 row=1, column=1, padx=(0, 8), sticky="w")
 
             # Campo pie de figura
@@ -856,7 +956,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             ctk.CTkEntry(frame,
                          placeholder_text=f"Pie de la Figura {num}…",
                          textvariable=pie_var,
-                         font=ctk.CTkFont(size=11), height=30).grid(
+                         font=ctk.CTkFont(size=15), height=36).grid(
                 row=0, column=2, columnspan=2,
                 padx=(0, 8), pady=(8, 2), sticky="ew")
             fig["_var"] = pie_var
@@ -864,14 +964,14 @@ class LimpiadorEditorialApp(ctk.CTk):
             # Campo ancla
             ctk.CTkLabel(frame,
                          text="📍 Pega aquí el texto del párrafo donde va la figura:",
-                         font=ctk.CTkFont(size=9), text_color="#a5d6a7").grid(
+                         font=ctk.CTkFont(size=15), text_color="#a5d6a7").grid(
                 row=2, column=1, columnspan=3, padx=(0, 8), pady=(4, 0), sticky="w")
 
             anc_var = ctk.StringVar(value=fig.get("ancla", ""))
             ctk.CTkEntry(frame,
                          placeholder_text='Ej: "Se muestra en la Figura 1A-B."',
                          textvariable=anc_var,
-                         font=ctk.CTkFont(size=10), height=30).grid(
+                         font=ctk.CTkFont(size=15), height=36).grid(
                 row=3, column=1, columnspan=3,
                 padx=(0, 8), pady=(0, 8), sticky="ew")
             fig["_var_anc"] = anc_var
@@ -882,10 +982,10 @@ class LimpiadorEditorialApp(ctk.CTk):
                 self._refrescar_lista_figuras()
                 self._set_status(f"Figura {idx+1} eliminada.")
 
-            ctk.CTkButton(frame, text="✕", width=28, height=28,
-                          fg_color="#b71c1c", hover_color="#7f0000",
+            ctk.CTkButton(frame, text="✕", width=28, height=34,
+                          fg_color="#c62828", hover_color="#8b0000",
                           command=_borrar,
-                          font=ctk.CTkFont(size=12)).grid(
+                          font=ctk.CTkFont(size=15)).grid(
                 row=0, column=4, padx=(0, 6), pady=8)
 
         n = len(self.figuras_manuales)
@@ -911,14 +1011,34 @@ class LimpiadorEditorialApp(ctk.CTk):
     # ─── Tablas ───────────────────────────────────────────────────
 
     def _agregar_tabla(self):
+        self._sync_titulos_tablas()
         rutas = filedialog.askopenfilenames(
             title="Selecciona archivo(s) Excel",
             filetypes=[("Excel", "*.xlsx *.xls"), ("Todos", "*.*")])
         if not rutas: return
+        try:
+            import openpyxl
+        except ImportError:
+            self._set_status("❌ Instala openpyxl: pip install openpyxl"); return
+
         for ruta in rutas:
-            self.tablas_manuales.append({"ruta": ruta, "titulo": "", "ancla": ""})
+            try:
+                wb = openpyxl.load_workbook(ruta, data_only=True)
+                hojas = wb.sheetnames
+                wb.close()
+                for hoja in hojas:
+                    self.tablas_manuales.append({
+                        "ruta":   ruta,
+                        "hoja":   hoja,
+                        "titulo": "",
+                        "ancla":  ""
+                    })
+            except Exception as e:
+                self._set_status(f"❌ Error leyendo {os.path.basename(ruta)}: {e}")
+                return
+
         self._refrescar_lista_tablas()
-        self._set_status(f"✓ {len(self.tablas_manuales)} tabla(s) en total.")
+        self._set_status(f"✓ {len(self.tablas_manuales)} tabla(s) detectadas.")
 
     def _limpiar_tablas(self):
         self.tablas_manuales = []
@@ -942,13 +1062,16 @@ class LimpiadorEditorialApp(ctk.CTk):
                 row=0, column=0, rowspan=3, padx=(8, 4), pady=8, sticky="n")
 
             ctk.CTkLabel(frame, text=f"Tabla {num}",
-                         font=ctk.CTkFont(size=12, weight="bold"),
+                         font=ctk.CTkFont(size=15, weight="bold"),
                          text_color="#ce93d8").grid(
                 row=0, column=1, padx=(0, 6), pady=(8, 0), sticky="w")
 
-            ctk.CTkLabel(frame,
-                         text=os.path.basename(tab_item["ruta"]),
-                         font=ctk.CTkFont(size=9), text_color="#666").grid(
+            # Nombre del archivo + hoja
+            hoja = tab_item.get("hoja", "")
+            archivo = os.path.basename(tab_item["ruta"])
+            subtitulo = f"{archivo}  ›  {hoja}" if hoja else archivo
+            ctk.CTkLabel(frame, text=subtitulo,
+                         font=ctk.CTkFont(size=15), text_color="#888").grid(
                 row=1, column=1, padx=(0, 6), pady=0, sticky="w")
 
             # ── Campo 1: Título ──
@@ -957,7 +1080,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 frame,
                 placeholder_text=f"Título de la Tabla {num}…",
                 textvariable=tit_var,
-                font=ctk.CTkFont(size=11), height=30
+                font=ctk.CTkFont(size=15), height=36
             ).grid(row=0, column=2, columnspan=2,
                    padx=(0, 8), pady=(8, 2), sticky="ew")
             tab_item["_var_tit"] = tit_var
@@ -965,7 +1088,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             # ── Campo 2: Texto ancla ──
             ctk.CTkLabel(frame,
                          text="📍 Pega aquí el texto del párrafo donde va la tabla:",
-                         font=ctk.CTkFont(size=9), text_color="#ce93d8").grid(
+                         font=ctk.CTkFont(size=15), text_color="#ce93d8").grid(
                 row=2, column=1, columnspan=3, padx=(0, 8), pady=(4, 0), sticky="w")
 
             anc_var = ctk.StringVar(value=tab_item.get("ancla", ""))
@@ -973,7 +1096,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 frame,
                 placeholder_text='Ej: "la Dra. Elena Centeno (Tabla 1)."',
                 textvariable=anc_var,
-                font=ctk.CTkFont(size=10), height=30
+                font=ctk.CTkFont(size=15), height=36
             ).grid(row=3, column=1, columnspan=3,
                    padx=(0, 8), pady=(0, 8), sticky="ew")
             tab_item["_var_anc"] = anc_var
@@ -985,10 +1108,10 @@ class LimpiadorEditorialApp(ctk.CTk):
                 self._refrescar_lista_tablas()
                 self._set_status(f"Tabla {idx+1} eliminada.")
 
-            ctk.CTkButton(frame, text="✕", width=28, height=28,
-                          fg_color="#b71c1c", hover_color="#7f0000",
+            ctk.CTkButton(frame, text="✕", width=28, height=34,
+                          fg_color="#c62828", hover_color="#8b0000",
                           command=_borrar_t,
-                          font=ctk.CTkFont(size=12)).grid(
+                          font=ctk.CTkFont(size=15)).grid(
                 row=0, column=4, padx=(0, 6), pady=8)
 
         n = len(self.tablas_manuales)
@@ -1090,7 +1213,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         self._btn_cargar.configure(
             state="disabled",
             text="⏳  Analizando…",
-            fg_color="#555"
+            fg_color="#37474f"
         )
         self._status.configure(text_color="#888")   # resetear color
         self._set_status("⏳  Analizando PDF, por favor espera…")
@@ -1282,7 +1405,7 @@ class LimpiadorEditorialApp(ctk.CTk):
 
                 bloques_raw.append({
                     "contenido": texto,
-                    "clasificacion": cls,
+                    "clasificacion": _CLASE_COMPAT.get(cls, cls),
                     "size": r["size"],
                     "bold": r["bold"],
                     "italic": r["italic"],
@@ -1548,9 +1671,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             self._mostrar_banner(
                 f"✅  Análisis completo — {len(bloques_utiles)} bloques extraídos")
             self._actualizar_stats()
-            # Mostrar zona Portada por defecto al cargar
-            self._zona_seg.set("📋 Portada")
-            self._cambiar_zona("📋 Portada")
+            self._aplicar_filtro("Todos")
 
         except Exception as e:
             self._set_status(f"❌ Error: {e}")
@@ -1561,7 +1682,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             self._btn_cargar.configure(
                 state="normal",
                 text="📂  Cargar PDF",
-                fg_color="#2e86c1"
+                fg_color="#1565c0"
             )
 
     def _crear_bloque_ui(self, item):
@@ -1579,16 +1700,16 @@ class LimpiadorEditorialApp(ctk.CTk):
         frame.columnconfigure(1, weight=1)
 
         badge = f"{size:.0f}pt"+(" B" if bold else "")+(" I" if ital else "")
-        ctk.CTkLabel(frame, text=badge, width=56,
-                     font=ctk.CTkFont(size=9), text_color="#bbb"
+        ctk.CTkLabel(frame, text=badge, width=62,
+                     font=ctk.CTkFont(size=15), text_color="#bbb"
                      ).grid(row=0, column=0, padx=(6,0), pady=5, sticky="w")
-        ctk.CTkLabel(frame, text=preview, wraplength=670,
+        ctk.CTkLabel(frame, text=preview, wraplength=720,
                      justify="left", anchor="w",
-                     font=ctk.CTkFont(size=11)
+                     font=ctk.CTkFont(size=15)
                      ).grid(row=0, column=1, padx=6, pady=5, sticky="ew")
 
         menu = ctk.CTkOptionMenu(frame, values=OPCIONES, width=175,
-                                  font=ctk.CTkFont(size=11),
+                                  font=ctk.CTkFont(size=15),
                                   command=self._actualizar_stats)
         menu.set(cls)
         menu.grid(row=0, column=2, padx=(0,8), pady=5)
@@ -1671,10 +1792,10 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         # Decidir qué referencias usar
         # Si hay externas → usar esas; los bloques "Referencia" del PDF → ignorar
+        # Referencias: SOLO las del .txt externo.
+        # Las referencias del PDF se ignoran siempre — el usuario las carga aparte.
         usar_refs_externas = bool(self.referencias_externas)
-        refs_a_usar = (self.referencias_externas if usar_refs_externas
-                       else [b["contenido"] for b in self.datos_bloques
-                             if b["menu"].get() == "Referencia"])
+        refs_a_usar = self.referencias_externas if usar_refs_externas else []
 
         # ── Separar bloques (saltando zona de autores del PDF) ──────
         idx_refs_start = None
@@ -1840,11 +1961,10 @@ class LimpiadorEditorialApp(ctk.CTk):
                     t_kw, count=1, flags=re.IGNORECASE)
                 lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
             elif cls in ("Normal", "Cuerpo"):
-                if en_refs and not usar_refs_externas:
-                    for parte in b["contenido"].split("\n\n"):
-                        parte = parte.strip()
-                        if parte:
-                            lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{esc(parte)}</p>')
+                if en_refs:
+                    # Dentro de la sección Referencias del PDF → ignorar siempre
+                    # (las refs externas ya se inyectaron con el ol.referencias)
+                    continue
                 else:
                     # Re-fusionar partes que siguen siendo continuación
                     # (§SUB§ siempre se trata aparte)
@@ -1923,7 +2043,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             for idx_t, t_item in enumerate(self.tablas_manuales, 1):
                 ancla  = t_item.get("ancla", "").strip()
                 titulo = t_item.get("titulo", "") or f"Tabla {idx_t}"
-                thtml  = _excel_a_html_tabla(t_item["ruta"])
+                thtml  = _excel_a_html_tabla(t_item["ruta"], t_item.get("hoja"))
                 bloque = (
                     f'\n<div class="tabla-wrapper">\n'
                     f'<p class="tabla-titulo"><strong>Tabla {idx_t}.</strong> {esc(titulo)}</p>\n'
@@ -2031,123 +2151,20 @@ class LimpiadorEditorialApp(ctk.CTk):
             f.write(html_body)
         self._set_status(f"✓ HTML guardado en: {ruta}")
 
+
     # ═════════════════════════════════════════════════════════════
-    # EXPORTAR XML
+    # EXPORTAR XML  (próximamente)
     # ═════════════════════════════════════════════════════════════
 
     def evento_exportar_xml(self):
-        if not self.datos_bloques:
-            self._set_status("⚠ Primero carga un PDF."); return
-        ruta = filedialog.asksaveasfilename(
-            defaultextension=".xml", filetypes=[("XML", "*.xml")])
-        if not ruta: return
-
-        usar_refs_externas = bool(self.referencias_externas)
-        refs_xml = (self.referencias_externas if usar_refs_externas
-                    else [b["contenido"] for b in self.datos_bloques
-                          if b["menu"].get() == "Referencia"])
-
-        def ex(t): return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
-
-        head = ['<?xml version="1.0" encoding="UTF-8"?>',
-                '<article article-type="research-article" xml:lang="es"',
-                '         xmlns:xlink="http://www.w3.org/1999/xlink">',
-                "  <front><article-meta>"]
-        body = ["  <body>"]
-        back = ["  <back>"]
-        sec  = False
-
-        for b in self.datos_bloques:
-            cls = b["menu"].get()
-            txt = ex(b["contenido"])
-            if cls in ("Ignorar","Imagen","Referencia"): continue
-            if   cls == "Título principal":
-                head.append(f"    <title-group><article-title>{txt}</article-title></title-group>")
-            elif cls == "Título secundario":
-                head.append(f"    <title-group><trans-title>{txt}</trans-title></title-group>")
-            elif cls == "Autores":
-                head.append(f"    <contrib-group><contrib><string-name>{txt}</string-name></contrib></contrib-group>")
-            elif cls == "Filiación":
-                head.append(f"    <aff>{txt}</aff>")
-            elif cls == "Palabras clave":
-                head.append(f"    <kwd-group><kwd>{txt}</kwd></kwd-group>")
-            elif cls in ("Cómo citar","Fecha manuscrito"):
-                back.append(f"    <notes><p>{txt}</p></notes>")
-            elif cls == "Encabezado sección":
-                if sec: body.append("    </sec>")
-                body.append(f"    <sec><title>{txt}</title>"); sec = True
-            elif cls == "Subencabezado":
-                body.append(f"      <title>{txt}</title>")
-            elif cls in ("Normal","Resumen / Abstract"):
-                body.append(f"      <p>{txt}</p>")
-            elif cls == "Pie de figura":
-                body.append(f"      <fig><caption><p>{txt}</p></caption></fig>")
-
-        if sec: body.append("    </sec>")
-        if refs_xml:
-            body.append("    <ref-list>")
-            for ref in refs_xml:
-                body.append(f"      <ref><mixed-citation>{ex(ref)}</mixed-citation></ref>")
-            body.append("    </ref-list>")
-
-        body.append("  </body>")
-        back.append("  </back>\n</article>")
-        head += ["  </article-meta></front>"]
-
-        with open(ruta, "w", encoding="utf-8") as f:
-            f.write("\n".join(head + body + back))
-        self._set_status(f"✓ XML guardado en: {ruta}")
+        self._set_status("⚠ Exportación XML en desarrollo.")
 
     # ═════════════════════════════════════════════════════════════
-    # EXPORTAR EPUB
+    # EXPORTAR EPUB  (próximamente)
     # ═════════════════════════════════════════════════════════════
 
     def evento_exportar_epub(self):
-        if not self.datos_bloques:
-            self._set_status("⚠ Primero carga un PDF."); return
-        ruta = filedialog.asksaveasfilename(
-            defaultextension=".epub", filetypes=[("EPUB","*.epub")])
-        if not ruta: return
-
-        usar_refs_externas = bool(self.referencias_externas)
-        refs_epub = (self.referencias_externas if usar_refs_externas
-                     else [b["contenido"] for b in self.datos_bloques
-                           if b["menu"].get() == "Referencia"])
-
-        book = epub.EpubBook()
-        book.set_title("Artículo de Revista")
-        book.set_language("es")
-        cap  = epub.EpubHtml(title="Contenido",
-                              file_name="articulo.xhtml", lang="es")
-        html = "<h1>Artículo</h1>\n"
-
-        for b in self.datos_bloques:
-            cls = b["menu"].get()
-            txt = b["contenido"]
-            if cls in ("Ignorar","Imagen","Referencia"): continue
-            if   cls == "Título principal":          html += f"<h1>{txt}</h1>\n"
-            elif cls == "Título secundario":         html += f"<h2><em>{txt}</em></h2>\n"
-            elif cls == "Autores":                   html += f"<p><strong>{txt}</strong></p>\n"
-            elif cls in ("Filiación","Email / Metadatos"): html += f"<p><small>{txt}</small></p>\n"
-            elif cls == "Encabezado sección":        html += f"<h2>{txt}</h2>\n"
-            elif cls == "Subencabezado":             html += f"<h3>{txt}</h3>\n"
-            elif cls == "Resumen / Abstract":        html += f"<p><em>{txt}</em></p>\n"
-            elif cls == "Palabras clave":            html += f"<p><strong>{txt}</strong></p>\n"
-            elif cls == "Normal":                    html += f"<p>{txt}</p>\n"
-            elif cls == "Pie de figura":             html += f"<p><small><em>{txt}</em></small></p>\n"
-            elif cls in ("Cómo citar","Fecha manuscrito"): html += f"<p><small>{txt}</small></p>\n"
-
-        if refs_epub:
-            html += ("<h2>Referencias</h2>\n<ol>\n"
-                     + "".join(f"  <li>{r}</li>\n" for r in refs_epub)
-                     + "</ol>\n")
-
-        cap.content = html
-        book.add_item(cap)
-        book.spine = ["nav", cap]
-        epub.write_epub(ruta, book, {})
-        self._set_status(f"✓ EPUB guardado en: {ruta}")
-
+        self._set_status("⚠ Exportación EPUB en desarrollo.")
 
 if __name__ == "__main__":
     app = LimpiadorEditorialApp()

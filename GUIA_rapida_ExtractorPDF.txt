@@ -1,0 +1,90 @@
+╔══════════════════════════════════════════════════════════════════╗
+║        EXTRACTOR DE PDF SEMÁNTICO — GUÍA RÁPIDA DE USO          ║
+║                    Paleontología Mexicana, UNAM                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+REQUISITOS
+──────────
+- Python 3.10 o superior instalado
+- Instalar dependencias (solo la primera vez):
+  pip install customtkinter pymupdf Pillow openpyxl
+- Ejecutar el programa usando venv:
+  python app.py
+
+
+FLUJO BÁSICO DE TRABAJO
+────────────────────────
+
+NOTA: Para cada apartado hay una carpeta de "Material de apoyo", revisar los archivos.
+
+1. CARGAR EL PDF
+   → Pestaña "PDF" → botón "Cargar PDF"
+   → El programa analiza automáticamente el artículo
+   → Puedes ver los bloques detectados y cambiar su etiqueta
+     si algo está mal clasificado (usa el menú de la derecha)
+
+2. AUTORES Y ORCID  (pestaña "Autores")
+   Opción A — Excel:
+   → Prepara un Excel con dos columnas: Autor | ORCID
+   → El ORCID puede ser el link completo o solo los números
+   → Botón "Cargar Excel"
+
+   Opción B — Manual:
+   → Botón "Agregar autor"
+   → Escribe el nombre y pega el link de ORCID (acepta link completo)
+
+3. AFILIACIONES  (pestaña "Afiliaciones")
+   → Prepara un .txt con una afiliación por línea, así:
+       1 Colección de Paleontología, Facultad de Estudios...
+       2 Departamento de Paleontología, Instituto de Geología...
+       * correo@unam.mx
+   → Botón "Cargar .txt"
+
+4. REFERENCIAS  (pestaña "Referencias")
+   → Prepara un .txt con las referencias numeradas, así:
+       1. Apellido, N. (2024). Título del artículo...
+       2. Apellido, N. (2023). Otro artículo...
+   → Botón "Cargar .txt"
+   → IMPORTANTE: si no cargas referencias, NO aparecerán en el HTML
+
+5. FIGURAS  (pestaña "Figuras")
+   → Botón "Agregar figura" → selecciona la imagen (jpg, png, etc.)
+   → Escribe el pie de figura
+   → En "Texto ancla": pega las últimas palabras del párrafo
+     donde quieres que aparezca la figura
+   → Si no pones ancla, la figura va al final del documento
+
+6. TABLAS  (pestaña "Figuras" → sección Tablas)
+   → Prepara un Excel donde cada HOJA es una tabla
+     (Hoja 1 = Tabla 1, Hoja 2 = Tabla 2, etc.)
+   → Primera fila de cada hoja = encabezados de la tabla
+   → Botón "Agregar tabla (.xlsx)"
+   → Escribe el título y pega el texto ancla igual que en figuras
+
+7. EXPORTAR HTML
+   → Botón verde "HTML" arriba de la pantalla
+   → Elige dónde guardar
+   → Listo ✓
+
+
+NOTAS IMPORTANTES
+──────────────────
+- Los autores del PDF se ignoran automáticamente si cargas
+  la pestaña de Autores. Siempre usa la pestaña para autores limpios.
+
+- Las referencias del PDF también se ignoran. Carga siempre el .txt.
+
+- Si una figura o tabla no aparece donde debe, revisa que el texto
+  ancla coincida exactamente con el final del párrafo en el HTML.
+
+- En la pestaña PDF puedes filtrar por tipo de bloque para revisar
+  solo los títulos, encabezados, etc. sin ver todo el texto.
+
+- Si un bloque está mal etiquetado, cámbialo con el menú desplegable
+  de la derecha y vuelve a exportar.
+
+
+PARA REPORTAR PROBLEMAS
+────────────────────────
+Describe qué hiciste, qué esperabas y qué salió diferente.
+Adjunta el PDF y el HTML generado si es posible.
