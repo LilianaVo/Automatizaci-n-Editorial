@@ -241,30 +241,54 @@ def _excel_a_html_tabla(ruta: str, hoja: str = None) -> str:
     """
     Convierte una hoja de un .xlsx en tabla HTML con estilos PM.
     Si hoja=None usa la hoja activa (primera).
+    Maneja celdas fusionadas (merged): solo muestra el valor en la celda
+    superior-izquierda del rango; las demás celdas del merge quedan vacías.
+    Esto evita que el centrado visual en la primera columna duplique texto.
     """
     try:
         import openpyxl
         wb = openpyxl.load_workbook(ruta, data_only=True)
         ws = wb[hoja] if hoja and hoja in wb.sheetnames else wb.active
-        filas = list(ws.iter_rows(values_only=True))
+
+        # Construir set de celdas que son parte de un merge pero NO son la
+        # celda "maestra" (top-left del rango fusionado).
+        celdas_merge_secundarias: set[tuple[int,int]] = set()
+        for rango in ws.merged_cells.ranges:
+            # rango.min_row/min_col es la celda maestra
+            for r in range(rango.min_row, rango.max_row + 1):
+                for c in range(rango.min_col, rango.max_col + 1):
+                    if r == rango.min_row and c == rango.min_col:
+                        continue   # esta es la maestra — guardar su valor
+                    celdas_merge_secundarias.add((r, c))
+
+        # Leer filas respetando las celdas secundarias (vaciarlas)
+        filas = []
+        for row_idx, fila in enumerate(ws.iter_rows(), start=1):
+            fila_vals = []
+            for col_idx, celda in enumerate(fila, start=1):
+                if (row_idx, col_idx) in celdas_merge_secundarias:
+                    fila_vals.append("")   # celda fusionada secundaria → vacía
+                else:
+                    fila_vals.append("" if celda.value is None else str(celda.value))
+            filas.append(fila_vals)
+
         if not filas:
             return "<p><em>[Tabla vacía]</em></p>"
 
         html = ['<table class="pm-tabla">']
         html.append("<thead><tr>")
-        for celda in filas[0]:
-            val = "" if celda is None else str(celda)
+        for val in filas[0]:
             html.append(f"<th>{esc(val)}</th>")
         html.append("</tr></thead><tbody>")
         for fila in filas[1:]:
-            if all(c is None for c in fila):
+            if all(v == "" for v in fila):
                 continue
             html.append("<tr>")
-            for celda in fila:
-                val = "" if celda is None else str(celda)
+            for val in fila:
                 html.append(f"<td>{esc(val)}</td>")
             html.append("</tr>")
         html.append("</tbody></table>")
+        wb.close()
         return "\n".join(html)
     except ImportError:
         return "<p><em>[Instala openpyxl: pip install openpyxl]</em></p>"
@@ -980,14 +1004,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                          font=ctk.CTkFont(size=15), text_color="#a5d6a7").grid(
                 row=2, column=1, columnspan=3, padx=(0, 8), pady=(4, 0), sticky="w")
 
-            anc_var = ctk.StringVar(value=fig.get("ancla", ""))
-            ctk.CTkEntry(frame,
-                         placeholder_text='Ej: "Se muestra en la Figura 1A-B."',
-                         textvariable=anc_var,
-                         font=ctk.CTkFont(size=15), height=36).grid(
-                row=3, column=1, columnspan=3,
-                padx=(0, 8), pady=(0, 8), sticky="ew")
-            fig["_var_anc"] = anc_var
+            anc_box = ctk.CTkTextbox(frame, font=ctk.CTkFont(size=14),
+                                     height=60, wrap="word")
+            anc_box.insert("1.0", fig.get("ancla", ""))
+            anc_box.grid(row=3, column=1, columnspan=3,
+                         padx=(0, 8), pady=(0, 8), sticky="ew")
+            fig["_box_anc"] = anc_box
 
             def _borrar(idx=i):
                 self._sync_pies()
@@ -1011,15 +1033,19 @@ class LimpiadorEditorialApp(ctk.CTk):
         for fig in self.figuras_manuales:
             if "_var" in fig:
                 fig["pie"] = fig["_var"].get()
-            if "_var_anc" in fig:
+            if "_box_anc" in fig:
+                fig["ancla"] = fig["_box_anc"].get("1.0", "end").strip()
+            elif "_var_anc" in fig:   # retrocompatibilidad
                 fig["ancla"] = fig["_var_anc"].get()
 
     def _sync_titulos_tablas(self):
         for tab in self.tablas_manuales:
             if "_var_tit" in tab:
                 tab["titulo"] = tab["_var_tit"].get()
-            if "_var_anc" in tab:
-                tab["ancla"]  = tab["_var_anc"].get()
+            if "_box_anc" in tab:
+                tab["ancla"] = tab["_box_anc"].get("1.0", "end").strip()
+            elif "_var_anc" in tab:   # retrocompatibilidad
+                tab["ancla"] = tab["_var_anc"].get()
 
     # ─── Tablas ───────────────────────────────────────────────────
 
@@ -1104,15 +1130,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                          font=ctk.CTkFont(size=15), text_color="#ce93d8").grid(
                 row=2, column=1, columnspan=3, padx=(0, 8), pady=(4, 0), sticky="w")
 
-            anc_var = ctk.StringVar(value=tab_item.get("ancla", ""))
-            ctk.CTkEntry(
-                frame,
-                placeholder_text='Ej: "la Dra. Elena Centeno (Tabla 1)."',
-                textvariable=anc_var,
-                font=ctk.CTkFont(size=15), height=36
-            ).grid(row=3, column=1, columnspan=3,
-                   padx=(0, 8), pady=(0, 8), sticky="ew")
-            tab_item["_var_anc"] = anc_var
+            anc_box_t = ctk.CTkTextbox(frame, font=ctk.CTkFont(size=14),
+                                       height=60, wrap="word")
+            anc_box_t.insert("1.0", tab_item.get("ancla", ""))
+            anc_box_t.grid(row=3, column=1, columnspan=3,
+                           padx=(0, 8), pady=(0, 8), sticky="ew")
+            tab_item["_box_anc"] = anc_box_t
 
             # ── Botón eliminar ──
             def _borrar_t(idx=i):
@@ -1481,7 +1504,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                 r")(?:\s+(?:[A-ZÁÉÍÓÚÑA-Za-z]{1,20}|\d{1,5}))+$" # más tokens
             )
 
-            def _parece_fila_tabla(item):
+            def _parece_fila_tabla(item, ya_en_modo=False):
+                """Solo detecta filas de tabla cuando ya estamos en modo tabla (ya_en_modo=True).
+                El modo tabla se activa únicamente por un Título tabla explícito,
+                nunca de forma proactiva, para evitar borrar texto real del artículo."""
+                if not ya_en_modo:
+                    return False   # nunca suprimir proactivamente sin Título tabla
                 t   = item["contenido"].strip()
                 cls = item["clasificacion"]
                 if cls != "Cuerpo": return False
@@ -1496,7 +1524,6 @@ class LimpiadorEditorialApp(ctk.CTk):
                     return False
                 # Encabezado de columnas: todas las palabras cortas (≤20 chars)
                 if all(len(tk) <= 20 for tk in tokens):
-                    # Al menos una palabra en mayúscula o es "n"/"N"
                     if any(tk[0].isupper() or tk in ("n", "N") for tk in tokens):
                         return True
                 # Fila de datos: contiene al menos un número
@@ -1516,7 +1543,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                     continue
 
                 # Activar por patrón de fila (sin necesitar el título)
-                if not en_modo_tabla and _parece_fila_tabla(item):
+                if not en_modo_tabla and _parece_fila_tabla(item, ya_en_modo=False):
                     en_modo_tabla = True
                     # No agregar esta fila — es contenido de tabla del PDF
                     continue
@@ -1719,6 +1746,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             fusionados = []
             buf_parrafos: list[tuple] = []  # (texto, pnum)
             buf_item = None
+            _en_tabla_pdf = False   # True → estamos dentro de tabla del PDF, suprimir Cuerpo
 
             def _vaciar():
                 nonlocal buf_item
@@ -1736,12 +1764,19 @@ class LimpiadorEditorialApp(ctk.CTk):
 
                 # Imágenes, pies de figura, ignorados y TABLAS del PDF: añadir
                 # a fusionados sin tocar el buffer de texto.
-                # Cómo citar y Fecha manuscrito también: aunque están en NO_FUSIONAR
-                # para el dropdown, no deben cortar el flujo del texto del artículo.
-                if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla",
-                           "Cómo citar", "Fecha manuscrito"):
+                if cls in ("Imagen", "Ignorar", "Pie de figura"):
                     fusionados.append(item)
-                    # Marcar pendiente si la oración no terminó
+                    continue
+
+                # Título tabla → activar modo supresión de filas PDF
+                if cls == "Título tabla":
+                    _en_tabla_pdf = True
+                    fusionados.append(item)
+                    continue
+
+                # Cómo citar y Fecha manuscrito: siempre pasan, no cortan flujo
+                if cls in ("Cómo citar", "Fecha manuscrito"):
+                    fusionados.append(item)
                     if cls in ("Cómo citar", "Fecha manuscrito"):
                         self._cc_pendiente = (
                             item
@@ -1749,6 +1784,25 @@ class LimpiadorEditorialApp(ctk.CTk):
                             else None
                         )
                     continue
+
+                # Encabezado/subencabezado → fin del modo tabla PDF
+                if cls in ("Encabezado sección", "Subencabezado", "Subencabezado-bajo",
+                           "Título principal", "Título secundario"):
+                    _en_tabla_pdf = False
+
+                # Si estamos dentro de tabla del PDF: suprimir bloques Cuerpo cortos
+                # y solo salir cuando aparece texto real (>150 chars con puntuación)
+                if _en_tabla_pdf and cls in ("Cuerpo", "Normal"):
+                    txt_blk = item["contenido"].strip()
+                    es_texto_real = (
+                        len(txt_blk) > 150
+                        and txt_blk[-1] in ".?!)"
+                        and re.search(r"[,;]", txt_blk)   # texto narrativo tiene comas
+                    )
+                    if es_texto_real:
+                        _en_tabla_pdf = False   # salimos del modo tabla
+                    else:
+                        continue   # suprimir fila de tabla del PDF
 
                 if cls in NO_FUSIONAR:
                     _vaciar()
@@ -1793,8 +1847,81 @@ class LimpiadorEditorialApp(ctk.CTk):
             _vaciar()
             bloques_utiles = fusionados
 
+            # ── Render agrupado por sección ──────────────────────────
+            _CABECERAS = {
+                "Título principal", "Título secundario",
+                "Encabezado sección", "Subencabezado",
+            }
+
+            # Agrupar: lista de (cabecera_item | None, [bloques])
+            grupos: list[tuple] = []
+            cab_actual = None
+            hijos_actual: list = []
             for item in bloques_utiles:
-                self._crear_bloque_ui(item)
+                if item["clasificacion"] in _CABECERAS:
+                    if hijos_actual or cab_actual is not None:
+                        grupos.append((cab_actual, hijos_actual))
+                    cab_actual = item
+                    hijos_actual = []
+                else:
+                    hijos_actual.append(item)
+            grupos.append((cab_actual, hijos_actual))
+
+            for cab, hijos in grupos:
+                if cab is not None:
+                    self._crear_bloque_ui(cab)   # cabecera siempre visible
+                if not hijos:
+                    continue
+
+                # Contenedor colapsable para los hijos
+                container = ctk.CTkFrame(
+                    self.frame_scroll, fg_color="#161b27", corner_radius=4)
+                container.pack(fill="x", padx=8, pady=(0, 4))
+
+                # Botón toggle (▼ N bloques)
+                _visible = [True]
+                hijos_frames: list[ctk.CTkFrame] = []
+
+                toggle_bar = ctk.CTkFrame(container, fg_color="#1e2535", corner_radius=4)
+                toggle_bar.pack(fill="x", padx=0, pady=0)
+
+                lbl_toggle = ctk.CTkLabel(
+                    toggle_bar,
+                    text=f"▼  {len(hijos)} bloque{'s' if len(hijos)!=1 else ''}",
+                    font=ctk.CTkFont(size=13),
+                    text_color="#64748b",
+                    cursor="hand2",
+                    anchor="w")
+                lbl_toggle.pack(side="left", padx=10, pady=3)
+
+                inner = ctk.CTkFrame(container, fg_color="transparent")
+                inner.pack(fill="x", padx=0, pady=0)
+
+                def _make_toggle(lbl, frm, vis, n):
+                    def _toggle(event=None):
+                        vis[0] = not vis[0]
+                        if vis[0]:
+                            frm.pack(fill="x", padx=0, pady=0)
+                            lbl.configure(
+                                text=f"▼  {n} bloque{'s' if n!=1 else ''}",
+                                text_color="#64748b")
+                        else:
+                            frm.pack_forget()
+                            lbl.configure(
+                                text=f"▶  {n} bloque{'s' if n!=1 else ''}  (colapsado)",
+                                text_color="#475569")
+                    return _toggle
+
+                lbl_toggle.bind(
+                    "<Button-1>",
+                    _make_toggle(lbl_toggle, inner, _visible, len(hijos)))
+
+                # Render de hijos dentro del inner frame
+                _old_scroll = self.frame_scroll
+                self.frame_scroll = inner
+                for h in hijos:
+                    self._crear_bloque_ui(h)
+                self.frame_scroll = _old_scroll
 
             conteo  = Counter(b["clasificacion"] for b in bloques_utiles)
             resumen = "  |  ".join(f"{k}: {v}" for k,v in conteo.most_common(6))
@@ -1825,27 +1952,45 @@ class LimpiadorEditorialApp(ctk.CTk):
         bold = item.get("bold", False)
         ital = item.get("italic", False)
 
-        color   = COLOR_POR_CLASE.get(cls, "#2b2b2b")
-        preview = (cont[:150]+"…") if len(cont)>150 else cont
+        color = COLOR_POR_CLASE.get(cls, "#2b2b2b")
+
+        # Texto: si es corto muestra todo; si es largo muestra 200 chars y expandible
+        es_largo = len(cont) > 200
+        preview  = cont[:200] + "…" if es_largo else cont
 
         frame = ctk.CTkFrame(self.frame_scroll, fg_color=color, corner_radius=5)
         frame.pack(fill="x", padx=8, pady=2)
         frame.columnconfigure(1, weight=1)
 
-        badge = f"{size:.0f}pt"+(" B" if bold else "")+(" I" if ital else "")
+        badge = f"{size:.0f}pt" + (" B" if bold else "") + (" I" if ital else "")
         ctk.CTkLabel(frame, text=badge, width=62,
                      font=ctk.CTkFont(size=15), text_color="#bbb"
-                     ).grid(row=0, column=0, padx=(6,0), pady=5, sticky="w")
-        ctk.CTkLabel(frame, text=preview, wraplength=720,
-                     justify="left", anchor="w",
-                     font=ctk.CTkFont(size=15)
-                     ).grid(row=0, column=1, padx=6, pady=5, sticky="ew")
+                     ).grid(row=0, column=0, padx=(6, 0), pady=(5, 0), sticky="nw")
+
+        # Label de texto — clickable para expandir/contraer si es largo
+        lbl = ctk.CTkLabel(frame, text=preview, wraplength=720,
+                           justify="left", anchor="w",
+                           font=ctk.CTkFont(size=15))
+        lbl.grid(row=0, column=1, padx=6, pady=5, sticky="ew")
+
+        if es_largo:
+            _expandido = [False]
+            def _toggle(event=None, l=lbl, t=cont, p=preview, e=_expandido):
+                e[0] = not e[0]
+                l.configure(text=t if e[0] else p,
+                            text_color="#ffffff" if e[0] else "#e2e8f0")
+            lbl.configure(text_color="#e2e8f0", cursor="hand2")
+            lbl.bind("<Button-1>", _toggle)
+            # Pequeño indicador de que hay más
+            ctk.CTkLabel(frame, text="▼ más", font=ctk.CTkFont(size=12),
+                         text_color="#64748b", cursor="hand2"
+                         ).grid(row=1, column=1, padx=6, pady=(0, 4), sticky="w")
 
         menu = ctk.CTkOptionMenu(frame, values=OPCIONES, width=175,
                                   font=ctk.CTkFont(size=15),
                                   command=self._actualizar_stats)
         menu.set(cls)
-        menu.grid(row=0, column=2, padx=(0,8), pady=5)
+        menu.grid(row=0, column=2, padx=(0, 8), pady=5, sticky="n")
 
         self.datos_bloques.append({
             "contenido": cont, "menu": menu,
@@ -1880,7 +2025,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                             and re.match(r"resumen|abstract",
                                          b["contenido"].strip().lower())
                             and (idx_tit_sec is None or i > idx_tit_sec)), None)
-        _CONSERVAR_EN_ZONA = {"Título principal", "Título secundario", "Filiación"}
+        _CONSERVAR_EN_ZONA = {"Título principal", "Título secundario"}
         zona_autores_pdf = set()
         if idx_tit_sec is not None and idx_resumen is not None:
             zona_autores_pdf = {
@@ -1925,6 +2070,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         en_abstract_secundario = False
         _en_cuerpo_secundario  = False
         primer_abstract_visto  = None
+        _doc_en_ingles         = False
         if self.autores_orcid:
             autores_html_manual = (
                 f'<p class="autores sin-sangria">'
@@ -2072,40 +2218,35 @@ class LimpiadorEditorialApp(ctk.CTk):
                 es_gris   = False
                 con_linea = txt_low in _SECCIONES_CON_LINEA
 
-                # Determinar si este encabezado es primario (negro) o secundario (gris cursiva)
-                _ABSTRACTS = {"resumen", "abstract", "resumen no técnico",
-                              "non-technical abstract", "keywords", "palabras clave"}
-                if txt_low in _ABSTRACTS:
+                # Idioma del documento: lo determinamos la primera vez que vemos
+                # un encabezado de resumen.
+                # Español: "resumen" / "resumen no técnico" → primarios (negro)
+                #          "abstract" / "non-technical abstract" → secundarios (gris)
+                # Inglés:  "abstract" / "non-technical abstract" → primarios (negro)
+                #          "resumen" / "resumen no técnico" → secundarios (gris)
+                _ES_INGLES  = {"abstract", "non-technical abstract"}
+                _ES_ESPANOL = {"resumen", "resumen no técnico"}
+                _TODOS_ABS  = _ES_INGLES | _ES_ESPANOL | {"keywords", "palabras clave"}
+
+                if txt_low in _TODOS_ABS:
                     if primer_abstract_visto is None:
-                        # Primera vez que aparece un abstract → primario (negro)
                         primer_abstract_visto = txt_low
                         en_abstract_secundario = False
+                        # Detectar idioma del documento por el primer abstract
+                        _doc_en_ingles = txt_low in _ES_INGLES
                     else:
-                        # ¿Es la "pareja" del primero? Resumen↔Abstract, RnT↔NtA
-                        _PARES = {
-                            "resumen": "abstract",
-                            "abstract": "resumen",
-                            "resumen no técnico": "non-technical abstract",
-                            "non-technical abstract": "resumen no técnico",
-                            "palabras clave": "keywords",
-                            "keywords": "palabras clave",
-                        }
-                        if txt_low == _PARES.get(primer_abstract_visto):
-                            en_abstract_secundario = True
-                        elif txt_low == primer_abstract_visto:
-                            # Mismo idioma de nuevo (Non-technical en el mismo idioma)
-                            en_abstract_secundario = False
-                            primer_abstract_visto = txt_low
-                    es_gris = en_abstract_secundario
+                        # Es gris si el idioma no coincide con el idioma principal
+                        if _doc_en_ingles:
+                            es_gris = txt_low in _ES_ESPANOL
+                            en_abstract_secundario = es_gris
+                        else:
+                            es_gris = txt_low in _ES_INGLES
+                            en_abstract_secundario = es_gris
                 else:
-                    # Salimos de la zona de resúmenes
                     en_abstract_secundario = False
 
-                # Detectar si estamos dentro del cuerpo del abstract secundario
-                if txt_low in {"abstract", "non-technical abstract",
-                               "resumen", "resumen no técnico"}:
-                    # Actualizar flag de cuerpo secundario
-                    _en_cuerpo_secundario = en_abstract_secundario
+                # Actualizar flag para el cuerpo del abstract
+                _en_cuerpo_secundario = en_abstract_secundario
                 if _es_meta:
                     clase_h2 = 'seccion meta'
                 elif con_linea and es_gris:
@@ -2227,6 +2368,41 @@ class LimpiadorEditorialApp(ctk.CTk):
         lineas.append("</article></body></html>")
         html_body = "\n".join(lineas)
 
+        def _buscar_ancla_html_tabla(ancla, html):
+            """Igual que _buscar_ancla_html pero disponible antes del bloque de figuras."""
+            if not ancla: return -1
+            def _norm(t):
+                t = re.sub(r"[\u00ad\ufffc\ufffe]", "", t)
+                t = re.sub(r"-\s+", "", t)
+                t = re.sub(r"&[a-zA-Z#0-9]+;", " ", t)
+                t = re.sub(r"<[^>]+>", " ", t)
+                t = re.sub(r"\s+", " ", t).strip()
+                return t
+            muestra = _norm(ancla)[-80:].strip()
+            if not muestra: return -1
+            escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
+            spacer  = r"(?:[­￼]?\s*(?:&[a-zA-Z#0-9]+;)?(?:<[^>]+>)?\s*)+"
+            pattern = escaped.replace("\\ ", spacer)
+            try:
+                matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
+                if matches:
+                    m = matches[-1]
+                    cierre = html.find("</p>", m.end())
+                    return cierre + 4 if cierre != -1 else -1
+            except re.error:
+                pass
+            html_limpio = _norm(html)
+            try:
+                idx = html_limpio.rfind(muestra)
+                if idx != -1:
+                    frac = idx / max(len(html_limpio), 1)
+                    aprox = int(frac * len(html))
+                    cierre = html.find("</p>", aprox)
+                    return cierre + 4 if cierre != -1 else -1
+            except Exception:
+                pass
+            return -1
+
         if self.tablas_manuales:
             tablas_ordenadas = []
             for idx_t, t_item in enumerate(self.tablas_manuales, 1):
@@ -2240,20 +2416,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 )
                 pos = -1
                 if ancla:
-                    ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
-                    ancla_norm = re.sub(r"-\s+", "", ancla_norm)
-                    ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
-                    muestra = ancla_norm[-80:].strip()
-                    escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
-                    _spacer = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
-                    pattern = escaped.replace("\\ ", _spacer)
-                    # Usar la ÚLTIMA ocurrencia — la tabla va DESPUÉS del párrafo
-                    matches = list(re.finditer(pattern, html_body,
-                                               re.IGNORECASE | re.DOTALL))
-                    if matches:
-                        m = matches[-1]
-                        cierre = html_body.find("</p>", m.end())
-                        pos = cierre + 4 if cierre != -1 else -1
+                    pos = _buscar_ancla_html_tabla(ancla, html_body)
                 tablas_ordenadas.append((pos, idx_t, bloque))
 
             tablas_ordenadas.sort(key=lambda x: (x[0] == -1, x[0], x[1]))
@@ -2295,20 +2458,54 @@ class LimpiadorEditorialApp(ctk.CTk):
             figs_al_final = []
 
             def _buscar_ancla_html(ancla, html):
+                """Busca el texto del ancla en el HTML.
+                Estrategia:
+                1. Limpiar el ancla: quitar soft hyphens, guiones de corte y espacios extra.
+                2. Tomar los últimos ~80 chars (final del párrafo que pegas).
+                3. Buscar en el HTML con un spacer tolerante a etiquetas, entidades y caracteres raros.
+                4. Si no hay coincidencia, intentar con versión simplificada (solo palabras).
+                """
                 if not ancla: return -1
-                ancla_norm = re.sub(r"[\u00ad\ufffc\ufffe]", "", ancla)
-                ancla_norm = re.sub(r"-\s+", "", ancla_norm)
-                ancla_norm = re.sub(r"\s+", " ", ancla_norm).strip()
-                muestra = ancla_norm[-80:].strip()
+
+                def _normalizar(t):
+                    t = re.sub(r"[\u00ad\ufffc\ufffe]", "", t)  # soft hyphen y similares
+                    t = re.sub(r"-\s+", "", t)                     # guiones de corte tipográfico
+                    t = re.sub(r"&[a-zA-Z#0-9]+;", " ", t)         # HTML entities
+                    t = re.sub(r"<[^>]+>", " ", t)                  # etiquetas HTML
+                    t = re.sub(r"\s+", " ", t).strip()
+                    return t
+
+                muestra = _normalizar(ancla)[-80:].strip()
+                if not muestra: return -1
+
+                # Estrategia 1: regex con spacer tolerante a etiquetas/entidades
                 escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
-                spacer  = "(?:[\N{SOFT HYPHEN}\ufffc]?\\s*(?:<[^>]+>)?\\s*)+"
+                spacer  = r"(?:[­￼]?\s*(?:&[a-zA-Z#0-9]+;)?(?:<[^>]+>)?\s*)+"
                 pattern = escaped.replace("\\ ", spacer)
-                # Usar la ÚLTIMA ocurrencia para evitar coincidencias en el resumen
-                matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
-                if matches:
-                    m = matches[-1]
-                    cierre = html.find("</p>", m.end())
-                    return cierre + 4 if cierre != -1 else -1
+                try:
+                    matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
+                    if matches:
+                        m = matches[-1]
+                        cierre = html.find("</p>", m.end())
+                        return cierre + 4 if cierre != -1 else -1
+                except re.error:
+                    pass
+
+                # Estrategia 2: buscar en el HTML limpio (sin etiquetas)
+                html_limpio = _normalizar(html)
+                try:
+                    idx = html_limpio.rfind(muestra)
+                    if idx != -1:
+                        # Mapear posición en HTML limpio → posición en HTML original
+                        # aproximación: buscar el </p> más cercano en el HTML original
+                        # a la altura relativa de la coincidencia
+                        frac = idx / max(len(html_limpio), 1)
+                        aprox = int(frac * len(html))
+                        cierre = html.find("</p>", aprox)
+                        return cierre + 4 if cierre != -1 else -1
+                except Exception:
+                    pass
+
                 return -1
 
             for i, fig in enumerate(figs, 1):
