@@ -2374,6 +2374,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             def _norm(t):
                 t = re.sub(r"[\u00ad\ufffc\ufffe]", "", t)
                 t = re.sub(r"-\s+", "", t)
+                t = re.sub(r"-([a-záéíóúüñ])", r"\1", t)      # guión pegado a letra (artefacto PDF)
                 t = re.sub(r"&[a-zA-Z#0-9]+;", " ", t)
                 t = re.sub(r"<[^>]+>", " ", t)
                 t = re.sub(r"\s+", " ", t).strip()
@@ -2382,7 +2383,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             if not muestra: return -1
             escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
             spacer  = r"(?:[­￼]?\s*(?:&[a-zA-Z#0-9]+;)?(?:<[^>]+>)?\s*)+"
-            pattern = escaped.replace("\\ ", spacer)
+            pattern = escaped.replace(" ", spacer)
             try:
                 matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
                 if matches:
@@ -2395,6 +2396,13 @@ class LimpiadorEditorialApp(ctk.CTk):
             try:
                 idx = html_limpio.rfind(muestra)
                 if idx != -1:
+                    # Estrategia 2a: búsqueda literal directa con los últimos 30 chars
+                    clave = muestra[-30:].strip()
+                    pos_directo = html.rfind(clave)
+                    if pos_directo != -1:
+                        cierre = html.find("</p>", pos_directo)
+                        return cierre + 4 if cierre != -1 else -1
+                    # Estrategia 2b: mapeo por fracción (fallback)
                     frac = idx / max(len(html_limpio), 1)
                     aprox = int(frac * len(html))
                     cierre = html.find("</p>", aprox)
@@ -2470,6 +2478,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 def _normalizar(t):
                     t = re.sub(r"[\u00ad\ufffc\ufffe]", "", t)  # soft hyphen y similares
                     t = re.sub(r"-\s+", "", t)                     # guiones de corte tipográfico
+                    t = re.sub(r"-([a-záéíóúüñ])", r"\1", t)      # guión pegado a letra (artefacto PDF)
                     t = re.sub(r"&[a-zA-Z#0-9]+;", " ", t)         # HTML entities
                     t = re.sub(r"<[^>]+>", " ", t)                  # etiquetas HTML
                     t = re.sub(r"\s+", " ", t).strip()
@@ -2481,7 +2490,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 # Estrategia 1: regex con spacer tolerante a etiquetas/entidades
                 escaped = re.sub(r"([.+*?()\[\]{}\\|^$])", r"\\\1", muestra)
                 spacer  = r"(?:[­￼]?\s*(?:&[a-zA-Z#0-9]+;)?(?:<[^>]+>)?\s*)+"
-                pattern = escaped.replace("\\ ", spacer)
+                pattern = escaped.replace(" ", spacer)
                 try:
                     matches = list(re.finditer(pattern, html, re.IGNORECASE | re.DOTALL))
                     if matches:
@@ -2499,6 +2508,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                         # Mapear posición en HTML limpio → posición en HTML original
                         # aproximación: buscar el </p> más cercano en el HTML original
                         # a la altura relativa de la coincidencia
+                        # Estrategia 2a: búsqueda literal directa con los últimos 30 chars
+                        clave = muestra[-30:].strip()
+                        pos_directo = html.rfind(clave)
+                        if pos_directo != -1:
+                            cierre = html.find("</p>", pos_directo)
+                            return cierre + 4 if cierre != -1 else -1
+                        # Estrategia 2b: mapeo por fracción (fallback)
                         frac = idx / max(len(html_limpio), 1)
                         aprox = int(frac * len(html))
                         cierre = html.find("</p>", aprox)
