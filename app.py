@@ -2507,6 +2507,7 @@ class LimpiadorEditorialApp(ctk.CTk):
         with open(ruta, "w", encoding="utf-8") as f:
             f.write(html_body)
         self._set_status(f"✓ HTML guardado en: {ruta}")
+        return html_body
 
 
     # ═════════════════════════════════════════════════════════════
@@ -2515,13 +2516,240 @@ class LimpiadorEditorialApp(ctk.CTk):
 
     def evento_exportar_xml(self):
         self._set_status("⚠ Exportación XML en desarrollo.")
-
+        
     # ═════════════════════════════════════════════════════════════
-    # EXPORTAR EPUB  (próximamente)
+    # EXPORTAR EPUB
     # ═════════════════════════════════════════════════════════════
 
     def evento_exportar_epub(self):
-        self._set_status("⚠ Exportación EPUB en desarrollo.")
+        import zipfile
+        import tempfile
+        import os as _os
+        import uuid
+
+        if not self.datos_bloques:
+            self._set_status("⚠ Primero carga un PDF."); return
+
+        # Pedir ruta destino
+        ruta_epub = filedialog.asksaveasfilename(
+            defaultextension=".epub",
+            filetypes=[("Archivo EPUB", "*.epub")])
+        if not ruta_epub:
+            return
+
+        # ── 1. Obtener el HTML generado ───────────────────────────────────────
+        self._sync_pies()
+        self._sync_titulos_tablas()
+        self._sync_autores()
+
+        with tempfile.NamedTemporaryFile(
+                suffix=".html", delete=False,
+                mode="w", encoding="utf-8") as _tmp:
+            _tmp_path = _tmp.name
+
+        _orig_dialog = filedialog.asksaveasfilename
+        filedialog.asksaveasfilename = lambda **kw: _tmp_path
+        try:
+            resultado = self.evento_exportar_html()
+        finally:
+            filedialog.asksaveasfilename = _orig_dialog
+
+        # Leer HTML desde el return o desde el archivo temporal
+        if resultado and isinstance(resultado, str) and len(resultado) > 100:
+            html_completo = resultado
+        else:
+            try:
+                with open(_tmp_path, "r", encoding="utf-8") as _f:
+                    html_completo = _f.read()
+            except Exception:
+                self._set_status("✗ No se pudo obtener el HTML para el EPUB.")
+                return
+        try:
+            _os.remove(_tmp_path)
+        except OSError:
+            pass
+
+        if not html_completo or len(html_completo) < 100:
+            self._set_status("✗ El HTML generado está vacío.")
+            return
+
+        # ── 2. Extraer metadatos ──────────────────────────────────────────────
+        titulo_art = next(
+            (b["contenido"].strip() for b in self.datos_bloques
+             if b["menu"].get() == "Título principal"),
+            "Artículo"
+        )
+        autores_lista = []
+        if self.autores_orcid:
+            autores_lista = [a["nombre"].strip() for a in self.autores_orcid
+                             if a.get("nombre", "").strip()]
+
+        doi_art = ""
+        for b in self.datos_bloques:
+            doi_m = re.search(r"https?://doi\.org/\S+", b["contenido"])
+            if doi_m:
+                doi_art = doi_m.group(0).rstrip(".")
+                break
+
+        uid_libro = str(uuid.uuid4())
+
+        # ── 3. Separar CSS y body del HTML ────────────────────────────────────
+        css_match = re.search(r"<style>(.*?)</style>", html_completo, re.DOTALL)
+        css_str   = css_match.group(1) if css_match else ""
+        # Quitar @import de Google Fonts (no funciona offline en EPUB)
+        css_str = re.sub(r"@import\s+url\([^)]+\)\s*;?\s*", "", css_str)
+
+        body_match = re.search(r"<body>(.*?)</body>", html_completo, re.DOTALL)
+        body_str   = body_match.group(1) if body_match else html_completo
+
+        # Limpiar para XHTML válido
+        body_str = re.sub(r"<br\s*>",               "<br/>",      body_str)
+        body_str = re.sub(r"<hr\s*>",               "<hr/>",      body_str)
+        body_str = re.sub(r"<img([^>]*[^/])\s*>",   r"<img\1/>",  body_str)
+        body_str = re.sub(r"<input([^>]*[^/])\s*>", r"<input\1/>",body_str)
+        # Reemplazar & sueltos que no sean entidades ya escapadas
+        body_str = re.sub(
+            r"&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[\da-fA-F]+;)",
+            "&amp;", body_str)
+
+        # ── 4. Detectar secciones para el TOC ────────────────────────────────
+        secciones = []
+        for b in self.datos_bloques:
+            cls = b["menu"].get()
+            txt = b["contenido"].strip()
+            if cls == "Encabezado sección" and txt:
+                ancla = re.sub(r"[^a-z0-9]", "-", txt.lower())[:40].strip("-")
+                secciones.append((ancla, txt))
+
+        # ── 5. Construir contenido de cada archivo del EPUB ──────────────────
+
+        # 5a. mimetype
+        mimetype_bytes = b"application/epub+zip"
+
+        # 5b. META-INF/container.xml
+        container_xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<container version="1.0" '
+            'xmlns="urn:oasis:names:tc:opendocument:xmlns:container">\n'
+            '  <rootfiles>\n'
+            '    <rootfile full-path="OEBPS/content.opf" '
+            'media-type="application/oebps-package+xml"/>\n'
+            '  </rootfiles>\n'
+            '</container>'
+        ).encode("utf-8")
+
+        # 5c. OEBPS/content.opf
+        autores_opf = "\n    ".join(
+            f'<dc:creator>{esc(a)}</dc:creator>' for a in autores_lista
+        ) if autores_lista else '<dc:creator>Autor desconocido</dc:creator>'
+
+        doi_opf = (
+            f'\n    <dc:identifier id="doi">{esc(doi_art)}</dc:identifier>'
+            if doi_art else ""
+        )
+
+        content_opf = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<package xmlns="http://www.idpf.org/2007/opf" '
+            'version="2.0" unique-identifier="uid">\n'
+            '  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" '
+            'xmlns:opf="http://www.idpf.org/2007/opf">\n'
+            f'    <dc:identifier id="uid">{uid_libro}</dc:identifier>\n'
+            f'    <dc:title>{esc(titulo_art)}</dc:title>\n'
+            f'    {autores_opf}{doi_opf}\n'
+            '    <dc:language>es</dc:language>\n'
+            '    <dc:publisher>'
+            'Paleontología Mexicana — Instituto de Geología, UNAM'
+            '</dc:publisher>\n'
+            '  </metadata>\n'
+            '  <manifest>\n'
+            '    <item id="article" href="article.xhtml" '
+            'media-type="application/xhtml+xml"/>\n'
+            '    <item id="css" href="style/main.css" '
+            'media-type="text/css"/>\n'
+            '    <item id="ncx" href="toc.ncx" '
+            'media-type="application/x-dtbncx+xml"/>\n'
+            '  </manifest>\n'
+            '  <spine toc="ncx">\n'
+            '    <itemref idref="article"/>\n'
+            '  </spine>\n'
+            '</package>'
+        ).encode("utf-8")
+
+        # 5d. OEBPS/toc.ncx
+        nav_points = ""
+        for i, (ancla, txt_sec) in enumerate(secciones, 1):
+            nav_points += (
+                f'  <navPoint id="nav{i}" playOrder="{i}">\n'
+                f'    <navLabel><text>{esc(txt_sec)}</text></navLabel>\n'
+                f'    <content src="article.xhtml"/>\n'
+                f'  </navPoint>\n'
+            )
+        if not nav_points:
+            nav_points = (
+                '  <navPoint id="nav1" playOrder="1">\n'
+                f'    <navLabel><text>{esc(titulo_art)}</text></navLabel>\n'
+                '    <content src="article.xhtml"/>\n'
+                '  </navPoint>\n'
+            )
+        toc_ncx = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN" '
+            '"http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">\n'
+            '<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" '
+            'version="2005-1">\n'
+            '  <head>\n'
+            f'    <meta name="dtb:uid" content="{uid_libro}"/>\n'
+            '    <meta name="dtb:depth" content="1"/>\n'
+            '    <meta name="dtb:totalPageCount" content="0"/>\n'
+            '    <meta name="dtb:maxPageNumber" content="0"/>\n'
+            '  </head>\n'
+            f'  <docTitle><text>{esc(titulo_art)}</text></docTitle>\n'
+            '  <navMap>\n'
+            f'{nav_points}'
+            '  </navMap>\n'
+            '</ncx>'
+        ).encode("utf-8")
+
+        # 5e. OEBPS/article.xhtml
+        article_xhtml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE html>\n'
+            '<html xmlns="http://www.w3.org/1999/xhtml" '
+            'lang="es" xml:lang="es">\n'
+            '<head>\n'
+            f'  <title>{esc(titulo_art)}</title>\n'
+            '  <link href="style/main.css" rel="stylesheet" '
+            'type="text/css"/>\n'
+            '</head>\n'
+            f'<body>\n{body_str}\n</body>\n'
+            '</html>'
+        ).encode("utf-8")
+
+        # 5f. OEBPS/style/main.css
+        css_bytes = css_str.encode("utf-8")
+
+        # ── 6. Escribir el ZIP (EPUB) manualmente ────────────────────────────
+        # ebooklib a veces genera ZIPs corruptos; construirlo a mano es más
+        # confiable y cumple exactamente la especificación EPUB 2.0.
+        try:
+            with zipfile.ZipFile(ruta_epub, "w",
+                                 compression=zipfile.ZIP_DEFLATED) as zf:
+                # mimetype SIN comprimir y SIN extra fields — obligatorio
+                info_mime = zipfile.ZipInfo("mimetype")
+                info_mime.compress_type = zipfile.ZIP_STORED
+                zf.writestr(info_mime, mimetype_bytes)
+
+                zf.writestr("META-INF/container.xml", container_xml)
+                zf.writestr("OEBPS/content.opf",      content_opf)
+                zf.writestr("OEBPS/toc.ncx",          toc_ncx)
+                zf.writestr("OEBPS/article.xhtml",    article_xhtml)
+                zf.writestr("OEBPS/style/main.css",   css_bytes)
+
+            self._set_status(f"✓ EPUB guardado en: {ruta_epub}")
+
+        except Exception as exc:
+            self._set_status(f"✗ Error al generar EPUB: {exc}")
 
 if __name__ == "__main__":
     app = LimpiadorEditorialApp()
