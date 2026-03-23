@@ -1,7 +1,7 @@
 # Extractor de PDF Semántico
 ### Herramienta de Automatización Editorial — Paleontología Mexicana, UNAM
 
-Aplicación de escritorio desarrollada en Python para el equipo editorial de la revista **Paleontología Mexicana** (Instituto de Geología, UNAM). Convierte artículos científicos en PDF a HTML editorial con estilos tipográficos fieles al diseño de la revista, optimizando el flujo de trabajo de maquetación.
+Aplicación de escritorio desarrollada en Python para el equipo editorial de la revista **Paleontología Mexicana** (Instituto de Geología, UNAM). Convierte artículos científicos en PDF a HTML editorial y EPUB con estilos tipográficos fieles al diseño de la revista, optimizando el flujo de trabajo de maquetación.
 
 ---
 
@@ -9,6 +9,7 @@ Aplicación de escritorio desarrollada en Python para el equipo editorial de la 
 
 - Extrae y clasifica automáticamente los bloques de texto de un PDF científico (títulos, resúmenes, cuerpo, referencias, tablas, figuras, etc.)
 - Genera un HTML limpio con tipografía editorial (Source Serif 4, Times New Roman)
+- Genera un EPUB compatible con lectores como Calibre, Thorium Reader y Apple Books
 - Vincula autores con sus perfiles ORCID
 - Inserta tablas Excel y figuras en la posición exacta del texto mediante texto ancla
 - Maneja artículos en dos columnas, guiones de corte tipográfico y saltos de página
@@ -23,6 +24,8 @@ El proyecto está desarrollado en **Python 3.10 o superior**. Para ejecutar la a
 - `customtkinter` — interfaz gráfica con diseño moderno
 - `Pillow` — procesamiento de imágenes
 - `openpyxl` — lectura de archivos Excel
+
+> Las dependencias `zipfile` y `uuid`, usadas para la exportación EPUB, ya vienen incluidas en Python y no requieren instalación adicional.
 
 ---
 
@@ -99,6 +102,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 5. Figuras          →  Imágenes con pie de figura y texto ancla
 6. Tablas           →  Excel con una hoja por tabla
 7. Exportar HTML    →  Botón verde "HTML"
+8. Exportar EPUB    →  Botón "EPUB" (no requiere generar HTML primero)
 ```
 
 ---
@@ -115,6 +119,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 | Tablas | Excel multi-hoja, una hoja = una tabla |
 | Figuras | Inserción por texto ancla o al final del documento |
 | Referencias | Solo desde .txt externo (nunca del PDF) |
+| EPUB | Generado directamente desde los datos clasificados, sin pasos intermedios |
 
 ---
 
@@ -129,6 +134,20 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 
 ---
 
+## Lectores EPUB compatibles
+
+El EPUB generado cumple la especificación EPUB 2.0 y ha sido probado en los siguientes lectores:
+
+| Lector | Sistema | Resultado |
+|---|---|---|
+| Calibre | Windows / Mac / Linux | ✅ Compatible |
+| Thorium Reader | Windows / Mac / Linux | ✅ Compatible |
+| Apple Books | Mac / iPhone / iPad | ✅ Compatible |
+
+> Se recomienda **Thorium Reader** para usuarios finales en Windows por su interfaz moderna y cumplimiento estricto del estándar EPUB. Descarga en [thorium-reader.org](https://thorium-reader.org).
+
+---
+
 ## Colaboración y control de versiones
 
 ### Gestión de ramas
@@ -138,16 +157,17 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 
 ### Reporte de errores
 
-- El proceso de QA consiste en generar los archivos HTML y compararlos con el PDF original.
+- El proceso de QA consiste en generar los archivos HTML y EPUB, y compararlos con el PDF original.
 - Los errores se documentan **exclusivamente en la pestaña Issues** de este repositorio.
-- Al crear un Issue, asigna la etiqueta `bug` e incluye: descripción del problema, página exacta del PDF donde ocurre y, si es posible, adjunta el PDF y el HTML generado.
+- Al crear un Issue, asigna la etiqueta `bug` e incluye: descripción del problema, página exacta del PDF donde ocurre y, si es posible, adjunta el PDF y el HTML o EPUB generado.
 
 ---
 
 ## Estado del proyecto
 
 > ✅ Versión funcional — PDF a HTML  
-> 🔧 En desarrollo — Exportación XML y EPUB
+> ✅ Versión funcional — PDF a EPUB  
+> 🔧 En desarrollo — Exportación XML
 
 ---
 
@@ -155,7 +175,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 
 - Ileana Verónica Lee Obando - Ingeniería en Computación
 - David Alejandro Galicia Cárdenas - Licenciatura en Informática
-- Erick Isaac Echeverria Goicochea -  Ingeniería en Computación
+- Erick Isaac Echeverria Goicochea - Ingeniería en Computación
 
 Servicio Social de Programación Editorial  
 Instituto de Geología, Universidad Nacional Autónoma de México (UNAM)
