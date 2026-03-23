@@ -11,6 +11,7 @@ from ebooklib import epub
 from collections import Counter
 import base64
 import shutil
+from jats_exporter import build_jats_xml
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -366,7 +367,7 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         for texto, cmd, fg, hv, w in [
             ("⬡  HTML",  self.evento_exportar_html,  "#16a34a", "#15803d", 110),
-            ("◻  XML",   self.evento_exportar_xml,   "#334155", "#475569", 90),
+            ("◻  JATS",  self.evento_exportar_jats,  "#334155", "#475569", 90),
             ("◻  EPUB",  self.evento_exportar_epub,  "#334155", "#475569", 90),
         ]:
             ctk.CTkButton(export_bar, text=texto, command=cmd,
@@ -2515,7 +2516,46 @@ class LimpiadorEditorialApp(ctk.CTk):
     # ═════════════════════════════════════════════════════════════
 
     def evento_exportar_xml(self):
-        self._set_status("⚠ Exportación XML en desarrollo.")
+        """Alias de compatibilidad: XML ahora exporta JATS XML."""
+        self.evento_exportar_jats()
+
+    def evento_exportar_jats(self):
+        if not self.datos_bloques:
+            self._set_status("⚠ Primero carga un PDF."); return
+
+        ruta_xml = filedialog.asksaveasfilename(
+            defaultextension=".xml",
+            filetypes=[("JATS XML", "*.xml"), ("Archivo XML", "*.xml")])
+        if not ruta_xml:
+            return
+
+        try:
+            self._sync_pies()
+            self._sync_titulos_tablas()
+            self._sync_autores()
+
+            bloques_snapshot = []
+            for b in self.datos_bloques:
+                bloques_snapshot.append({
+                    "contenido": b.get("contenido", ""),
+                    "clasificacion": b["menu"].get(),
+                    "italic": b.get("italic", False),
+                })
+
+            xml_jats = build_jats_xml(
+                bloques=bloques_snapshot,
+                referencias_externas=self.referencias_externas,
+                autores_orcid=self.autores_orcid,
+                afiliaciones_txt=self.afiliaciones_txt,
+                figuras=self.figuras_manuales,
+                tablas=self.tablas_manuales,
+            )
+
+            with open(ruta_xml, "w", encoding="utf-8") as f:
+                f.write(xml_jats)
+            self._set_status(f"✓ JATS XML guardado en: {ruta_xml}")
+        except Exception as exc:
+            self._set_status(f"✗ Error al generar JATS XML: {exc}")
         
     # ═════════════════════════════════════════════════════════════
     # EXPORTAR EPUB
