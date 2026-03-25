@@ -134,6 +134,38 @@ _ORCID_SVG = (
 def esc(t: str) -> str:
     return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
+def _esc_con_etiquetas_editoriales(t: str) -> str:
+    """Escapa HTML y formatea etiquetas editoriales puntuales.
+    Solo aplica cuando llevan punto final: "Sinonimia.", "Material.",
+    "Descripción." y "Etología.".
+    """
+    texto = esc(t)
+    patron = re.compile(
+    r"\b("
+    r"Sinonimia\.|"
+    r"Material(?: examinado)?\.|Referred material\.|"
+    r"Descripción\.|Description\.|"
+    r"Etología\.|"
+    r"Especie tipo\.|Type species\.|"
+    r"Medidas\.|Dimensions\.|"
+    r"Distribución\.|Occurrence\.|"
+    r"Otras localidades\.|Other occurrences\.|"
+    r"Discusión\.|Remarks\.|"
+    r"Comentarios\.|Comments\.|"
+    r"Repositorio\.|Repository\.|"
+    r"Localidad\.|Locality\.|"
+    r"Nuevo registro\.|"
+    r"Horizonte\.|Horizonte y localidad\.|Horizon and locality\."
+    r")\s*",
+    re.IGNORECASE
+    )
+    def _reemplazo(m: re.Match) -> str:
+        etiqueta = m.group(1)
+        prefijo = "" if m.start() == 0 else "<br>"
+        if etiqueta == "Sinonimia." or etiqueta == "Locality Abbreviations:":
+            return f"{prefijo}<strong>{etiqueta}</strong><br>"
+        return f"{prefijo}<strong>{etiqueta}</strong> "
+    return patron.sub(_reemplazo, texto).strip()
 
 def _insertar_orcid(texto: str, autores_orcid: list | None = None) -> str:
     """
@@ -196,7 +228,17 @@ def _parsear_referencias(texto: str) -> list[str]:
 
 
 def _es_como_citar(t: str) -> bool:
-    return bool(re.match(r"(cómo citar|how to cite)", t.strip().lower()))
+    # Detección directa del prefijo
+    if re.match(r"(cómo citar|how to cite)", t.strip().lower()):
+        return True
+    # Continuación de cita: bloque corto que termina con patrón de revista
+    # Ej: "Título del artículo. Paleontología Mexicana, 15(1), 85–108."
+    # Contiene ", vol(num), pp–pp." sin ser una referencia larga
+    if (len(t) < 400 and
+            re.search(r",\s*\d+\s*\(\d+\)\s*,\s*\d+\s*[–\-]\s*\d+", t) and
+            not re.search(r"https?://", t)):
+        return True
+    return False
 
 
 def _es_encabezado_resumen_legacy_no_usar(t: str) -> bool:
@@ -309,6 +351,75 @@ def _excel_a_html_tabla(ruta: str, hoja: str = None) -> str:
     except Exception as e:
         return f"<p><em>[Error al leer tabla: {esc(str(e))}]</em></p>"
 
+def _render_parrafo_o_lista(texto: str, es_cuerpo: bool, abstract_mode: bool) -> list[str]:
+    """ Enlista cuando detecta '•'."""
+    t = texto.strip()
+    if not t:
+        return []
+
+    def _render_p(s: str) -> str:
+        s = s.strip()
+        if not s:
+            return ""
+        s_html = _esc_con_etiquetas_editoriales(s)
+        if abstract_mode:
+            return f'<p class="abstract sin-sangria">{s_html}</p>'
+        if es_cuerpo:
+            return f'<p class="cuerpo">{s_html}</p>'
+        return f'<p>{s_html}</p>'
+
+    if "•" not in t:
+        p = _render_p(t)
+        return [p] if p else []
+
+    # Si hay, dividir en secciones intro + lista.
+    # Soporta casos donde un item trae al final un nuevo intro terminado en ':'.
+    empieza_con_bullet = t.lstrip().startswith("•")
+    partes = [s.strip() for s in re.split(r"\s*•\s*", t) if s.strip()]
+    if not partes:
+        p = _render_p(t)
+        return [p] if p else []
+
+    intro_actual = "" if empieza_con_bullet else partes[0]
+    items_actual = []
+    bloques = []
+
+    idx_ini = 0 if empieza_con_bullet else 1
+    for seg in partes[idx_ini:]:
+        m = re.search(r"^(.*?[.;])\s+([A-ZÁÉÍÓÚÑ][^:]{4,}:)\s*$", seg)
+        if m:
+            item_prev = m.group(1).strip()
+            if item_prev:
+                items_actual.append(item_prev)
+            if intro_actual or items_actual:
+                bloques.append((intro_actual, items_actual))
+            intro_actual = m.group(2).strip()
+            items_actual = []
+        else:
+            items_actual.append(seg)
+
+    if intro_actual or items_actual:
+        bloques.append((intro_actual, items_actual))
+
+    out = []
+    ul_class = "lista-bullets"
+    if es_cuerpo:
+        ul_class += " cuerpo-list"
+    if abstract_mode:
+        ul_class += " abstract-list"
+
+    for intro, items in bloques:
+        p_intro = _render_p(intro)
+        if p_intro:
+            out.append(p_intro)
+        if items:
+            out.append(f'<ul class="{ul_class}">')
+            for it in items:
+                out.append(f'  <li>{_esc_con_etiquetas_editoriales(it)}</li>')
+            out.append("</ul>")
+
+    return out
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 class LimpiadorEditorialApp(ctk.CTk):
@@ -367,7 +478,7 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         for texto, cmd, fg, hv, w in [
             ("⬡  HTML",  self.evento_exportar_html,  "#16a34a", "#15803d", 110),
-            ("◻  JATS",  self.evento_exportar_jats,  "#334155", "#475569", 90),
+            ("◻  XML",   self.evento_exportar_xml,   "#334155", "#475569", 90),
             ("◻  EPUB",  self.evento_exportar_epub,  "#334155", "#475569", 90),
         ]:
             ctk.CTkButton(export_bar, text=texto, command=cmd,
@@ -972,7 +1083,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             os.makedirs(self._auto_fig_dir, exist_ok=True)
 
         pat_caption = re.compile(
-            r"^\s*(figura|fig\.?|figure)\s*\d+[a-z]?(?:\s*-\s*[a-z])?[\.\):]?\s*",
+            r"^\s*(figura|fig\.?|figure|table|tabla)\s*\d+[a-z]?(?:\s*-\s*[a-z])?[\.\):]?\s*",
             re.IGNORECASE,
         )
 
@@ -1455,9 +1566,15 @@ class LimpiadorEditorialApp(ctk.CTk):
         for line in block.get("lines", []):
             for span in line.get("spans", []):
                 sizes.append(span["size"])
-                fuentes.append(span.get("font", "").lower())
+                fnt = span.get("font", "").lower()
+                fuentes.append(fnt)
                 if span["flags"] & (1 << 4): bold   = True
                 if span["flags"] & (1 << 1): italic = True
+                # Fallback por nombre de fuente (algunos PDF no marcan bien flags)
+                if re.search(r"bold|black|heavy|semibold|demi", fnt):
+                    bold = True
+                if re.search(r"italic|oblique|kursiv", fnt):
+                    italic = True
         avg = sum(sizes)/len(sizes) if sizes else 10.0
         dom = Counter(fuentes).most_common(1)[0][0] if fuentes else ""
         return avg, bold, italic, dom
@@ -1468,27 +1585,33 @@ class LimpiadorEditorialApp(ctk.CTk):
         for line in block.get("lines", []):
             lineas.append("".join(s["text"] for s in line.get("spans", [])))
 
-        # Unir líneas: si una termina en guión (- o ­), pegar directamente
+        # Unir líneas: si una termina en guion de corte, pegar directamente.
+        _DASH_CORTES = "-\u00ad\u2010\u2011\u2012\u2013\u2014"
         resultado = ""
         for i, linea in enumerate(lineas):
             if i == 0:
                 resultado = linea
             else:
-                if resultado.endswith("-") or resultado.endswith("\u00ad"):
-                    # Guión de corte: quitar guión y pegar sin espacio
-                    resultado = resultado.rstrip("-\u00ad") + linea.lstrip()
+                # Solo quitar guion de corte si la siguiente linea parece
+                # continuar la palabra (inicia con letra minuscula).
+                if re.search(rf"[{_DASH_CORTES}]\s*$", resultado) and \
+                   re.match(r"^\s*[a-záéíóúñü]", linea):
+                    resultado = re.sub(rf"[{_DASH_CORTES}]\s*$", "", resultado) + linea.lstrip()
                 else:
                     resultado = resultado + " " + linea
 
         # Limpiar espacios múltiples y soft-hyphens residuales
         resultado = resultado.replace("\u00ad", "")       # soft hyphens
         resultado = re.sub(r"\s+", " ", resultado).strip()
-        # Guiones de corte que quedaron con espacio: "pos­ teriormente" → "posteriormente"
-        resultado = re.sub(r"(\w)-\s+(\w)", r"\1\2", resultado)
+        # Guiones de corte
+        resultado = re.sub(r"(\w)[\u2010\u2011\u2012\u2013\u2014-]\s+([a-záéíóúñü])", r"\1\2", resultado)
         return resultado
 
     def _clasificar_auto(self, texto, size, bold, italic, font, body_size):
         t, t_low = texto.strip(), texto.strip().lower()
+        f_low = (font or "").lower()
+        es_bold = bold or bool(re.search(r"bold|black|heavy|semibold|demi", f_low))
+        es_italic = italic or bool(re.search(r"italic|oblique|kursiv", f_low))
 
         secciones = {
             "resumen","abstract","resumen no técnico","non-technical abstract",
@@ -1496,7 +1619,11 @@ class LimpiadorEditorialApp(ctk.CTk):
             "conclusiones","conclusions","referencias","references",
             "agradecimientos","acknowledgements","discusión","discussion",
             "metodología","methods","resultados","results",
-            "contribuciones de los autores",
+            "contribuciones de los autores","contribuciones de los autores", 
+            "contribucción de autores", "contribución de Autores",
+            "authors' contribution",
+            "conflicto de intereses","conflict of interest",
+            "conflicts of interest", "competing interests",
             "paleontología sistemática","systematic palaeontology",
         }
         if t_low in secciones: return "Encabezado sección"
@@ -1504,6 +1631,8 @@ class LimpiadorEditorialApp(ctk.CTk):
         if _es_fecha_mss(t) or _es_doi(t): return "Fecha manuscrito"
         if re.match(r"^(palabras\s+clave|keywords)\s*[:\.]", t_low):
             return "Palabras clave"
+        if re.match(r"^(tabla|table)\s+\d+[\.\:\s]", t_low):
+            return "Título tabla"
         if re.search(r"@[\w\-\.]+\.\w{2,}", t) and len(t) < 120:
             return "Email / Metadatos"
 
@@ -1515,13 +1644,13 @@ class LimpiadorEditorialApp(ctk.CTk):
             return "Subencabezado"
         if re.match(r"^\d+\.\d+", t) and s <= 12:
             return "Subencabezado-bajo"
-        if s >= 13 and bold and not italic: return "Título principal"
-        if s >= 13 and bold and italic:     return "Título secundario"
-        if s == 13 and not bold and not italic: return "Autores"
-        if s == 12 and italic:  return "Email / Metadatos"
-        if s == 12 and not bold: return "Normal"
-        if s == 10 and bold:    return "Encabezado sección"
-        if s == 10 and not bold: return "Subencabezado"
+        if s >= 13 and es_bold and not es_italic: return "Título principal"
+        if s >= 13 and es_bold and es_italic:     return "Título secundario"
+        if s == 13 and not es_bold and not es_italic: return "Autores"
+        if s == 12 and es_italic:  return "Email / Metadatos"
+        if s == 12 and not es_bold: return "Normal"
+        if s == 10 and es_bold:    return "Encabezado sección"
+        if s == 10 and not es_bold: return "Subencabezado"
         if s == 9:
             is_tnr = "times" in font or "roman" in font
             if is_tnr or len(t) > 100: return "Resumen / Abstract"
@@ -1681,10 +1810,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "resumen", "abstract", "resumen no técnico",
                 "non-technical abstract", "palabras clave", "keywords",
                 "referencias", "references", "conclusiones", "conclusions",
-                "agradecimientos", "acknowledgements", "discusión",
+                "agradecimientos", "acknowledgements","acknowledgments", "discusión",
                 "resultados", "introducción", "metodología",
-                "contribuciones de los autores",
-                "conflicto de intereses", "conflict of interest",
+                "contribuciones de los autores", "contribucción de autores",
+                "contribucción de Autores", "contribución de autores", "authors' contribution",
+                "conflicto de intereses", "conflict of interest","conflicts of interest",
+                "competing interests","declaración de conflictos",
             }
 
             zona_b_inicio = None   # índice en raw donde empieza el cuerpo
@@ -1739,9 +1870,9 @@ class LimpiadorEditorialApp(ctk.CTk):
                         cls = "Fecha manuscrito"
                     elif t_low in _SECCIONES_EXACTAS:
                         cls = "Encabezado sección"
-                    elif re.search(r"\btabla\s+\d+[\.\:\s]", t_low):
+                    elif re.search(r"\b(?:tabla|table)\s+\d+[\.\:\s]", t_low):
                         cls = "Título tabla"
-                    elif re.match(r"^figura\s+\d+[\.\:\s]", t_low):
+                    elif re.match(r"^(figura|figure)\s+\d+[\.\:\s]", t_low):
                         cls = "Pie de figura"   # pie de foto del PDF → ignorar en HTML
                     else:
                         cls = "Cuerpo"
@@ -1778,11 +1909,17 @@ class LimpiadorEditorialApp(ctk.CTk):
             _pat_fila_tabla = re.compile(
                 r"^(1[89]\d{2}|20\d{2})\s+\S"   # año AAAA + contenido
             )
+            _pat_lista_crono_taxon = re.compile(
+                r"^(1[89]\d{2}|20\d{2})\s+[A-Za-zÁÉÍÓÚÑáéíóúñü\-]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñü\-]+){0,4}\s*;",
+                re.IGNORECASE,
+            )
 
             def _parece_fila_tabla(item):
                 t   = item["contenido"].strip()
                 cls = item["clasificacion"]
                 if cls != "Cuerpo": return False
+                # Listados cronológicos (ej. sinonimias) no son tablas
+                if _pat_lista_crono_taxon.match(t): return False
                 # Solo suprimir proactivamente si empieza con año de 4 dígitos
                 if _pat_fila_tabla.match(t): return True
                 return False
@@ -1826,6 +1963,11 @@ class LimpiadorEditorialApp(ctk.CTk):
             HEADERS_EMBEBIDOS = [
                 "Non-technical Abstract", "Non-Technical Abstract",
                 "Resumen no técnico", "Resumen no Técnico",
+                "Acknowledgments", "Acknowledgements", "Agradecimientos",
+                "Conflicts of interest", "Conflict of interest", "Competing interests",
+                "Conflicto de intereses", "Authors' Contribution",
+                "Contribuciones de los autores", "Contribucción de autores",
+                "Contribucción de Autores", "Contribución de Autores", 
                 # "Abstract" se maneja por separado con regex (ver abajo)
             ]
             # Detectar "Abstract" sola sin cortar "Non-technical Abstract"
@@ -1837,7 +1979,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             # Captura todo desde "Tabla N." hasta el fin de esa "oración" (hasta \n
             # o hasta el final del texto).
             _pat_tabla_embebida = re.compile(
-                r'(?<!\w)(Tabla\s+\d+[\.\:\s][^\n]{0,200})',
+                r'(?<!\w)((?:Tabla|Table)\s+\d+[\.\:\s][^\n]{0,200})',
                 re.IGNORECASE
             )
 
@@ -2141,7 +2283,12 @@ class LimpiadorEditorialApp(ctk.CTk):
         autores_html_manual = ""
         autores_inyectado   = False
         primer_nivel1_emitido = False
-        en_abstract_ingles  = False   # True dentro de Abstract / Non-technical Abstract
+        # Estilo dinámico por orden:
+        # primer bloque Resumen/Abstract -> negro
+        # segundo bloque Resumen/Abstract -> gris/cursiva
+        contador_resumenes = 0
+        en_bloque_resumen = False
+        bloque_resumen_gris = False
         if self.autores_orcid:
             autores_html_manual = (
                 f'<p class="autores sin-sangria">'
@@ -2248,8 +2395,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                 en_refs = bool(re.search(r"referencia|reference", texto, re.I))
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-                    "referencias", "references", "contribuciones de los autores",
-                    "agradecimientos", "acknowledgements",
+                    "referencias", "references", "contribuciones de los autores", 
+                    "contribución de autores","contribucción de autores",
+                    "author contribution", "author contributions",
+                    "authors' contribution","agradecimientos",
+                    "acknowledgements", "acknowledgments",
+                    "conflicto de intereses", "conflict of interest",
+                    "conflicts of interest", "competing interests",
                 }
                 # Metadatos de cabecera: ISSN, volumen, fechas → letra pequeña
                 _es_meta = bool(re.search(
@@ -2263,25 +2415,36 @@ class LimpiadorEditorialApp(ctk.CTk):
                 )) or re.match(r"^paleontolog[íi]a mexicana$", texto.strip(), re.I)
                 # Solo Abstract y Non-technical Abstract en gris (inglés)
                 _SECCIONES_GRISES = {
-                    "abstract", "non-technical abstract",
                     "keywords",
                 }
                 # Secciones con línea divisora
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-                    "referencias", "references", "contribuciones de los autores",
-                    "agradecimientos", "acknowledgements",
+                    "referencias", "references", "contribuciones de los autores", 
+                    "contribución de autores","contribucción de autores",
+                    "author contribution", "author contributions",
+                    "authors' contribution",
+                    "agradecimientos", "acknowledgements",  "acknowledgments",
                     "conflicto de intereses", "conflict of interest",
+                    "conflicts of interest", "competing interests",
                 }
                 txt_low = texto.strip().lower()
-                es_gris   = txt_low in _SECCIONES_GRISES
+                _SECCIONES_RESUMEN = {
+                    "resumen", "abstract", "resumen no técnico", "non-technical abstract"
+                }
+
+                if txt_low in _SECCIONES_RESUMEN:
+                    contador_resumenes += 1
+                    en_bloque_resumen = True
+                    bloque_resumen_gris = contador_resumenes >= 2
+                elif txt_low not in ("palabras clave", "keywords"):
+                    en_bloque_resumen = False
+                    bloque_resumen_gris = False
+
+                es_gris = txt_low in _SECCIONES_GRISES
+                if txt_low in _SECCIONES_RESUMEN:
+                    es_gris = bloque_resumen_gris
                 con_linea = txt_low in _SECCIONES_CON_LINEA
-                # Detectar si entramos/salimos de Abstract en inglés
-                _ABSTRACT_INGLES = {"abstract", "non-technical abstract"}
-                if txt_low in _ABSTRACT_INGLES:
-                    en_abstract_ingles = True
-                elif txt_low not in _SECCIONES_GRISES:
-                    en_abstract_ingles = False
                 if _es_meta:
                     clase_h2 = 'seccion meta'
                 elif con_linea and es_gris:
@@ -2299,7 +2462,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                         lineas.append(f"  <li>{esc(ref)}</li>")
                     lineas.append("</ol>")
             elif cls == "Subencabezado":
-                en_abstract_ingles = False
+                en_bloque_resumen = False
+                bloque_resumen_gris = False
                 if not primer_nivel1_emitido:
                     lineas.append(f'<h3 class="subseccion primer-nivel1">{texto}</h3>')
                     primer_nivel1_emitido = True
@@ -2317,7 +2481,10 @@ class LimpiadorEditorialApp(ctk.CTk):
                     r"^(Palabras\s+clave|Keywords)\s*[:\.]?\s*",
                     lambda m: f"<strong>{m.group(0).rstrip()}</strong> ",
                     t_kw, count=1, flags=re.IGNORECASE)
-                lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
+                if en_bloque_resumen and bloque_resumen_gris:
+                    lineas.append(f'<p class="keywords sin-sangria" style="color:#666;font-style:italic;">{t_kw}</p>')
+                else:
+                    lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
             elif cls in ("Normal", "Cuerpo"):
                 if en_refs:
                     # Dentro de la sección Referencias del PDF → ignorar siempre
@@ -2337,8 +2504,9 @@ class LimpiadorEditorialApp(ctk.CTk):
                             prev = partes_unidas[-1].rstrip()
                             if prev and prev[-1] not in ".?!:":
                                 # Continuación — unir
-                                if prev.endswith("-"):
-                                    partes_unidas[-1] = prev[:-1] + parte
+                                if re.search(r"[\u2010\u2011\u2012\u2013\u2014-]\s*$", prev) and \
+                                   re.match(r"^[a-záéíóúñü]", parte):
+                                    partes_unidas[-1] = re.sub(r"[\u2010\u2011\u2012\u2013\u2014-]\s*$", "", prev) + parte
                                 else:
                                     partes_unidas[-1] = prev + " " + parte
                             else:
@@ -2350,12 +2518,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                         if parte.startswith("§SUB§"):
                             lineas.append(f'<h3 class="subseccion-bajo">{esc(parte[5:])}</h3>')
                         else:
-                            tag_p = 'class="cuerpo"' if cls == "Cuerpo" else ""
-                            # Cuerpo dentro de Abstract/Non-technical Abstract → cursiva gris
-                            if en_abstract_ingles:
-                                lineas.append(f'<p class="abstract sin-sangria">{esc(parte)}</p>')
-                            else:
-                                lineas.append(f'<p {tag_p}>{esc(parte)}</p>'.replace("  >", ">"))
+                            # Solo el segundo bloque de Resumen/Abstract va en gris/cursiva.
+                            abstract_mode = en_bloque_resumen and bloque_resumen_gris
+                            lineas.extend(_render_parrafo_o_lista(
+                                parte,
+                                es_cuerpo=(cls == "Cuerpo"),
+                                abstract_mode=abstract_mode,
+                            ))
             elif cls == "Referencia":
                 lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{texto}</p>')
             elif cls == "Título tabla":
@@ -2509,7 +2678,6 @@ class LimpiadorEditorialApp(ctk.CTk):
             f.write(html_body)
         self._set_status(f"✓ HTML guardado en: {ruta}")
         return html_body
-
 
     # ═════════════════════════════════════════════════════════════
     # EXPORTAR XML  (próximamente)
