@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from PIL import Image as PILImage
 import fitz
 import re
@@ -11,6 +11,7 @@ from ebooklib import epub
 from collections import Counter
 import base64
 import shutil
+from jats_exporter import build_jats_xml
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -80,6 +81,7 @@ HTML_CSS = """
 # ─── Clasificaciones ──────────────────────────────────────────────────────────
 OPCIONES = [
     "Cuerpo",
+    "Cuerpo del abstract",
     "Título principal", "Título secundario",
     "Encabezado sección",
     "Subencabezado", "Subencabezado-bajo",
@@ -106,6 +108,7 @@ COLORES_UI = [
     ("Subencabezado",      "#00695c", "Verde azulado"),
     ("Subencabezado-bajo", "#00796b", "Verde azulado claro"),
     ("Cuerpo",             "#212121", "Negro"),
+    ("Cuerpo del abstract", "#455a64", "Gris azulado"),
     ("Palabras clave",     "#6a1b9a", "Morado"),
     ("Referencia",         "#424242", "Gris"),
     ("Cómo citar",         "#e65100", "Naranja"),
@@ -117,6 +120,27 @@ COLORES_UI = [
     ("Ignorar",            "#c62828", "Rojo"),
 ]
 COLOR_POR_CLASE = {c: col for c, col, _ in COLORES_UI}
+
+# ── Estilos visuales por clase (para el textbox editable) ──────────────────
+# Cada entrada: (font_size, weight, slant, fg_color, bg_color)
+ESTILO_POR_CLASE = {
+    "Título principal":    (17, "bold",   "roman",  "#ffffff", "#1a237e"),
+    "Título secundario":   (16, "bold",   "italic", "#e8eaf6", "#283593"),
+    "Encabezado sección":  (14, "bold",   "roman",  "#e3f2fd", "#0277bd"),
+    "Subencabezado":       (13, "bold",   "roman",  "#e0f2f1", "#00695c"),
+    "Subencabezado-bajo":  (12, "normal", "italic", "#e0f2f1", "#00796b"),
+    "Cuerpo":              (12, "normal", "roman",  "#e2e8f0", "#1a1a2e"),
+    "Cuerpo del abstract": (12, "normal", "roman",  "#b0bec5", "#263238"),  # gris azulado, cursiva en HTML
+    "Palabras clave":      (11, "normal", "roman",  "#f3e5f5", "#4a148c"),
+    "Referencia":          (11, "normal", "roman",  "#cccccc", "#2a2a2a"),
+    "Cómo citar":          (11, "normal", "italic", "#fff3e0", "#bf360c"),
+    "Fecha manuscrito":    (11, "normal", "italic", "#fbe9e7", "#8d2b07"),
+    "Título tabla":        (12, "bold",   "roman",  "#e3f2fd", "#0d47a1"),
+    "Pie de figura":       (11, "normal", "italic", "#f1f8e9", "#33691e"),
+    "Filiación":           (11, "normal", "roman",  "#e8f5e9", "#1b5e20"),
+    "Email / Metadatos":   (11, "normal", "italic", "#e8f5e9", "#1b5e20"),
+    "Ignorar":             (11, "normal", "roman",  "#ffcdd2", "#7f0000"),
+}
 
 # ─── ORCID SVG embebido ───────────────────────────────────────────────────────
 _ORCID_SVG = (
@@ -133,6 +157,38 @@ _ORCID_SVG = (
 def esc(t: str) -> str:
     return t.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 
+def _esc_con_etiquetas_editoriales(t: str) -> str:
+    """Escapa HTML y formatea etiquetas editoriales puntuales.
+    Solo aplica cuando llevan punto final: "Sinonimia.", "Material.",
+    "Descripción." y "Etología.".
+    """
+    texto = esc(t)
+    patron = re.compile(
+    r"\b("
+    r"Sinonimia\.|"
+    r"Material(?: examinado)?\.|Referred material\.|"
+    r"Descripción\.|Description\.|"
+    r"Etología\.|"
+    r"Especie tipo\.|Type species\.|"
+    r"Medidas\.|Dimensions\.|"
+    r"Distribución\.|Occurrence\.|"
+    r"Otras localidades\.|Other occurrences\.|"
+    r"Discusión\.|Remarks\.|"
+    r"Comentarios\.|Comments\.|"
+    r"Repositorio\.|Repository\.|"
+    r"Localidad\.|Locality\.|"
+    r"Nuevo registro\.|"
+    r"Horizonte\.|Horizonte y localidad\.|Horizon and locality\."
+    r")\s*",
+    re.IGNORECASE
+    )
+    def _reemplazo(m: re.Match) -> str:
+        etiqueta = m.group(1)
+        prefijo = "" if m.start() == 0 else "<br>"
+        if etiqueta == "Sinonimia." or etiqueta == "Locality Abbreviations:":
+            return f"{prefijo}<strong>{etiqueta}</strong><br>"
+        return f"{prefijo}<strong>{etiqueta}</strong> "
+    return patron.sub(_reemplazo, texto).strip()
 
 def _insertar_orcid(texto: str, autores_orcid: list | None = None) -> str:
     """
@@ -195,7 +251,17 @@ def _parsear_referencias(texto: str) -> list[str]:
 
 
 def _es_como_citar(t: str) -> bool:
-    return bool(re.match(r"(cómo citar|how to cite)", t.strip().lower()))
+    # Detección directa del prefijo
+    if re.match(r"(cómo citar|how to cite)", t.strip().lower()):
+        return True
+    # Continuación de cita: bloque corto que termina con patrón de revista
+    # Ej: "Título del artículo. Paleontología Mexicana, 15(1), 85–108."
+    # Contiene ", vol(num), pp–pp." sin ser una referencia larga
+    if (len(t) < 400 and
+            re.search(r",\s*\d+\s*\(\d+\)\s*,\s*\d+\s*[–\-]\s*\d+", t) and
+            not re.search(r"https?://", t)):
+        return True
+    return False
 
 
 def _es_encabezado_resumen_legacy_no_usar(t: str) -> bool:
@@ -274,6 +340,76 @@ def _limpiar_prefijo_titulo_tabla(texto: str) -> str:
     return t.strip(" -:\t")
 
 
+def _split_afiliaciones_linea(linea: str) -> list[tuple[str, str]]:
+    """Extrae afiliaciones (numero/letra + texto) desde una linea.
+
+    Soporta casos como:
+      "1 Institucion ... 2 Otra ..."
+      "a Department of Earth Sciences ... b Faculty of ..."
+      "a Department of Earth Sciences, University of California"  (una sola)
+    """
+    t = re.sub(r"\s+", " ", (linea or "")).strip()
+    if not t:
+        return []
+
+    # ── Caso 1: línea empieza con marcador único y es una sola afiliación ─────
+    # "a Department of..." / "1 Institución..." / "b* Department..."
+    # Se detecta primero para evitar falsos positivos del scanner multi-marcador.
+    m_simple = re.match(
+        r"^([0-9]+|[A-Za-z]{1,3})\s*[\)\.\:\-\*]?\s+([A-ZÁÉÍÓÚÑÜ].*)$",
+        t, re.DOTALL
+    )
+    if m_simple:
+        label = m_simple.group(1).strip()
+        body  = m_simple.group(2).strip(" -:\t")
+        # Solo hay una afiliación si el texto NO contiene otro marcador interno.
+        # Patrón de marcador interno: ". a " / "; b " / ") c " etc.
+        _pat_interno = re.compile(
+            r"[\.;:\)]\s+([0-9]+|[A-Za-z]{1,3})\s+[A-ZÁÉÍÓÚÑÜ]"
+        )
+        if not _pat_interno.search(body):
+            return [(label, body)] if body else []
+
+    # ── Caso 2: varias afiliaciones en la misma línea ─────────────────────────
+    # Marca al inicio de afiliación: numero o letra(s), seguida de texto.
+    # Se filtra por contexto para evitar falsos positivos dentro de palabras.
+    pat = re.compile(r"([0-9]+|[A-Za-z]{1,3})\s+(?=[A-Za-zÁÉÍÓÚÑÜáéíóúñü])")
+    starts: list[tuple[int, int]] = []
+    for m in pat.finditer(t):
+        s, e = m.start(1), m.end(1)
+        if s == 0:
+            starts.append((s, e))
+            continue
+        j = s - 1
+        while j >= 0 and t[j].isspace():
+            j -= 1
+        # Aceptar marcador interno si viene precedido de puntuación
+        if j >= 0 and t[j] in ".;:)":
+            starts.append((s, e))
+
+    # Quitar duplicados por posicion
+    seen_pos = set()
+    uniq: list[tuple[int, int]] = []
+    for s, e in starts:
+        if s in seen_pos:
+            continue
+        seen_pos.add(s)
+        uniq.append((s, e))
+    starts = sorted(uniq, key=lambda x: x[0])
+
+    if not starts:
+        return []
+
+    out: list[tuple[str, str]] = []
+    for i, (s, e) in enumerate(starts):
+        lim = starts[i + 1][0] if i + 1 < len(starts) else len(t)
+        label = t[s:e].strip()
+        body = t[e:lim].strip(" -.:;\t")
+        if body:
+            out.append((label, body))
+    return out
+
+
 def _excel_a_html_tabla(ruta: str, hoja: str = None) -> str:
     """
     Convierte una hoja de un .xlsx en tabla HTML con estilos PM.
@@ -308,6 +444,75 @@ def _excel_a_html_tabla(ruta: str, hoja: str = None) -> str:
     except Exception as e:
         return f"<p><em>[Error al leer tabla: {esc(str(e))}]</em></p>"
 
+def _render_parrafo_o_lista(texto: str, es_cuerpo: bool, abstract_mode: bool) -> list[str]:
+    """ Enlista cuando detecta '•'."""
+    t = texto.strip()
+    if not t:
+        return []
+
+    def _render_p(s: str) -> str:
+        s = s.strip()
+        if not s:
+            return ""
+        s_html = _esc_con_etiquetas_editoriales(s)
+        if abstract_mode:
+            return f'<p class="abstract sin-sangria">{s_html}</p>'
+        if es_cuerpo:
+            return f'<p class="cuerpo">{s_html}</p>'
+        return f'<p>{s_html}</p>'
+
+    if "•" not in t:
+        p = _render_p(t)
+        return [p] if p else []
+
+    # Si hay, dividir en secciones intro + lista.
+    # Soporta casos donde un item trae al final un nuevo intro terminado en ':'.
+    empieza_con_bullet = t.lstrip().startswith("•")
+    partes = [s.strip() for s in re.split(r"\s*•\s*", t) if s.strip()]
+    if not partes:
+        p = _render_p(t)
+        return [p] if p else []
+
+    intro_actual = "" if empieza_con_bullet else partes[0]
+    items_actual = []
+    bloques = []
+
+    idx_ini = 0 if empieza_con_bullet else 1
+    for seg in partes[idx_ini:]:
+        m = re.search(r"^(.*?[.;])\s+([A-ZÁÉÍÓÚÑ][^:]{4,}:)\s*$", seg)
+        if m:
+            item_prev = m.group(1).strip()
+            if item_prev:
+                items_actual.append(item_prev)
+            if intro_actual or items_actual:
+                bloques.append((intro_actual, items_actual))
+            intro_actual = m.group(2).strip()
+            items_actual = []
+        else:
+            items_actual.append(seg)
+
+    if intro_actual or items_actual:
+        bloques.append((intro_actual, items_actual))
+
+    out = []
+    ul_class = "lista-bullets"
+    if es_cuerpo:
+        ul_class += " cuerpo-list"
+    if abstract_mode:
+        ul_class += " abstract-list"
+
+    for intro, items in bloques:
+        p_intro = _render_p(intro)
+        if p_intro:
+            out.append(p_intro)
+        if items:
+            out.append(f'<ul class="{ul_class}">')
+            for it in items:
+                out.append(f'  <li>{_esc_con_etiquetas_editoriales(it)}</li>')
+            out.append("</ul>")
+
+    return out
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 class LimpiadorEditorialApp(ctk.CTk):
@@ -327,6 +532,10 @@ class LimpiadorEditorialApp(ctk.CTk):
         self._vista_estructura:    bool       = True
         self._auto_fig_dir:        str | None = None
         self._auto_tab_dir:        str | None = None
+        self._diag_tablas_auto:    str        = ""
+        # Buscador
+        self._buscar_resultados:   list[int]  = []
+        self._buscar_cursor:       int        = -1
 
         # ══════════════════════════════════════════════════════════
         # BARRA SUPERIOR — logo + título + exportar
@@ -469,6 +678,56 @@ class LimpiadorEditorialApp(ctk.CTk):
             toolbar, text="", font=ctk.CTkFont(size=15), text_color="#64748b")
         self._stats_lbl.pack(side="left", padx=12)
 
+        # ── Buscador ──────────────────────────────────────────────
+        ctk.CTkFrame(toolbar, width=1, height=34, fg_color="#334155").pack(
+            side="right", padx=8, pady=10)
+
+        # Botones anterior / siguiente
+        self._btn_buscar_prev = ctk.CTkButton(
+            toolbar, text="▲", width=28, height=34, corner_radius=6,
+            fg_color="#334155", hover_color="#475569",
+            font=ctk.CTkFont(size=13),
+            command=lambda: self._navegar_busqueda(-1))
+        self._btn_buscar_prev.pack(side="right", padx=(0, 2), pady=7)
+
+        self._btn_buscar_next = ctk.CTkButton(
+            toolbar, text="▼", width=28, height=34, corner_radius=6,
+            fg_color="#334155", hover_color="#475569",
+            font=ctk.CTkFont(size=13),
+            command=lambda: self._navegar_busqueda(+1))
+        self._btn_buscar_next.pack(side="right", padx=(0, 2), pady=7)
+
+        # Contador de resultados "3 / 12"
+        self._lbl_buscar_cnt = ctk.CTkLabel(
+            toolbar, text="", width=52,
+            font=ctk.CTkFont(size=14), text_color="#64748b")
+        self._lbl_buscar_cnt.pack(side="right", padx=(0, 4), pady=7)
+
+        # Entry de búsqueda
+        self._entry_buscar = ctk.CTkEntry(
+            toolbar,
+            placeholder_text="Buscar en bloques...",
+            width=200, height=34, corner_radius=6,
+            fg_color="#0f1117", border_color="#334155",
+            text_color="#e2e8f0", placeholder_text_color="#64748b",
+            font=ctk.CTkFont(size=14))
+        self._entry_buscar.pack(side="right", padx=(0, 2), pady=7)
+        self._entry_buscar.bind("<Return>",      lambda e: self._navegar_busqueda(+1))
+        self._entry_buscar.bind("<Shift-Return>", lambda e: self._navegar_busqueda(-1))
+        self._entry_buscar.bind("<KeyRelease>",   lambda e: self._buscar_en_bloques())
+
+        # Botón lupa
+        self._btn_lupa = ctk.CTkButton(
+            toolbar, text="🔍", width=36, height=34, corner_radius=6,
+            fg_color="#3b82f6", hover_color="#2563eb",
+            font=ctk.CTkFont(size=16),
+            command=self._buscar_en_bloques)
+        self._btn_lupa.pack(side="right", padx=(4, 0), pady=7)
+
+        # Estado interno del buscador
+        self._buscar_resultados: list[int] = []  
+        self._buscar_cursor:     int       = -1 
+
         # ── Leyenda (oculta) ──────────────────────────────────────
         self._leyenda_visible = False
         self._leyenda_panel   = ctk.CTkFrame(tab, fg_color="#1e2535", corner_radius=8)
@@ -607,8 +866,9 @@ class LimpiadorEditorialApp(ctk.CTk):
             text=(
                 "Carga un .txt con las afiliaciones, una por línea:\n"
                 "    1 Colección de Paleontología, Facultad...\n"
-                "    2 Departamento de Paleontología, Instituto...\n"
+                "    a Department of Paleontology, Institute...\n"
                 "    * correo@unam.mx\n"
+                "Acepta prefijos con número o letra (1, 2, a, b, ...).\n"
                 "Los correos se vinculan automáticamente."
             ),
             font=ctk.CTkFont(size=15), justify="left", text_color="#aaa"
@@ -651,7 +911,20 @@ class LimpiadorEditorialApp(ctk.CTk):
     def _refrescar_afiliaciones(self):
         for w in self._afil_scroll.winfo_children():
             w.destroy()
-        lineas = [l for l in self.afiliaciones_txt.splitlines() if l.strip()]
+        lineas_raw = [l for l in self.afiliaciones_txt.splitlines() if l.strip()]
+        lineas = []
+        for linea in lineas_raw:
+            t = linea.strip()
+            if re.match(r"^\*\s*[\w\.\-]+@[\w\-\.]+\.\w{2,}", t):
+                lineas.append(t)
+                continue
+            segs = _split_afiliaciones_linea(t)
+            if segs:
+                for lbl, txt in segs:
+                    lineas.append(f"{lbl} {txt}")
+            else:
+                lineas.append(t)
+
         for linea in lineas:
             frame = ctk.CTkFrame(self._afil_scroll, fg_color="#1a2a1a", corner_radius=4)
             frame.pack(fill="x", padx=2, pady=2)
@@ -879,8 +1152,170 @@ class LimpiadorEditorialApp(ctk.CTk):
                 b["frame"].pack(fill="x", padx=8, pady=2)
             else:
                 b["frame"].pack_forget()
+        # Limpiar búsqueda al cambiar filtro
+        self._limpiar_busqueda_highlight()
 
-    # ── Leyenda ───────────────────────────────────────────────────
+    # ── Buscador ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _quitar_acentos(texto: str) -> str:
+        """Elimina acentos para busqueda insensible a acentos."""
+        import unicodedata
+        return "".join(
+            c for c in unicodedata.normalize("NFD", texto)
+            if unicodedata.category(c) != "Mn"
+        )
+
+    def _buscar_en_bloques(self):
+        """Ejecuta la busqueda y resalta todos los bloques que coinciden."""
+        query = self._entry_buscar.get().strip()
+        self._limpiar_busqueda_highlight()
+
+        if not query or not self.datos_bloques:
+            self._lbl_buscar_cnt.configure(text="")
+            return
+
+        query_low = self._quitar_acentos(query.lower())
+        self._buscar_resultados = [
+            i for i, b in enumerate(self.datos_bloques)
+            if query_low in self._quitar_acentos(b["_txtbox"].get("1.0", "end").lower())
+        ]
+
+        total = len(self._buscar_resultados)
+        if total == 0:
+            self._lbl_buscar_cnt.configure(text="0 resultados", text_color="#ef4444")
+            self._buscar_cursor = -1
+            return
+
+        for idx in self._buscar_resultados:
+            b = self.datos_bloques[idx]
+            if "_color_original" not in b:
+                b["_color_original"] = b["frame"].cget("fg_color")
+            b["frame"].configure(border_width=2, border_color="#facc15")
+
+        self._buscar_cursor = 0
+        self._ir_a_resultado_actual()
+
+    def _navegar_busqueda(self, direccion: int):
+        if not self._buscar_resultados:
+            self._buscar_en_bloques()
+            return
+        total = len(self._buscar_resultados)
+        self._buscar_cursor = (self._buscar_cursor + direccion) % total
+        self._ir_a_resultado_actual()
+
+    def _ir_a_resultado_actual(self):
+        if not self._buscar_resultados:
+            return
+
+        total = len(self._buscar_resultados)
+        cursor = self._buscar_cursor
+        idx_activo = self._buscar_resultados[cursor]
+
+        # Actualizar contador
+        self._lbl_buscar_cnt.configure(
+            text=f"{cursor + 1} / {total}", text_color="#94a3b8")
+
+        # Restaurar borde amarillo a todos los resultados
+        for idx in self._buscar_resultados:
+            self.datos_bloques[idx]["frame"].configure(
+                border_width=2, border_color="#facc15")
+
+        # Borde naranja brillante al resultado activo
+        frame_activo = self.datos_bloques[idx_activo]["frame"]
+        frame_activo.configure(border_width=3, border_color="#f97316")
+
+        # Resaltar texto dentro del textbox activo
+        self._resaltar_texto_en_textbox(idx_activo)
+
+        # Scroll hasta el bloque
+        self.after(40, lambda f=frame_activo: self._scroll_hasta_frame(f))
+
+    def _resaltar_texto_en_textbox(self, idx: int):
+        """Resalta las ocurrencias del término buscado dentro del textbox."""
+        query = self._entry_buscar.get().strip()
+        if not query:
+            return
+        tb = self.datos_bloques[idx]["_txtbox"]
+        # Limpiar tags anteriores en este textbox
+        try:
+            tb.tag_remove("busqueda", "1.0", "end")
+        except Exception:
+            pass
+        contenido = tb.get("1.0", "end-1c")
+        query_low = self._quitar_acentos(query.lower())
+        contenido_low = self._quitar_acentos(contenido.lower())
+        start = 0
+        while True:
+            pos = contenido_low.find(query_low, start)
+            if pos == -1:
+                break
+            # Convertir offset absoluto → índice Tk "línea.columna"
+            antes = contenido[:pos]
+            fila = antes.count("\n") + 1
+            col_inicio = pos - antes.rfind("\n") - 1
+            fin = pos + len(query)
+            despues = contenido[:fin]
+            fila_fin = despues.count("\n") + 1
+            col_fin = fin - despues.rfind("\n") - 1
+            try:
+                tb.tag_add("busqueda", f"{fila}.{col_inicio}", f"{fila_fin}.{col_fin}")
+            except Exception:
+                pass
+            start = pos + 1
+        try:
+            tb.tag_config("busqueda", background="#f97316", foreground="#000000")
+        except Exception:
+            pass
+
+    def _scroll_hasta_frame(self, frame):
+        """Desplaza el CTkScrollableFrame para que el bloque sea visible."""
+        try:
+            # CTkScrollableFrame expone el canvas interior como _parent_canvas
+            canvas = self.frame_scroll._parent_canvas
+            frame.update_idletasks()
+            canvas.update_idletasks()
+
+            # Posición Y del frame dentro del canvas interior
+            fy = frame.winfo_y()
+            fh = frame.winfo_height()
+
+            # Región total desplazable (bbox del canvas)
+            _, _, _, total_h = canvas.bbox("all")
+            if not total_h or total_h <= 0:
+                return
+
+            visible_h = canvas.winfo_height()
+
+            # Queremos centrar el bloque en la ventana visible
+            target_y = fy - (visible_h - fh) // 2
+            target_y = max(0, min(target_y, total_h - visible_h))
+            fraction = target_y / total_h
+            canvas.yview_moveto(fraction)
+        except Exception:
+            pass
+
+    def _limpiar_busqueda_highlight(self):
+        """Quita todos los bordes y tags de resaltado de búsqueda."""
+        for b in self.datos_bloques:
+            try:
+                # Restaurar el color original del frame (sin borde)
+                color_orig = b.get("_color_original", b["frame"].cget("fg_color"))
+                b["frame"].configure(border_width=0, border_color=color_orig)
+            except Exception:
+                pass
+            try:
+                b["_txtbox"].tag_remove("busqueda", "1.0", "end")
+            except Exception:
+                pass
+        self._buscar_resultados = []
+        self._buscar_cursor = -1
+        try:
+            self._lbl_buscar_cnt.configure(text="")
+        except Exception:
+            pass
+
+
 
     def _construir_leyenda(self, parent):
         cols = 4
@@ -971,7 +1406,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             os.makedirs(self._auto_fig_dir, exist_ok=True)
 
         pat_caption = re.compile(
-            r"^\s*(figura|fig\.?|figure)\s*\d+[a-z]?(?:\s*-\s*[a-z])?[\.\):]?\s*",
+            r"^\s*(figura|fig\.?|figure|table|tabla)\s*\d+[a-z]?(?:\s*-\s*[a-z])?[\.\):]?\s*",
             re.IGNORECASE,
         )
 
@@ -1192,10 +1627,12 @@ class LimpiadorEditorialApp(ctk.CTk):
     def _extraer_tablas_desde_pdf(self, doc, ruta_pdf: str):
         """Devuelve (tablas_auto, rects_por_pagina) para tablas detectadas."""
         self._limpiar_cache_tablas_auto()
+        self._diag_tablas_auto = ""
 
         try:
             import openpyxl
-        except Exception:
+        except Exception as exc:
+            self._diag_tablas_auto = f"openpyxl no disponible: {exc}"
             return [], {}
 
         base = os.path.splitext(os.path.basename(ruta_pdf))[0]
@@ -1214,19 +1651,28 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         tablas_auto = []
         rects_por_pagina = {}
+        paginas_con_find_tables = 0
+        paginas_con_tablas = 0
+        errores_find_tables = []
+        errores_extract = []
+        errores_guardado = []
 
         for pnum in range(len(doc)):
             page = doc.load_page(pnum)
             if not hasattr(page, "find_tables"):
                 continue
+            paginas_con_find_tables += 1
 
             try:
                 finder = page.find_tables()
-            except Exception:
+            except Exception as exc:
+                if len(errores_find_tables) < 3:
+                    errores_find_tables.append(f"p{pnum+1}: {exc}")
                 continue
             tables = getattr(finder, "tables", []) if finder else []
             if not tables:
                 continue
+            paginas_con_tablas += 1
 
             blocks = page.get_text("dict").get("blocks", [])
             text_blocks = []
@@ -1252,7 +1698,9 @@ class LimpiadorEditorialApp(ctk.CTk):
 
                 try:
                     rows = tb.extract()
-                except Exception:
+                except Exception as exc:
+                    if len(errores_extract) < 3:
+                        errores_extract.append(f"p{pnum+1}/t{idx_tab}: {exc}")
                     continue
                 if not rows or len(rows) < 2:
                     continue
@@ -1312,7 +1760,9 @@ class LimpiadorEditorialApp(ctk.CTk):
                         ws.append(row)
                     wb.save(xlsx_path)
                     wb.close()
-                except Exception:
+                except Exception as exc:
+                    if len(errores_guardado) < 3:
+                        errores_guardado.append(f"p{pnum+1}/t{idx_tab}: {exc}")
                     continue
 
                 rects_por_pagina.setdefault(pnum, []).append(rect)
@@ -1331,6 +1781,34 @@ class LimpiadorEditorialApp(ctk.CTk):
         for tab in tablas_auto:
             tab.pop("_y", None)
             tab.pop("_x", None)
+
+        if tablas_auto:
+            self._diag_tablas_auto = (
+                f"detectadas {len(tablas_auto)} tabla(s) "
+                f"en {paginas_con_tablas} pagina(s)"
+            )
+        elif paginas_con_find_tables == 0:
+            self._diag_tablas_auto = (
+                "tu version de PyMuPDF no expone find_tables()"
+            )
+        elif errores_find_tables:
+            self._diag_tablas_auto = (
+                "find_tables() fallo: " + " | ".join(errores_find_tables)
+            )
+        elif errores_extract:
+            self._diag_tablas_auto = (
+                "se detectaron tablas pero no se pudieron extraer: "
+                + " | ".join(errores_extract)
+            )
+        elif errores_guardado:
+            self._diag_tablas_auto = (
+                "se detectaron tablas pero no se pudieron guardar: "
+                + " | ".join(errores_guardado)
+            )
+        else:
+            self._diag_tablas_auto = (
+                "find_tables() no detecto tablas en el PDF"
+            )
         return tablas_auto, rects_por_pagina
 
     def _agregar_tabla(self):
@@ -1454,9 +1932,15 @@ class LimpiadorEditorialApp(ctk.CTk):
         for line in block.get("lines", []):
             for span in line.get("spans", []):
                 sizes.append(span["size"])
-                fuentes.append(span.get("font", "").lower())
+                fnt = span.get("font", "").lower()
+                fuentes.append(fnt)
                 if span["flags"] & (1 << 4): bold   = True
                 if span["flags"] & (1 << 1): italic = True
+                # Fallback por nombre de fuente (algunos PDF no marcan bien flags)
+                if re.search(r"bold|black|heavy|semibold|demi", fnt):
+                    bold = True
+                if re.search(r"italic|oblique|kursiv", fnt):
+                    italic = True
         avg = sum(sizes)/len(sizes) if sizes else 10.0
         dom = Counter(fuentes).most_common(1)[0][0] if fuentes else ""
         return avg, bold, italic, dom
@@ -1467,27 +1951,33 @@ class LimpiadorEditorialApp(ctk.CTk):
         for line in block.get("lines", []):
             lineas.append("".join(s["text"] for s in line.get("spans", [])))
 
-        # Unir líneas: si una termina en guión (- o ­), pegar directamente
+        # Unir líneas: si una termina en guion de corte, pegar directamente.
+        _DASH_CORTES = "-\u00ad\u2010\u2011\u2012\u2013\u2014"
         resultado = ""
         for i, linea in enumerate(lineas):
             if i == 0:
                 resultado = linea
             else:
-                if resultado.endswith("-") or resultado.endswith("\u00ad"):
-                    # Guión de corte: quitar guión y pegar sin espacio
-                    resultado = resultado.rstrip("-\u00ad") + linea.lstrip()
+                # Solo quitar guion de corte si la siguiente linea parece
+                # continuar la palabra (inicia con letra minuscula).
+                if re.search(rf"[{_DASH_CORTES}]\s*$", resultado) and \
+                   re.match(r"^\s*[a-záéíóúñüa-z]", linea):
+                    resultado = re.sub(rf"[{_DASH_CORTES}]\s*$", "", resultado) + linea.lstrip()
                 else:
                     resultado = resultado + " " + linea
 
         # Limpiar espacios múltiples y soft-hyphens residuales
         resultado = resultado.replace("\u00ad", "")       # soft hyphens
         resultado = re.sub(r"\s+", " ", resultado).strip()
-        # Guiones de corte que quedaron con espacio: "pos­ teriormente" → "posteriormente"
-        resultado = re.sub(r"(\w)-\s+(\w)", r"\1\2", resultado)
+        # Guiones de corte
+        resultado = re.sub(r"(\w)[\u2010\u2011\u2012\u2013\u2014-]\s+([a-záéíóúñüa-z])", r"\1\2", resultado)
         return resultado
 
     def _clasificar_auto(self, texto, size, bold, italic, font, body_size):
         t, t_low = texto.strip(), texto.strip().lower()
+        f_low = (font or "").lower()
+        es_bold = bold or bool(re.search(r"bold|black|heavy|semibold|demi", f_low))
+        es_italic = italic or bool(re.search(r"italic|oblique|kursiv", f_low))
 
         secciones = {
             "resumen","abstract","resumen no técnico","non-technical abstract",
@@ -1495,7 +1985,11 @@ class LimpiadorEditorialApp(ctk.CTk):
             "conclusiones","conclusions","referencias","references",
             "agradecimientos","acknowledgements","discusión","discussion",
             "metodología","methods","resultados","results",
-            "contribuciones de los autores",
+            "contribuciones de los autores","contribuciones de los autores", 
+            "contribucción de autores", "contribución de Autores",
+            "authors' contribution",
+            "conflicto de intereses","conflict of interest",
+            "conflicts of interest", "competing interests",
             "paleontología sistemática","systematic palaeontology",
         }
         if t_low in secciones: return "Encabezado sección"
@@ -1503,6 +1997,8 @@ class LimpiadorEditorialApp(ctk.CTk):
         if _es_fecha_mss(t) or _es_doi(t): return "Fecha manuscrito"
         if re.match(r"^(palabras\s+clave|keywords)\s*[:\.]", t_low):
             return "Palabras clave"
+        if re.match(r"^(tabla|table)\s+\d+[\.\:\s]", t_low):
+            return "Título tabla"
         if re.search(r"@[\w\-\.]+\.\w{2,}", t) and len(t) < 120:
             return "Email / Metadatos"
 
@@ -1514,17 +2010,38 @@ class LimpiadorEditorialApp(ctk.CTk):
             return "Subencabezado"
         if re.match(r"^\d+\.\d+", t) and s <= 12:
             return "Subencabezado-bajo"
-        if s >= 13 and bold and not italic: return "Título principal"
-        if s >= 13 and bold and italic:     return "Título secundario"
-        if s == 13 and not bold and not italic: return "Autores"
-        if s == 12 and italic:  return "Email / Metadatos"
-        if s == 12 and not bold: return "Normal"
-        if s == 10 and bold:    return "Encabezado sección"
-        if s == 10 and not bold: return "Subencabezado"
+        if s >= 13 and es_bold and not es_italic: return "Título principal"
+        if s >= 13 and es_bold and es_italic:     return "Título secundario"
+        if s == 13 and not es_bold and not es_italic: return "Autores"
+        if s == 12 and es_italic:  return "Email / Metadatos"
+        if s == 12 and not es_bold: return "Normal"
+        if s == 10 and es_bold:    return "Encabezado sección"
+        if s == 10 and not es_bold: return "Subencabezado"
+        # ── Heurística para afiliaciones con letras (inglés/español) ────────
+        # Detecta líneas que empiezan con letra(s) sola(s) seguidas de institución.
+        # Ej: "a Department of Earth Sciences, University of California..."
+        #     "b Instituto de Geología, UNAM, Ciudad de México..."
+        _pat_afil_letra = re.compile(
+            r"^[a-zA-Z]{1,3}\s+[A-ZÁÉÍÓÚÑÜ][a-zA-ZÁÉÍÓÚÑÜáéíóúñü]",
+        )
+        if _pat_afil_letra.match(t) and not re.search(r"\.\s+[A-Z]", t[:30]):
+            # Confirmar que parece institución: contiene coma o ciudad
+            if re.search(r",|\b(university|instituto|department|lab|center|centre|"
+                         r"museum|college|faculty|school|national|natural)\b",
+                         t, re.IGNORECASE):
+                return "Filiación"
+
         if s == 9:
             is_tnr = "times" in font or "roman" in font
+            # Afiliación en 9pt: empieza con número/letra + institución, sin ser TNR
+            if not is_tnr:
+                if re.match(r"^(\d+|[a-zA-Z])\s+[A-ZÁÉÍÓÚÑÜ]", t):
+                    if re.search(r",|\b(university|instituto|department|lab|center|centre|"
+                                 r"museum|college|faculty|school|national|natural)\b",
+                                 t, re.IGNORECASE):
+                        return "Filiación"
             if is_tnr or len(t) > 100: return "Resumen / Abstract"
-            if len(t) < 50: return "Filiación"
+            if len(t) < 80: return "Filiación"
             return "Resumen / Abstract"
         if len(t) < 4: return "Ignorar"
         return "Normal"
@@ -1548,6 +2065,14 @@ class LimpiadorEditorialApp(ctk.CTk):
         for w in self.frame_scroll.winfo_children():
             w.destroy()
         self.datos_bloques.clear()
+        # Limpiar estado del buscador al cargar nuevo PDF
+        self._buscar_resultados = []
+        self._buscar_cursor = -1
+        try:
+            self._entry_buscar.delete(0, "end")
+            self._lbl_buscar_cnt.configure(text="")
+        except Exception:
+            pass
         self._limpiar_cache_figuras_auto()
         self.figuras_manuales = []
         self._refrescar_lista_figuras()
@@ -1590,9 +2115,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             # estar al 6-8% de la página y NO deben filtrarse.
             _pat_cornisa_txt = re.compile(
                 r"^(https?://doi\.org/|doi\.org/|\d{1,3}$"
-                r"|paleontolog[íi]a mexicana\s+vol\."
-                r"|velasco-de le[oó]n et al"
-                r"|ra[íi]ces de la paleobotánica)",
+                r"|paleontolog[íi]a mexicana\s+vol\.)",
                 re.IGNORECASE
             )
             def _es_cornisa(by0, by1, page_h, pnum):
@@ -1680,10 +2203,12 @@ class LimpiadorEditorialApp(ctk.CTk):
                 "resumen", "abstract", "resumen no técnico",
                 "non-technical abstract", "palabras clave", "keywords",
                 "referencias", "references", "conclusiones", "conclusions",
-                "agradecimientos", "acknowledgements", "discusión",
+                "agradecimientos", "acknowledgements","acknowledgments", "discusión",
                 "resultados", "introducción", "metodología",
-                "contribuciones de los autores",
-                "conflicto de intereses", "conflict of interest",
+                "contribuciones de los autores", "contribucción de autores",
+                "contribucción de Autores", "contribución de autores", "authors' contribution",
+                "conflicto de intereses", "conflict of interest","conflicts of interest",
+                "competing interests","declaración de conflictos",
             }
 
             zona_b_inicio = None   # índice en raw donde empieza el cuerpo
@@ -1738,9 +2263,9 @@ class LimpiadorEditorialApp(ctk.CTk):
                         cls = "Fecha manuscrito"
                     elif t_low in _SECCIONES_EXACTAS:
                         cls = "Encabezado sección"
-                    elif re.search(r"\btabla\s+\d+[\.\:\s]", t_low):
+                    elif re.search(r"\b(?:tabla|table)\s+\d+[\.\:\s]", t_low):
                         cls = "Título tabla"
-                    elif re.match(r"^figura\s+\d+[\.\:\s]", t_low):
+                    elif re.match(r"^(figura|figure)\s+\d+[\.\:\s]", t_low):
                         cls = "Pie de figura"   # pie de foto del PDF → ignorar en HTML
                     else:
                         cls = "Cuerpo"
@@ -1777,11 +2302,17 @@ class LimpiadorEditorialApp(ctk.CTk):
             _pat_fila_tabla = re.compile(
                 r"^(1[89]\d{2}|20\d{2})\s+\S"   # año AAAA + contenido
             )
+            _pat_lista_crono_taxon = re.compile(
+                r"^(1[89]\d{2}|20\d{2})\s+[A-Za-zÁÉÍÓÚÑáéíóúñü\-]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñü\-]+){0,4}\s*;",
+                re.IGNORECASE,
+            )
 
             def _parece_fila_tabla(item):
                 t   = item["contenido"].strip()
                 cls = item["clasificacion"]
                 if cls != "Cuerpo": return False
+                # Listados cronológicos (ej. sinonimias) no son tablas
+                if _pat_lista_crono_taxon.match(t): return False
                 # Solo suprimir proactivamente si empieza con año de 4 dígitos
                 if _pat_fila_tabla.match(t): return True
                 return False
@@ -1825,6 +2356,11 @@ class LimpiadorEditorialApp(ctk.CTk):
             HEADERS_EMBEBIDOS = [
                 "Non-technical Abstract", "Non-Technical Abstract",
                 "Resumen no técnico", "Resumen no Técnico",
+                "Acknowledgments", "Acknowledgements", "Agradecimientos",
+                "Conflicts of interest", "Conflict of interest", "Competing interests",
+                "Conflicto de intereses", "Authors' Contribution",
+                "Contribuciones de los autores", "Contribucción de autores",
+                "Contribucción de Autores", "Contribución de Autores", 
                 # "Abstract" se maneja por separado con regex (ver abajo)
             ]
             # Detectar "Abstract" sola sin cortar "Non-technical Abstract"
@@ -1836,7 +2372,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             # Captura todo desde "Tabla N." hasta el fin de esa "oración" (hasta \n
             # o hasta el final del texto).
             _pat_tabla_embebida = re.compile(
-                r'(?<!\w)(Tabla\s+\d+[\.\:\s][^\n]{0,200})',
+                r'(?<!\w)((?:Tabla|Table)\s+\d+[\.\:\s][^\n]{0,200})',
                 re.IGNORECASE
             )
 
@@ -2023,11 +2559,22 @@ class LimpiadorEditorialApp(ctk.CTk):
             resumen = "  |  ".join(f"{k}: {v}" for k,v in conteo.most_common(6))
             resumen += f"  |  Figuras auto: {len(figuras_auto)}"
             resumen += f"  |  Tablas auto: {len(tablas_auto)}"
+            if not tablas_auto and self._diag_tablas_auto:
+                resumen += f"  |  diag tablas: {self._diag_tablas_auto}"
             self._status.configure(text_color="#66bb6a")
             self._set_status(
                 f"✅  Análisis completo — {len(bloques_utiles)} bloques  |  base: {body_size}pt  |  {resumen}")
-            self._mostrar_banner(
-                f"✅  Análisis completo — {len(bloques_utiles)} bloques extraídos")
+            if not tablas_auto and self._diag_tablas_auto:
+                diag_msg = f"No se extrajeron tablas automáticamente: {self._diag_tablas_auto}"
+                print(diag_msg)
+                self._mostrar_banner(diag_msg, color_bg="#7f1d1d", color_txt="#fee2e2")
+                try:
+                    messagebox.showwarning("Diagnóstico de tablas", diag_msg)
+                except Exception:
+                    pass
+            else:
+                self._mostrar_banner(
+                    f"✅  Análisis completo — {len(bloques_utiles)} bloques extraídos")
             self._actualizar_stats()
             self._aplicar_filtro("Todos")
 
@@ -2043,6 +2590,17 @@ class LimpiadorEditorialApp(ctk.CTk):
                 fg_color="#1565c0"
             )
 
+    def _aplicar_estilo_textbox(self, txt_box, cls):
+        """Aplica fuente y colores al CTkTextbox según la clase semántica."""
+        fsize, weight, slant, fg, bg = ESTILO_POR_CLASE.get(
+            cls, (12, "normal", "roman", "#e2e8f0", "#1a1a2e"))
+        txt_box.configure(
+            font=ctk.CTkFont(size=fsize, weight=weight),
+            text_color=fg,
+            fg_color=bg,
+            border_color=COLOR_POR_CLASE.get(cls, "#333"),
+        )
+
     def _crear_bloque_ui(self, item):
         cls  = item["clasificacion"]
         cont = item["contenido"]
@@ -2050,32 +2608,75 @@ class LimpiadorEditorialApp(ctk.CTk):
         bold = item.get("bold", False)
         ital = item.get("italic", False)
 
-        color   = COLOR_POR_CLASE.get(cls, "#2b2b2b")
-        preview = (cont[:150]+"…") if len(cont)>150 else cont
+        color = COLOR_POR_CLASE.get(cls, "#2b2b2b")
 
+        # ── Fila superior: badge + clasificador ───────────────────
         frame = ctk.CTkFrame(self.frame_scroll, fg_color=color, corner_radius=5)
         frame.pack(fill="x", padx=8, pady=2)
+        frame.columnconfigure(0, weight=0)
         frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(2, weight=0)
 
         badge = f"{size:.0f}pt"+(" B" if bold else "")+(" I" if ital else "")
         ctk.CTkLabel(frame, text=badge, width=62,
                      font=ctk.CTkFont(size=15), text_color="#bbb"
-                     ).grid(row=0, column=0, padx=(6,0), pady=5, sticky="w")
-        ctk.CTkLabel(frame, text=preview, wraplength=720,
-                     justify="left", anchor="w",
-                     font=ctk.CTkFont(size=15)
-                     ).grid(row=0, column=1, padx=6, pady=5, sticky="ew")
+                     ).grid(row=0, column=0, padx=(6, 0), pady=(5, 2), sticky="nw")
+
+        # ── Textbox editable con el contenido completo ────────────
+        lineas_aprox = max(2, min(10, len(cont) // 80 + cont.count("\n") + 1))
+        altura_px = lineas_aprox * 22 + 12
+
+        fsize, weight, slant, fg, bg = ESTILO_POR_CLASE.get(
+            cls, (12, "normal", "roman", "#e2e8f0", "#1a1a2e"))
+
+        txt_box = ctk.CTkTextbox(
+            frame,
+            font=ctk.CTkFont(size=fsize, weight=weight),
+            fg_color=bg,
+            text_color=fg,
+            border_color=color,
+            border_width=1,
+            corner_radius=4,
+            wrap="word",
+            height=altura_px,
+            activate_scrollbars=False,
+        )
+        txt_box.insert("1.0", cont)
+        txt_box.grid(row=0, column=1, padx=(4, 6), pady=(5, 6), sticky="ew")
 
         menu = ctk.CTkOptionMenu(frame, values=OPCIONES, width=175,
                                   font=ctk.CTkFont(size=15),
-                                  command=self._actualizar_stats)
+                                  command=lambda v, f=frame, tb=txt_box: self._on_clase_cambiada(v, f, tb))
         menu.set(cls)
-        menu.grid(row=0, column=2, padx=(0,8), pady=5)
+        menu.grid(row=0, column=2, padx=(0, 8), pady=(5, 2), sticky="ne")
 
         self.datos_bloques.append({
-            "contenido": cont, "menu": menu,
-            "italic": ital,    "frame": frame,
+            "contenido": cont,
+            "menu": menu,
+            "italic": ital,
+            "frame": frame,
+            "_txtbox": txt_box,
+            "_color_original": color,
         })
+
+    def _on_clase_cambiada(self, nueva_clase, frame, txt_box):
+        """Cambia color del frame y estilo del textbox cuando cambia la clasificación."""
+        nuevo_color = COLOR_POR_CLASE.get(nueva_clase, "#2b2b2b")
+        frame.configure(fg_color=nuevo_color)
+        self._aplicar_estilo_textbox(txt_box, nueva_clase)
+        self._actualizar_stats(nueva_clase)
+        # Actualizar _color_original para que el buscador restaure el color correcto
+        for b in self.datos_bloques:
+            if b["frame"] is frame:
+                b["_color_original"] = nuevo_color
+                break
+
+    def _sync_contenidos_bloques(self):
+        """Lee el texto de cada CTkTextbox y lo guarda en b['contenido']."""
+        for b in self.datos_bloques:
+            tb = b.get("_txtbox")
+            if tb is not None:
+                b["contenido"] = tb.get("1.0", "end-1c")
 
     # ═════════════════════════════════════════════════════════════
     # EXPORTAR HTML
@@ -2089,6 +2690,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             filetypes=[("Archivo HTML", "*.html")])
         if not ruta: return
 
+        self._sync_contenidos_bloques()   # leer ediciones del usuario en textboxes
         self._sync_pies()
         self._sync_titulos_tablas()
         self._sync_autores()   # sincronizar autores/ORCID antes de exportar
@@ -2096,15 +2698,18 @@ class LimpiadorEditorialApp(ctk.CTk):
         # Si hay autores manuales, el bloque de autores del PDF se ignora
         # y se inyecta el bloque manual justo después del título secundario.
         # ── Zona de autores del PDF: ignorar TODO entre titulo-secundario y Resumen ──
+        idx_tit_pri = next((i for i, b in enumerate(self.datos_bloques)
+                            if b["menu"].get() == "Título principal"), None)
         idx_tit_sec = next((i for i, b in enumerate(self.datos_bloques)
                             if b["menu"].get() == "Título secundario"), None)
+        idx_tit_base = idx_tit_sec if idx_tit_sec is not None else idx_tit_pri
         idx_resumen = next((i for i, b in enumerate(self.datos_bloques)
                             if b["menu"].get() == "Encabezado sección"
                             and _es_encabezado_resumen(b["contenido"])
-                            and (idx_tit_sec is None or i > idx_tit_sec)), None)
+                            and (idx_tit_base is None or i > idx_tit_base)), None)
         zona_autores_pdf = set()
-        if idx_tit_sec is not None and idx_resumen is not None:
-            zona_autores_pdf = set(range(idx_tit_sec + 1, idx_resumen))
+        if idx_tit_base is not None and idx_resumen is not None:
+            zona_autores_pdf = set(range(idx_tit_base + 1, idx_resumen))
 
         # ── Construir HTML de afiliaciones desde .txt ──────────────
         def _afil_a_html(txt: str) -> str:
@@ -2122,13 +2727,14 @@ class LimpiadorEditorialApp(ctk.CTk):
                             f'<p class="email sin-sangria">'
                             f'* <a href="mailto:{e}">{esc(e)}</a></p>')
                     continue
-                # Número inicial → superíndice
-                m = re.match(r"^(\d+)\s+(.*)", linea, re.DOTALL)
-                if m:
-                    num, resto = m.group(1), m.group(2).strip()
-                    html_lineas.append(
-                        f'<p class="filiaciones sin-sangria">'
-                        f'<sup>{num}</sup> {esc(resto)}</p>')
+
+                segs = _split_afiliaciones_linea(linea)
+                if segs:
+                    for marca, resto in segs:
+                        html_lineas.append(
+                            f'<p class="filiaciones sin-sangria">'
+                            f'<sup>{esc(marca)}</sup> {esc(resto)}</p>'
+                        )
                 else:
                     html_lineas.append(
                         f'<p class="filiaciones sin-sangria">{esc(linea)}</p>')
@@ -2139,8 +2745,14 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         autores_html_manual = ""
         autores_inyectado   = False
+        hay_titulo_sec = any(b["menu"].get() == "Título secundario" for b in self.datos_bloques)
         primer_nivel1_emitido = False
-        en_abstract_ingles  = False   # True dentro de Abstract / Non-technical Abstract
+        # Estilo dinámico por orden:
+        # primer bloque Resumen/Abstract -> negro
+        # segundo bloque Resumen/Abstract -> gris/cursiva
+        contador_resumenes = 0
+        en_bloque_resumen = False
+        bloque_resumen_gris = False
         if self.autores_orcid:
             autores_html_manual = (
                 f'<p class="autores sin-sangria">'
@@ -2218,13 +2830,22 @@ class LimpiadorEditorialApp(ctk.CTk):
             if cls == "Ignorar": continue
 
             # ── Si hay referencias externas y estamos dentro de la sección
-            #    de referencias del PDF, suprimir TODO excepto nuevos
-            #    encabezados de sección (que resetean en_refs).
-            if usar_refs_externas and en_refs and cls != "Encabezado sección":
+            #    de referencias del PDF, suprimir SOLO bloques de clase
+            #    "Referencia" (las refs externas ya se inyectaron).
+            #    Si el usuario cambió la clase a algo distinto, se respeta.
+            if usar_refs_externas and en_refs and cls == "Referencia":
                 continue
 
             if cls == "Título principal":
                 lineas.append(f'<h1 class="titulo-principal">{texto}</h1>')
+                # Si el articulo no tiene titulo secundario, inyectar aqui.
+                if not hay_titulo_sec:
+                    if autores_html_manual and not autores_inyectado:
+                        lineas.append(autores_html_manual)
+                        autores_inyectado = True
+                    if afil_html and not afil_inyectado:
+                        lineas.append(afil_html)
+                        afil_inyectado = True
             elif cls == "Título secundario":
                 lineas.append(f'<h2 class="titulo-secundario">{texto}</h2>')
                 if autores_html_manual and not autores_inyectado:
@@ -2238,7 +2859,15 @@ class LimpiadorEditorialApp(ctk.CTk):
                 if not autores_html_manual:
                     lineas.append(f'<p class="autores sin-sangria">{_insertar_orcid(b["contenido"], None)}</p>')
             elif cls == "Filiación":
-                lineas.append(f'<p class="filiaciones sin-sangria">{texto}</p>')
+                segs_pdf = _split_afiliaciones_linea(b["contenido"])
+                if segs_pdf:
+                    for marca, resto in segs_pdf:
+                        lineas.append(
+                            f'<p class="filiaciones sin-sangria">'
+                            f'<sup>{esc(marca)}</sup> {esc(resto)}</p>'
+                        )
+                else:
+                    lineas.append(f'<p class="filiaciones sin-sangria">{texto}</p>')
             elif cls == "Email / Metadatos":
                 txt_link = re.sub(r"([\w\.\-]+@[\w\-\.]+\.\w{2,})",
                                   r'<a href="mailto:\1">\1</a>', texto)
@@ -2247,8 +2876,13 @@ class LimpiadorEditorialApp(ctk.CTk):
                 en_refs = bool(re.search(r"referencia|reference", texto, re.I))
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-                    "referencias", "references", "contribuciones de los autores",
-                    "agradecimientos", "acknowledgements",
+                    "referencias", "references", "contribuciones de los autores", 
+                    "contribución de autores","contribucción de autores",
+                    "author contribution", "author contributions",
+                    "authors' contribution","agradecimientos",
+                    "acknowledgements", "acknowledgments",
+                    "conflicto de intereses", "conflict of interest",
+                    "conflicts of interest", "competing interests",
                 }
                 # Metadatos de cabecera: ISSN, volumen, fechas → letra pequeña
                 _es_meta = bool(re.search(
@@ -2262,25 +2896,36 @@ class LimpiadorEditorialApp(ctk.CTk):
                 )) or re.match(r"^paleontolog[íi]a mexicana$", texto.strip(), re.I)
                 # Solo Abstract y Non-technical Abstract en gris (inglés)
                 _SECCIONES_GRISES = {
-                    "abstract", "non-technical abstract",
                     "keywords",
                 }
                 # Secciones con línea divisora
                 _SECCIONES_CON_LINEA = {
                     "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-                    "referencias", "references", "contribuciones de los autores",
-                    "agradecimientos", "acknowledgements",
+                    "referencias", "references", "contribuciones de los autores", 
+                    "contribución de autores","contribucción de autores",
+                    "author contribution", "author contributions",
+                    "authors' contribution",
+                    "agradecimientos", "acknowledgements",  "acknowledgments",
                     "conflicto de intereses", "conflict of interest",
+                    "conflicts of interest", "competing interests",
                 }
                 txt_low = texto.strip().lower()
-                es_gris   = txt_low in _SECCIONES_GRISES
+                _SECCIONES_RESUMEN = {
+                    "resumen", "abstract", "resumen no técnico", "non-technical abstract"
+                }
+
+                if txt_low in _SECCIONES_RESUMEN:
+                    contador_resumenes += 1
+                    en_bloque_resumen = True
+                    bloque_resumen_gris = contador_resumenes >= 2
+                elif txt_low not in ("palabras clave", "keywords"):
+                    en_bloque_resumen = False
+                    bloque_resumen_gris = False
+
+                es_gris = txt_low in _SECCIONES_GRISES
+                if txt_low in _SECCIONES_RESUMEN:
+                    es_gris = bloque_resumen_gris
                 con_linea = txt_low in _SECCIONES_CON_LINEA
-                # Detectar si entramos/salimos de Abstract en inglés
-                _ABSTRACT_INGLES = {"abstract", "non-technical abstract"}
-                if txt_low in _ABSTRACT_INGLES:
-                    en_abstract_ingles = True
-                elif txt_low not in _SECCIONES_GRISES:
-                    en_abstract_ingles = False
                 if _es_meta:
                     clase_h2 = 'seccion meta'
                 elif con_linea and es_gris:
@@ -2298,7 +2943,8 @@ class LimpiadorEditorialApp(ctk.CTk):
                         lineas.append(f"  <li>{esc(ref)}</li>")
                     lineas.append("</ol>")
             elif cls == "Subencabezado":
-                en_abstract_ingles = False
+                en_bloque_resumen = False
+                bloque_resumen_gris = False
                 if not primer_nivel1_emitido:
                     lineas.append(f'<h3 class="subseccion primer-nivel1">{texto}</h3>')
                     primer_nivel1_emitido = True
@@ -2316,45 +2962,57 @@ class LimpiadorEditorialApp(ctk.CTk):
                     r"^(Palabras\s+clave|Keywords)\s*[:\.]?\s*",
                     lambda m: f"<strong>{m.group(0).rstrip()}</strong> ",
                     t_kw, count=1, flags=re.IGNORECASE)
-                lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
-            elif cls in ("Normal", "Cuerpo"):
-                if en_refs:
-                    # Dentro de la sección Referencias del PDF → ignorar siempre
-                    # (las refs externas ya se inyectaron con el ol.referencias)
-                    continue
+                if en_bloque_resumen and bloque_resumen_gris:
+                    lineas.append(f'<p class="keywords sin-sangria" style="color:#666;font-style:italic;">{t_kw}</p>')
                 else:
-                    # Re-fusionar partes que siguen siendo continuación
-                    # (§SUB§ siempre se trata aparte)
-                    partes_raw = b["contenido"].split("\n\n")
-                    partes_unidas = []
-                    for parte in partes_raw:
-                        parte = parte.strip()
-                        if not parte: continue
-                        if parte.startswith("§SUB§"):
-                            partes_unidas.append(parte)
-                        elif partes_unidas and not partes_unidas[-1].startswith("§SUB§"):
-                            prev = partes_unidas[-1].rstrip()
-                            if prev and prev[-1] not in ".?!:":
-                                # Continuación — unir
-                                if prev.endswith("-"):
-                                    partes_unidas[-1] = prev[:-1] + parte
-                                else:
-                                    partes_unidas[-1] = prev + " " + parte
+                    lineas.append(f'<p class="keywords sin-sangria">{t_kw}</p>')
+            elif cls == "Cuerpo del abstract":
+                # ── El usuario marcó explícitamente este bloque como abstract.
+                # Se renderiza con clase CSS "abstract" (gris, cursiva) igual
+                # que antes tenía el segundo bloque de resumen.
+                lineas.extend(_render_parrafo_o_lista(
+                    b["contenido"],
+                    es_cuerpo=False,
+                    abstract_mode=True,
+                ))
+            elif cls in ("Normal", "Cuerpo"):
+                # ── La clase "Cuerpo" elegida por el usuario siempre se renderiza.
+                # Solo se suprime si es una referencia automática dentro de la
+                # sección de refs (cls == "Referencia") — eso se maneja arriba.
+                # Re-fusionar partes que siguen siendo continuación
+                # (§SUB§ siempre se trata aparte)
+                partes_raw = b["contenido"].split("\n\n")
+                partes_unidas = []
+                for parte in partes_raw:
+                    parte = parte.strip()
+                    if not parte: continue
+                    if parte.startswith("§SUB§"):
+                        partes_unidas.append(parte)
+                    elif partes_unidas and not partes_unidas[-1].startswith("§SUB§"):
+                        prev = partes_unidas[-1].rstrip()
+                        if prev and prev[-1] not in ".?!:":
+                            # Continuación — unir
+                            if re.search(r"[\u2010\u2011\u2012\u2013\u2014-]\s*$", prev) and \
+                               re.match(r"^[a-záéíóúñü]", parte):
+                                partes_unidas[-1] = re.sub(r"[\u2010\u2011\u2012\u2013\u2014-]\s*$", "", prev) + parte
                             else:
-                                partes_unidas.append(parte)
+                                partes_unidas[-1] = prev + " " + parte
                         else:
                             partes_unidas.append(parte)
+                    else:
+                        partes_unidas.append(parte)
 
-                    for parte in partes_unidas:
-                        if parte.startswith("§SUB§"):
-                            lineas.append(f'<h3 class="subseccion-bajo">{esc(parte[5:])}</h3>')
-                        else:
-                            tag_p = 'class="cuerpo"' if cls == "Cuerpo" else ""
-                            # Cuerpo dentro de Abstract/Non-technical Abstract → cursiva gris
-                            if en_abstract_ingles:
-                                lineas.append(f'<p class="abstract sin-sangria">{esc(parte)}</p>')
-                            else:
-                                lineas.append(f'<p {tag_p}>{esc(parte)}</p>'.replace("  >", ">"))
+                for parte in partes_unidas:
+                    if parte.startswith("§SUB§"):
+                        lineas.append(f'<h3 class="subseccion-bajo">{esc(parte[5:])}</h3>')
+                    else:
+                        # El usuario marcó "Cuerpo" → NUNCA abstract_mode.
+                        # La decisión del usuario prevalece siempre sobre el contexto.
+                        lineas.extend(_render_parrafo_o_lista(
+                            parte,
+                            es_cuerpo=True,
+                            abstract_mode=False,
+                        ))
             elif cls == "Referencia":
                 lineas.append(f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">{texto}</p>')
             elif cls == "Título tabla":
@@ -2509,13 +3167,52 @@ class LimpiadorEditorialApp(ctk.CTk):
         self._set_status(f"✓ HTML guardado en: {ruta}")
         return html_body
 
-
     # ═════════════════════════════════════════════════════════════
-    # EXPORTAR XML  (próximamente)
+    # EXPORTAR XML  
     # ═════════════════════════════════════════════════════════════
 
     def evento_exportar_xml(self):
-        self._set_status("⚠ Exportación XML en desarrollo.")
+        """Alias de compatibilidad: XML ahora exporta JATS XML."""
+        self.evento_exportar_jats()
+
+    def evento_exportar_jats(self):
+        if not self.datos_bloques:
+            self._set_status("⚠ Primero carga un PDF."); return
+
+        ruta_xml = filedialog.asksaveasfilename(
+            defaultextension=".xml",
+            filetypes=[("JATS XML", "*.xml"), ("Archivo XML", "*.xml")])
+        if not ruta_xml:
+            return
+
+        try:
+            self._sync_contenidos_bloques()
+            self._sync_pies()
+            self._sync_titulos_tablas()
+            self._sync_autores()
+
+            bloques_snapshot = []
+            for b in self.datos_bloques:
+                bloques_snapshot.append({
+                    "contenido": b.get("contenido", ""),
+                    "clasificacion": b["menu"].get(),
+                    "italic": b.get("italic", False),
+                })
+
+            xml_jats = build_jats_xml(
+                bloques=bloques_snapshot,
+                referencias_externas=self.referencias_externas,
+                autores_orcid=self.autores_orcid,
+                afiliaciones_txt=self.afiliaciones_txt,
+                figuras=self.figuras_manuales,
+                tablas=self.tablas_manuales,
+            )
+
+            with open(ruta_xml, "w", encoding="utf-8") as f:
+                f.write(xml_jats)
+            self._set_status(f"✓ JATS XML guardado en: {ruta_xml}")
+        except Exception as exc:
+            self._set_status(f"✗ Error al generar JATS XML: {exc}")
         
     # ═════════════════════════════════════════════════════════════
     # EXPORTAR EPUB
@@ -2538,6 +3235,7 @@ class LimpiadorEditorialApp(ctk.CTk):
             return
 
         # ── 1. Obtener el HTML generado ───────────────────────────────────────
+        self._sync_contenidos_bloques()
         self._sync_pies()
         self._sync_titulos_tablas()
         self._sync_autores()
