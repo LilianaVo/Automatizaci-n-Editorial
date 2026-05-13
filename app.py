@@ -11,6 +11,8 @@ from ebooklib import epub
 from collections import Counter
 import base64
 import shutil
+import time
+from contextlib import contextmanager
 from jats_exporter import build_jats_xml
 
 ctk.set_appearance_mode("Dark")
@@ -314,6 +316,69 @@ def _img_to_base64(path: str) -> str:
     with open(path, "rb") as f:
         data = base64.b64encode(f.read()).decode()
     return f"data:image/{mime};base64,{data}"
+
+
+def _nombre_seguro_archivo(texto: str) -> str:
+    base = os.path.splitext(os.path.basename(texto or ""))[0]
+    base = unicodedata.normalize("NFKD", base)
+    base = "".join(ch for ch in base if not unicodedata.combining(ch))
+    base = re.sub(r"[^A-Za-z0-9_-]+", "_", base).strip("_")
+    return base or "articulo"
+
+
+def _preparar_figuras_scielo(figuras: list[dict], dir_figs: str,
+                             href_dir: str = "imagenes") -> tuple[list[dict], str, int]:
+    """Copia/convierte figuras a una carpeta relativa para el paquete JATS."""
+    if not figuras:
+        return [], "", 0
+
+    os.makedirs(dir_figs, exist_ok=True)
+    for old in os.listdir(dir_figs):
+        if re.match(r"^fig\d{2}\.(jpe?g|png|tiff?|tif)$", old, re.IGNORECASE):
+            os.remove(os.path.join(dir_figs, old))
+
+    figuras_jats = []
+    convertidas = 0
+    for i, fig in enumerate(figuras, 1):
+        src = fig.get("ruta", "")
+        if not src or not os.path.exists(src):
+            raise FileNotFoundError(f"No se encontró la imagen de Figura {i}: {src}")
+
+        ext_salida = ".png"
+        copiar_original = False
+        try:
+            with PILImage.open(src) as img:
+                formato = (img.format or "").upper()
+                if formato in {"JPEG", "PNG", "TIFF"}:
+                    ext_salida = {"JPEG": ".jpg", "PNG": ".png", "TIFF": ".tif"}[formato]
+                    copiar_original = True
+                else:
+                    if img.mode not in ("RGB", "RGBA"):
+                        img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+                    destino = os.path.join(dir_figs, f"fig{i:02d}{ext_salida}")
+                    img.save(destino, format="PNG", optimize=False)
+                    convertidas += 1
+        except Exception:
+            ext = os.path.splitext(src)[1].lower()
+            if ext not in {".jpg", ".jpeg", ".png", ".tif", ".tiff"}:
+                raise ValueError(
+                    f"No se pudo convertir la Figura {i} a PNG/TIFF/JPEG: {src}"
+                )
+            ext_salida = ext
+            copiar_original = True
+
+        destino = os.path.join(dir_figs, f"fig{i:02d}{ext_salida}")
+        if copiar_original:
+            if os.path.abspath(src) != os.path.abspath(destino):
+                shutil.copy2(src, destino)
+
+        fig_jats = dict(fig)
+        fig_jats["ruta"] = destino
+        fig_jats["href"] = f"{href_dir}/fig{i:02d}{ext_salida}"
+        fig_jats["id"] = f"fig{i:02d}"
+        figuras_jats.append(fig_jats)
+
+    return figuras_jats, dir_figs, convertidas
 
 
 def _limpiar_prefijo_pie_figura(texto: str) -> str:
@@ -1108,6 +1173,39 @@ class LimpiadorEditorialApp(ctk.CTk):
     def _set_status(self, msg: str):
         self._status.configure(text=msg)
         self.update_idletasks()
+
+    def _perf_inicio(self, etiqueta: str):
+        self._perf_etiqueta = etiqueta
+        self._perf_medidas = []
+        self._perf_t0 = time.perf_counter()
+
+    @contextmanager
+    def _medir(self, nombre: str):
+        t0 = time.perf_counter()
+        try:
+            yield
+        finally:
+            dt = time.perf_counter() - t0
+            if not hasattr(self, "_perf_medidas"):
+                self._perf_medidas = []
+            self._perf_medidas.append((nombre, dt))
+            print(f"[PERF] {nombre}: {dt:.2f}s")
+
+    def _perf_resumen(self, max_items: int = 6) -> str:
+        medidas = getattr(self, "_perf_medidas", [])
+        total = time.perf_counter() - getattr(self, "_perf_t0", time.perf_counter())
+        if not medidas:
+            return f"tiempo total: {total:.2f}s"
+        top = sorted(medidas, key=lambda item: item[1], reverse=True)[:max_items]
+        partes = [f"{nombre}: {dt:.2f}s" for nombre, dt in top]
+        return f"total: {total:.2f}s | " + " | ".join(partes)
+
+    def _perf_agregar(self, nombre: str, t0: float):
+        dt = time.perf_counter() - t0
+        if not hasattr(self, "_perf_medidas"):
+            self._perf_medidas = []
+        self._perf_medidas.append((nombre, dt))
+        print(f"[PERF] {nombre}: {dt:.2f}s")
 
     # Clases que pertenecen a cada zona del segmented button
     _ZONA_CLASES = {
@@ -2081,18 +2179,22 @@ class LimpiadorEditorialApp(ctk.CTk):
         self._refrescar_lista_tablas()
 
         try:
-            doc = fitz.open(ruta)
+            self._perf_inicio("cargar_pdf")
+            with self._medir("abrir PDF"):
+                doc = fitz.open(ruta)
 
             all_sizes = []
-            for pnum in range(len(doc)):
-                for block in doc.load_page(pnum).get_text("dict")["blocks"]:
-                    if block["type"] == 0:
-                        for line in block.get("lines", []):
-                            for span in line.get("spans", []):
-                                all_sizes.append(round(span["size"]))
+            with self._medir("detectar tamaño base"):
+                for pnum in range(len(doc)):
+                    for block in doc.load_page(pnum).get_text("dict")["blocks"]:
+                        if block["type"] == 0:
+                            for line in block.get("lines", []):
+                                for span in line.get("spans", []):
+                                    all_sizes.append(round(span["size"]))
             body_size = Counter(all_sizes).most_common(1)[0][0] if all_sizes else 12
 
-            tablas_auto, rects_tablas_por_pagina = self._extraer_tablas_desde_pdf(doc, ruta)
+            with self._medir("extraer tablas"):
+                tablas_auto, rects_tablas_por_pagina = self._extraer_tablas_desde_pdf(doc, ruta)
 
             def _en_bloque_tabla(pnum: int, bbox) -> bool:
                 rects = rects_tablas_por_pagina.get(pnum, [])
@@ -2125,6 +2227,7 @@ class LimpiadorEditorialApp(ctk.CTk):
                 return by1 < page_h * 0.05 or by0 > page_h * 0.95
 
             # ─── PASO 1: extraer todos los bloques de texto crudos ────────
+            t_bloques = time.perf_counter()
             raw = []   # list of {"texto", "size", "bold", "italic", "font", "pnum"}
             for pnum in range(len(doc)):
                 page   = doc.load_page(pnum)
@@ -2545,20 +2648,26 @@ class LimpiadorEditorialApp(ctk.CTk):
                         buf_parrafos.append((txt_nuevo, pnum))
             _vaciar()
             bloques_utiles = fusionados
+            self._perf_agregar("extraer y clasificar bloques", t_bloques)
 
-            for item in bloques_utiles:
-                self._crear_bloque_ui(item)
+            with self._medir("crear bloques UI"):
+                for item in bloques_utiles:
+                    self._crear_bloque_ui(item)
 
-            figuras_auto = self._extraer_figuras_desde_pdf(doc, ruta)
+            with self._medir("extraer figuras"):
+                figuras_auto = self._extraer_figuras_desde_pdf(doc, ruta)
             self.figuras_manuales = figuras_auto
-            self._refrescar_lista_figuras()
+            with self._medir("refrescar figuras"):
+                self._refrescar_lista_figuras()
             self.tablas_manuales.extend(tablas_auto)
-            self._refrescar_lista_tablas()
+            with self._medir("refrescar tablas"):
+                self._refrescar_lista_tablas()
 
             conteo  = Counter(b["clasificacion"] for b in bloques_utiles)
             resumen = "  |  ".join(f"{k}: {v}" for k,v in conteo.most_common(6))
             resumen += f"  |  Figuras auto: {len(figuras_auto)}"
             resumen += f"  |  Tablas auto: {len(tablas_auto)}"
+            resumen += f"  |  PERF {self._perf_resumen(4)}"
             if not tablas_auto and self._diag_tablas_auto:
                 resumen += f"  |  diag tablas: {self._diag_tablas_auto}"
             self._status.configure(text_color="#66bb6a")
@@ -2690,11 +2799,14 @@ class LimpiadorEditorialApp(ctk.CTk):
             filetypes=[("Archivo HTML", "*.html")])
         if not ruta: return
 
-        self._sync_contenidos_bloques()   # leer ediciones del usuario en textboxes
-        self._sync_pies()
-        self._sync_titulos_tablas()
-        self._sync_autores()   # sincronizar autores/ORCID antes de exportar
+        self._perf_inicio("exportar_html")
+        with self._medir("sincronizar datos HTML"):
+            self._sync_contenidos_bloques()   # leer ediciones del usuario en textboxes
+            self._sync_pies()
+            self._sync_titulos_tablas()
+            self._sync_autores()   # sincronizar autores/ORCID antes de exportar
 
+        t_html_body = time.perf_counter()
         # Si hay autores manuales, el bloque de autores del PDF se ignora
         # y se inyecta el bloque manual justo después del título secundario.
         # ── Zona de autores del PDF: ignorar TODO entre titulo-secundario y Resumen ──
@@ -3162,9 +3274,11 @@ class LimpiadorEditorialApp(ctk.CTk):
                     figs_html += _fig_html(i, fig) + "\n"
                 html_body = html_body.replace("</article>", figs_html + "</article>", 1)
 
-        with open(ruta, "w", encoding="utf-8") as f:
-            f.write(html_body)
-        self._set_status(f"✓ HTML guardado en: {ruta}")
+        self._perf_agregar("construir HTML", t_html_body)
+        with self._medir("escribir HTML"):
+            with open(ruta, "w", encoding="utf-8") as f:
+                f.write(html_body)
+        self._set_status(f"✓ HTML guardado en: {ruta} | PERF {self._perf_resumen(4)}")
         return html_body
 
     # ═════════════════════════════════════════════════════════════
@@ -3186,31 +3300,70 @@ class LimpiadorEditorialApp(ctk.CTk):
             return
 
         try:
-            self._sync_contenidos_bloques()
-            self._sync_pies()
-            self._sync_titulos_tablas()
-            self._sync_autores()
+            self._perf_inicio("exportar_jats")
+            ruta_xml_abs = os.path.abspath(ruta_xml)
+            dir_base = os.path.dirname(ruta_xml_abs) or os.getcwd()
+            nombre_xml = os.path.basename(ruta_xml_abs)
+            base_xml = _nombre_seguro_archivo(nombre_xml)
+            dir_paquete = os.path.join(dir_base, f"{base_xml}_jats")
+            ruta_xml_paquete = os.path.join(dir_paquete, nombre_xml)
+            dir_figs = os.path.join(dir_paquete, "imagenes")
 
-            bloques_snapshot = []
-            for b in self.datos_bloques:
-                bloques_snapshot.append({
-                    "contenido": b.get("contenido", ""),
-                    "clasificacion": b["menu"].get(),
-                    "italic": b.get("italic", False),
-                })
+            if os.path.exists(dir_paquete) and not os.path.isdir(dir_paquete):
+                raise OSError(f"No se puede crear el paquete JATS: ya existe un archivo llamado {dir_paquete}")
 
-            xml_jats = build_jats_xml(
-                bloques=bloques_snapshot,
-                referencias_externas=self.referencias_externas,
-                autores_orcid=self.autores_orcid,
-                afiliaciones_txt=self.afiliaciones_txt,
-                figuras=self.figuras_manuales,
-                tablas=self.tablas_manuales,
-            )
+            if os.path.exists(dir_paquete) and os.listdir(dir_paquete):
+                reemplazar = messagebox.askyesno(
+                    "Reemplazar paquete JATS",
+                    "Ya existe un paquete JATS para este nombre.\n\n"
+                    f"{dir_paquete}\n\n"
+                    "¿Quieres reemplazar el XML y regenerar sus imágenes?"
+                )
+                if not reemplazar:
+                    self._set_status("Exportación JATS cancelada.")
+                    return
 
-            with open(ruta_xml, "w", encoding="utf-8") as f:
-                f.write(xml_jats)
-            self._set_status(f"✓ JATS XML guardado en: {ruta_xml}")
+            with self._medir("sincronizar datos JATS"):
+                self._sync_contenidos_bloques()
+                self._sync_pies()
+                self._sync_titulos_tablas()
+                self._sync_autores()
+
+            with self._medir("preparar bloques JATS"):
+                bloques_snapshot = []
+                for b in self.datos_bloques:
+                    bloques_snapshot.append({
+                        "contenido": b.get("contenido", ""),
+                        "clasificacion": b["menu"].get(),
+                        "italic": b.get("italic", False),
+                    })
+
+            with self._medir("preparar figuras SciELO"):
+                figuras_jats, dir_figs, convertidas = _preparar_figuras_scielo(
+                    self.figuras_manuales,
+                    dir_figs,
+                )
+
+            with self._medir("construir XML JATS"):
+                xml_jats = build_jats_xml(
+                    bloques=bloques_snapshot,
+                    referencias_externas=self.referencias_externas,
+                    autores_orcid=self.autores_orcid,
+                    afiliaciones_txt=self.afiliaciones_txt,
+                    figuras=figuras_jats,
+                    tablas=self.tablas_manuales,
+                )
+
+            with self._medir("escribir paquete JATS"):
+                os.makedirs(dir_paquete, exist_ok=True)
+                with open(ruta_xml_paquete, "w", encoding="utf-8") as f:
+                    f.write(xml_jats)
+            extra = ""
+            if dir_figs:
+                extra = f" | Figuras: {dir_figs}"
+                if convertidas:
+                    extra += f" ({convertidas} convertida(s) a PNG)"
+            self._set_status(f"✓ Paquete JATS guardado en: {dir_paquete}{extra} | PERF {self._perf_resumen(4)}")
         except Exception as exc:
             self._set_status(f"✗ Error al generar JATS XML: {exc}")
         
@@ -3267,10 +3420,12 @@ class LimpiadorEditorialApp(ctk.CTk):
         except OSError:
             pass
 
+        self._perf_inicio("exportar_epub")
         if not html_completo or len(html_completo) < 100:
             self._set_status("✗ El HTML generado está vacío.")
             return
 
+        t_epub = time.perf_counter()
         # ── 2. Extraer metadatos ──────────────────────────────────────────────
         titulo_art = next(
             (b["contenido"].strip() for b in self.datos_bloques
@@ -3426,25 +3581,27 @@ class LimpiadorEditorialApp(ctk.CTk):
 
         # 5f. OEBPS/style/main.css
         css_bytes = css_str.encode("utf-8")
+        self._perf_agregar("construir EPUB", t_epub)
 
         # ── 6. Escribir el ZIP (EPUB) manualmente ────────────────────────────
         # ebooklib a veces genera ZIPs corruptos; construirlo a mano es más
         # confiable y cumple exactamente la especificación EPUB 2.0.
         try:
-            with zipfile.ZipFile(ruta_epub, "w",
-                                 compression=zipfile.ZIP_DEFLATED) as zf:
-                # mimetype SIN comprimir y SIN extra fields — obligatorio
-                info_mime = zipfile.ZipInfo("mimetype")
-                info_mime.compress_type = zipfile.ZIP_STORED
-                zf.writestr(info_mime, mimetype_bytes)
+            with self._medir("escribir EPUB"):
+                with zipfile.ZipFile(ruta_epub, "w",
+                                     compression=zipfile.ZIP_DEFLATED) as zf:
+                    # mimetype SIN comprimir y SIN extra fields — obligatorio
+                    info_mime = zipfile.ZipInfo("mimetype")
+                    info_mime.compress_type = zipfile.ZIP_STORED
+                    zf.writestr(info_mime, mimetype_bytes)
 
-                zf.writestr("META-INF/container.xml", container_xml)
-                zf.writestr("OEBPS/content.opf",      content_opf)
-                zf.writestr("OEBPS/toc.ncx",          toc_ncx)
-                zf.writestr("OEBPS/article.xhtml",    article_xhtml)
-                zf.writestr("OEBPS/style/main.css",   css_bytes)
+                    zf.writestr("META-INF/container.xml", container_xml)
+                    zf.writestr("OEBPS/content.opf",      content_opf)
+                    zf.writestr("OEBPS/toc.ncx",          toc_ncx)
+                    zf.writestr("OEBPS/article.xhtml",    article_xhtml)
+                    zf.writestr("OEBPS/style/main.css",   css_bytes)
 
-            self._set_status(f"✓ EPUB guardado en: {ruta_epub}")
+            self._set_status(f"✓ EPUB guardado en: {ruta_epub} | PERF {self._perf_resumen(4)}")
 
         except Exception as exc:
             self._set_status(f"✗ Error al generar EPUB: {exc}")

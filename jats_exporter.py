@@ -1318,15 +1318,15 @@ def build_jats_xml(
         sec_figs = ET.SubElement(body, "sec", {"sec-type": "figures"})
         ET.SubElement(sec_figs, "title").text = "Figuras"
         for i, fig in enumerate(figuras, 1):
-            fg = ET.SubElement(sec_figs, "fig", {"id": f"fig{i}"})
+            fg = ET.SubElement(sec_figs, "fig", {"id": fig.get("id") or f"fig{i}"})
             ET.SubElement(fg, "label").text = f"Figura {i}"
             cap = ET.SubElement(fg, "caption")
             ET.SubElement(cap, "title").text = f"Figura {i}"
             ET.SubElement(cap, "p").text = \
                 _clean_text(fig.get("pie", "")) or f"Figura {i}"
             g = ET.SubElement(fg, "graphic")
-            g.set(f"{{{XLINK_NS}}}href",
-                  os.path.basename(fig.get("ruta", f"fig{i}.png")))
+            href = fig.get("href") or os.path.basename(fig.get("ruta", f"fig{i}.png"))
+            g.set(f"{{{XLINK_NS}}}href", href)
 
     # Back
     back = ET.SubElement(root, "back")
