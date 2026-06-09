@@ -1,7 +1,7 @@
 # Extractor de PDF Semántico
 ### Herramienta de Automatización Editorial — Paleontología Mexicana, UNAM
 
-Aplicación de escritorio desarrollada en Python para el equipo editorial de la revista **Paleontología Mexicana** (Instituto de Geología, UNAM). Convierte artículos científicos en PDF a HTML editorial y EPUB con estilos tipográficos fieles al diseño de la revista, optimizando el flujo de trabajo de maquetación.
+Aplicación de escritorio desarrollada en Python para el equipo editorial de la revista **Paleontología Mexicana** (Instituto de Geología, UNAM). Convierte artículos científicos en PDF a HTML editorial, EPUB y XML JATS con estilos tipográficos fieles al diseño de la revista, optimizando el flujo de trabajo de maquetación.
 
 ---
 
@@ -10,6 +10,7 @@ Aplicación de escritorio desarrollada en Python para el equipo editorial de la 
 - Extrae y clasifica automáticamente los bloques de texto de un PDF científico (títulos, resúmenes, cuerpo, referencias, tablas, figuras, etc.)
 - Genera un HTML limpio con tipografía editorial (Source Serif 4, Times New Roman)
 - Genera un EPUB compatible con lectores como Calibre, Thorium Reader y Apple Books
+- Genera XML en formato JATS orientado a SciELO SPS
 - Vincula autores con sus perfiles ORCID
 - Inserta tablas Excel y figuras en la posición exacta del texto mediante texto ancla
 - Maneja artículos en dos columnas, guiones de corte tipográfico y saltos de página
@@ -57,7 +58,7 @@ source venv/bin/activate
 ### 3. Instalar dependencias
 
 ```bash
-pip install customtkinter pymupdf Pillow openpyxl
+pip install -r requirements.txt
 ```
 
 ### 4. Ejecutar la aplicación
@@ -73,22 +74,40 @@ python app.py
 ## Estructura del repositorio
 
 ```
-app.py                       →  Código fuente principal de la aplicación
-app.spec                     →  Configuración para compilar el ejecutable (.exe)
-GUIA_rapida_ExtractorPDF.txt →  Guía de uso rápido para usuarios finales
-README.md                    →  Este archivo
-build/                       →  Archivos temporales generados al compilar (no modificar)
-dist/                        →  Aquí aparece el .exe listo para distribuir
-Material Apoyo/              →  PDFs, Excels y archivos de prueba usados en desarrollo
-venv/                        →  Entorno virtual de Python (no se sube a GitHub)
+Automatización-Editorial/
+│
+├── app.py                            →  Código fuente principal de la aplicación
+├── jats_exporter.py                  →  Módulo de exportación XML JATS (SciELO SPS)
+├── app.spec                          →  Configuración para compilar el ejecutable (.exe)
+├── requirements.txt                  →  Dependencias del proyecto
+├── .gitignore                        →  Archivos y carpetas excluidos del repositorio
+├── README.md                         →  Este archivo
+├── GUIA_rapida_ExtractorPDF.txt      →  Guía de uso rápido para usuarios finales
+│
+├── Programa/                         →  Ejecutable listo para distribuir
+│   └── app.exe
+│
+├── Material de apoyo PDF y resultados/  →  Archivos de prueba por tipo de salida
+│   ├── PDF/                          →  PDFs de artículos para pruebas
+│   ├── HTML/                         →  Resultados HTML generados
+│   ├── EPUB/                         →  Resultados EPUB generados
+│   ├── XML/                          →  Resultados XML JATS generados
+│   ├── Tablas/                       →  Archivos Excel de tablas
+│   ├── Imagenes/                     →  Figuras e imágenes de los artículos
+│   ├── Autores con ORCID/            →  Excels con datos de autores
+│   ├── Afiliaciones/                 →  .txt con afiliaciones numeradas
+│   └── Referencias enumeradas/       →  .txt con referencias bibliográficas
+│
+├── build/                            →  Archivos temporales de PyInstaller (no modificar)
+└── venv/                             →  Entorno virtual de Python (no se sube a GitHub)
 ```
 
-> **Para generar el ejecutable (.exe) sin necesidad de Python:**
+> **Para regenerar el ejecutable (.exe) sin necesidad de distribuir Python:**
 > ```bash
 > pip install pyinstaller
 > pyinstaller app.spec
 > ```
-> El `.exe` resultante aparece en `dist/` y puede ejecutarse en cualquier Windows.
+> El `.exe` resultante aparece en `dist/`. Cópialo manualmente a la carpeta `Programa/`.
 
 ---
 
@@ -103,6 +122,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 6. Tablas           →  Excel con una hoja por tabla
 7. Exportar HTML    →  Botón verde "HTML"
 8. Exportar EPUB    →  Botón "EPUB" (no requiere generar HTML primero)
+9. Exportar XML     →  Botón "XML" (genera JATS compatible con SciELO SPS)
 ```
 
 ---
@@ -120,6 +140,7 @@ venv/                        →  Entorno virtual de Python (no se sube a GitHub
 | Figuras | Inserción por texto ancla o al final del documento |
 | Referencias | Solo desde .txt externo (nunca del PDF) |
 | EPUB | Generado directamente desde los datos clasificados, sin pasos intermedios |
+| XML | Formato JATS orientado a SciELO SPS, con metadatos, front y body |
 
 ---
 
@@ -157,9 +178,9 @@ El EPUB generado cumple la especificación EPUB 2.0 y ha sido probado en los sig
 
 ### Reporte de errores
 
-- El proceso de QA consiste en generar los archivos HTML y EPUB, y compararlos con el PDF original.
+- El proceso de QA consiste en generar los archivos HTML, EPUB y XML, y compararlos con el PDF original.
 - Los errores se documentan **exclusivamente en la pestaña Issues** de este repositorio.
-- Al crear un Issue, asigna la etiqueta `bug` e incluye: descripción del problema, página exacta del PDF donde ocurre y, si es posible, adjunta el PDF y el HTML o EPUB generado.
+- Al crear un Issue, asigna la etiqueta `bug` e incluye: descripción del problema, página exacta del PDF donde ocurre y, si es posible, adjunta el PDF y el archivo generado.
 
 ---
 
@@ -167,15 +188,15 @@ El EPUB generado cumple la especificación EPUB 2.0 y ha sido probado en los sig
 
 > ✅ Versión funcional — PDF a HTML  
 > ✅ Versión funcional — PDF a EPUB  
-> 🔧 En desarrollo — Exportación XML
+> ✅ Versión funcional — PDF a XML JATS (SciELO SPS)
 
 ---
 
 ## Colaboradores
 
-- Ileana Verónica Lee Obando - Ingeniería en Computación
-- David Alejandro Galicia Cárdenas - Licenciatura en Informática
-- Erick Isaac Echeverria Goicochea - Ingeniería en Computación
+- Ileana Verónica Lee Obando — Ingeniería en Computación
+- David Alejandro Galicia Cárdenas — Licenciatura en Informática
+- Erick Isaac Echeverria Goicochea — Ingeniería en Computación
 
 Servicio Social de Programación Editorial  
 Instituto de Geología, Universidad Nacional Autónoma de México (UNAM)
