@@ -64,7 +64,7 @@ pip install -r requirements.txt
 ### 4. Ejecutar la aplicación
 
 ```bash
-python app.py
+python Programa/app.py
 ```
 
 > ⚠️ Recuerda activar el entorno virtual **cada vez** que abras una nueva terminal antes de ejecutar el programa.
@@ -76,27 +76,26 @@ python app.py
 ```
 Automatización-Editorial/
 │
-├── app.py                            →  Código fuente principal de la aplicación
-├── jats_exporter.py                  →  Módulo de exportación XML JATS (SciELO SPS)
-├── app.spec                          →  Configuración para compilar el ejecutable (.exe)
+├── README.md                         →  Este archivo
 ├── requirements.txt                  →  Dependencias del proyecto
 ├── .gitignore                        →  Archivos y carpetas excluidos del repositorio
-├── README.md                         →  Este archivo
-├── GUIA_rapida_ExtractorPDF.txt      →  Guía de uso rápido para usuarios finales
 │
-├── Programa/                         →  Ejecutable listo para distribuir
-│   └── app.exe
+├── Programa/                         →  Código fuente y ejecutable de la aplicación
+│   ├── app.py                        →  Código fuente principal
+│   ├── jats_exporter.py              →  Módulo de exportación XML JATS (SciELO SPS)
+│   ├── app.spec                      →  Configuración para compilar el ejecutable (.exe)
+│   ├── app.exe                       →  Ejecutable listo para distribuir en Windows
+│   └── GUIA_rapida_ExtractorPDF.txt  →  Guía de uso rápido para usuarios finales
 │
-├── Material de apoyo PDF y resultados/  →  Archivos de prueba por tipo de salida
-│   ├── PDF/                          →  PDFs de artículos para pruebas
-│   ├── HTML/                         →  Resultados HTML generados
-│   ├── EPUB/                         →  Resultados EPUB generados
-│   ├── XML/                          →  Resultados XML JATS generados
-│   ├── Tablas/                       →  Archivos Excel de tablas
-│   ├── Imagenes/                     →  Figuras e imágenes de los artículos
-│   ├── Autores con ORCID/            →  Excels con datos de autores
-│   ├── Afiliaciones/                 →  .txt con afiliaciones numeradas
-│   └── Referencias enumeradas/       →  .txt con referencias bibliográficas
+├── Material de apoyo PDF y resultados de funciones/
+│   ├── Material inicial, PDF/        →  PDFs de artículos y archivos de entrada para pruebas
+│   │   ├── Afiliaciones/             →  .txt con afiliaciones numeradas
+│   │   ├── Autores con ORCID/        →  Excels con datos de autores
+│   │   ├── Imagenes/                 →  Figuras e imágenes de los artículos
+│   │   ├── Referencias enumeradas/   →  .txt con referencias bibliográficas
+│   │   └── Tablas/                   →  Archivos Excel de tablas
+│   ├── Resultados de HTML/           →  HTMLs generados por el programa
+│   └── Resultados de EPUB/           →  EPUBs generados por el programa
 │
 ├── build/                            →  Archivos temporales de PyInstaller (no modificar)
 └── venv/                             →  Entorno virtual de Python (no se sube a GitHub)
@@ -105,7 +104,7 @@ Automatización-Editorial/
 > **Para regenerar el ejecutable (.exe) sin necesidad de distribuir Python:**
 > ```bash
 > pip install pyinstaller
-> pyinstaller app.spec
+> pyinstaller Programa/app.spec
 > ```
 > El `.exe` resultante aparece en `dist/`. Cópialo manualmente a la carpeta `Programa/`.
 
