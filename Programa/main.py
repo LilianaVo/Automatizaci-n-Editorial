@@ -1,0 +1,147 @@
+"""
+main.py
+Entry point de la aplicación de escritorio.
+Lanza FastAPI en un hilo y abre PyWebView como ventana nativa.
+"""
+
+from __future__ import annotations
+
+import sys
+import time
+import threading
+import socket
+from pathlib import Path
+
+import uvicorn
+import webview
+
+HOST = "127.0.0.1"
+PORT = 8765
+URL  = f"http://{HOST}:{PORT}"
+
+
+class AppAPI:
+    """
+    Métodos accesibles desde JavaScript via window.pywebview.api.*
+    IMPORTANTE — Windows PyWebView requiere el formato exacto:
+        "Descripción (*.ext1;*.ext2)"
+    """
+
+    def abrir_pdf(self) -> str | None:
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Archivos PDF (*.pdf)",),
+        )
+        return rutas[0] if rutas else None
+
+    def guardar_html(self) -> str | None:
+        ruta = webview.windows[0].create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="articulo.html",
+            file_types=("Archivo HTML (*.html)",),
+        )
+        return ruta if isinstance(ruta, str) else (ruta[0] if ruta else None)
+
+    def guardar_xml(self) -> str | None:
+        ruta = webview.windows[0].create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="articulo.xml",
+            file_types=("Archivo XML (*.xml)",),
+        )
+        return ruta if isinstance(ruta, str) else (ruta[0] if ruta else None)
+
+    def guardar_epub(self) -> str | None:
+        ruta = webview.windows[0].create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename="articulo.epub",
+            file_types=("Archivo EPUB (*.epub)",),
+        )
+        return ruta if isinstance(ruta, str) else (ruta[0] if ruta else None)
+
+    def abrir_excel(self) -> str | None:
+        """Un solo Excel (autores)."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Archivo Excel (*.xlsx;*.xls)",),
+        )
+        return rutas[0] if rutas else None
+
+    def abrir_excels_multiples(self) -> list[str]:
+        """Múltiples Excel (tablas)."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=True,
+            file_types=("Archivo Excel (*.xlsx;*.xls)",),
+        )
+        return list(rutas) if rutas else []
+
+    def abrir_txt(self) -> str | None:
+        """Archivo .txt (afiliaciones o referencias)."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Archivo de texto (*.txt)",),
+        )
+        return rutas[0] if rutas else None
+
+    def abrir_imagenes(self) -> list[str]:
+        """Múltiples imágenes (figuras)."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=True,
+            file_types=("Imágenes (*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp)",),
+        )
+        return list(rutas) if rutas else []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _puerto_libre(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex((host, port)) != 0
+
+
+def _iniciar_servidor() -> None:
+    from server import app as fastapi_app
+    uvicorn.run(fastapi_app, host=HOST, port=PORT,
+                log_level="error", access_log=False)
+
+
+def _esperar_servidor(timeout: float = 15.0) -> bool:
+    inicio = time.time()
+    while time.time() - inicio < timeout:
+        if not _puerto_libre(HOST, PORT):
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def main() -> None:
+    if not _puerto_libre(HOST, PORT):
+        print(f"[WARN] Puerto {PORT} ya en uso.")
+
+    hilo = threading.Thread(target=_iniciar_servidor, daemon=True)
+    hilo.start()
+
+    if not _esperar_servidor():
+        print("[ERROR] El servidor no arrancó a tiempo.")
+        sys.exit(1)
+
+    webview.create_window(
+        title       = "Editor Semántico — Paleontología Mexicana",
+        url         = URL,
+        js_api      = AppAPI(),
+        width       = 1340,
+        height      = 880,
+        min_size    = (1100, 720),
+        resizable   = True,
+        text_select = True,
+    )
+
+    webview.start(debug=False)
+
+
+if __name__ == "__main__":
+    main()

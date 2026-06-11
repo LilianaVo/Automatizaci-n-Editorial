@@ -1,0 +1,783 @@
+/**
+ * app.js — Editor Semántico · Paleontología Mexicana · UNAM
+ * Lógica completa del frontend. Se comunica con FastAPI via fetch()
+ * y con diálogos nativos via window.pywebview.api.*
+ */
+
+"use strict";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estado local
+// ─────────────────────────────────────────────────────────────────────────────
+const State = {
+  seccionActiva : "pdf",
+  bloques       : [],   // [{id, contenido, clasificacion, italic, bold, size}]
+  autores       : [],   // [{nombre, orcid}]
+  config        : { opciones: [], colores: {} },
+  tienePDF      : false,
+  _afilTimer    : null,
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wrapper fetch  (GET / POST JSON / PUT JSON / POST FormData)
+// ─────────────────────────────────────────────────────────────────────────────
+const API = {
+  async get(path) {
+    const r = await fetch(path);
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async post(path, body) {
+    const r = await fetch(path, {
+      method  : "POST",
+      headers : { "Content-Type": "application/json" },
+      body    : JSON.stringify(body),
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async put(path, body) {
+    const r = await fetch(path, {
+      method  : "PUT",
+      headers : { "Content-Type": "application/json" },
+      body    : JSON.stringify(body),
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async patch(path, body) {
+    const r = await fetch(path, {
+      method  : "PATCH",
+      headers : { "Content-Type": "application/json" },
+      body    : JSON.stringify(body),
+    });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async postForm(path, fd) {
+    const r = await fetch(path, { method: "POST", body: fd });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async postBlob(path) {
+    const r = await fetch(path, { method: "POST" });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.blob();
+  },
+};
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers de UI
+// ─────────────────────────────────────────────────────────────────────────────
+function $(id)    { return document.getElementById(id); }
+function esc(str) {
+  return String(str ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;");
+}
+
+function setStatus(msg, tipo = "ok") {
+  const dot  = $("status-dot");
+  const text = $("status-text");
+  if (!dot || !text) return;
+  text.textContent = msg;
+  dot.className = "status-dot"
+    + (tipo === "error" ? " status-dot--error"
+     : tipo === "warn"  ? " status-dot--warn"
+     : tipo === "idle"  ? " status-dot--idle" : "");
+}
+
+let _toastTimer = null;
+function showToast(msg, ms = 2800) {
+  const t = $("toast");
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add("toast--visible");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove("toast--visible"), ms);
+}
+
+function showLoading(on) {
+  let ov = $("loading-overlay");
+  if (on) {
+    if (!ov) {
+      ov = document.createElement("div");
+      ov.id = "loading-overlay";
+      ov.className = "loading-overlay";
+      ov.innerHTML = '<div class="loading-spinner"></div>';
+      document.body.appendChild(ov);
+    }
+    ov.style.display = "flex";
+  } else if (ov) {
+    ov.style.display = "none";
+  }
+}
+
+function actualizarStepper() {
+  const orden = ["pdf","autores","afiliaciones","referencias","figuras","tablas","exportar"];
+  const idx   = orden.indexOf(State.seccionActiva);
+  orden.forEach((s, i) => {
+    const el = $(`step-${s}`);
+    if (!el) return;
+    el.classList.remove("step--active","step--done");
+    if (i === idx)       el.classList.add("step--active");
+    else if (i < idx)    el.classList.add("step--done");
+  });
+}
+
+function actualizarSidebar(seccion) {
+  document.querySelectorAll(".nav-item").forEach(btn =>
+    btn.classList.toggle("nav-item--active", btn.dataset.seccion === seccion)
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Objeto principal App  (expuesto globalmente para los onclick del HTML)
+// ─────────────────────────────────────────────────────────────────────────────
+const App = {
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // NAVEGACIÓN
+  // ══════════════════════════════════════════════════════════════════════════
+
+  irSeccion(seccion) {
+    document.querySelectorAll(".panel").forEach(p => p.style.display = "none");
+    const panel = $(`panel-${seccion}`);
+    if (panel) panel.style.display = "flex";
+
+    State.seccionActiva = seccion;
+    actualizarSidebar(seccion);
+    actualizarStepper();
+
+    // Cargar datos según sección
+    if (seccion === "referencias") App._cargarReferencias();
+    if (seccion === "figuras")     App._cargarFiguras();
+    if (seccion === "tablas")      App._cargarTablas();
+    if (seccion === "autores")     App._renderAutores();
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PDF — carga
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async seleccionarPDF() {
+    try {
+      if (window.pywebview) {
+        const ruta = await window.pywebview.api.abrir_pdf();
+        if (ruta) await App._cargarPorRuta(ruta);
+      } else {
+        // Fallback desarrollo: input[type=file]
+        const input = document.createElement("input");
+        input.type   = "file";
+        input.accept = ".pdf";
+        input.onchange = async () => {
+          if (input.files[0]) await App._cargarPorUpload(input.files[0]);
+        };
+        input.click();
+      }
+    } catch (e) {
+      setStatus("Error: " + e.message, "error");
+    }
+  },
+
+  async _cargarPorRuta(ruta) {
+    setStatus("Procesando PDF...", "idle");
+    showLoading(true);
+    try {
+      const data = await API.post("/api/pdf/cargar-ruta", { ruta });
+      App._aplicarResultadoPDF(data);
+    } catch (e) {
+      showLoading(false);
+      setStatus("Error: " + e.message, "error");
+      showToast("No se pudo procesar el PDF", 4000);
+    }
+  },
+
+  async _cargarPorUpload(file) {
+    setStatus("Procesando PDF...", "idle");
+    showLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const data = await API.postForm("/api/pdf/cargar", fd);
+      App._aplicarResultadoPDF(data);
+    } catch (e) {
+      showLoading(false);
+      setStatus("Error: " + e.message, "error");
+      showToast("No se pudo procesar el PDF", 4000);
+    }
+  },
+
+  _aplicarResultadoPDF(data) {
+    showLoading(false);
+    State.bloques  = data.bloques || [];
+    State.tienePDF = true;
+
+    // Info del documento
+    const info = data.info || {};
+    const setVal = (id, val) => { const el=$(id); if(el) el.textContent = val||"—"; };
+    setVal("info-nombre",  info.nombre);
+    setVal("info-paginas", info.paginas);
+    setVal("info-tamanio", info.tamanio);
+    const badge = $("info-estado");
+    if (badge) { badge.textContent = "Cargado"; badge.className = "badge badge--green"; }
+
+    // Ocultar dropzone, mostrar bloques
+    const dz = $("dropzone");
+    const bc = $("bloques-container");
+    if (dz) dz.style.display = "none";
+    if (bc) bc.style.display = "block";
+
+    // Mostrar controles de filtro
+    const btnLey = $("btn-leyenda");
+    const grpFil = $("filtro-grupo");
+    if (btnLey) btnLey.style.display = "inline-flex";
+    if (grpFil) grpFil.style.display = "flex";
+
+    App._poblarFiltro();
+    App._renderBloques(State.bloques);
+
+    const n = State.bloques.length;
+    setStatus(`PDF cargado — ${n} bloques detectados`);
+    showToast(`✓ PDF procesado · ${n} bloques`);
+  },
+
+  // ── Drag & drop ─────────────────────────────────────────────────────────
+
+  onDragOver(e) {
+    e.preventDefault();
+    $("dropzone")?.classList.add("dropzone--over");
+  },
+  onDragLeave() {
+    $("dropzone")?.classList.remove("dropzone--over");
+  },
+  async onDrop(e) {
+    e.preventDefault();
+    $("dropzone")?.classList.remove("dropzone--over");
+    const file = e.dataTransfer?.files?.[0];
+    if (file?.type === "application/pdf") {
+      await App._cargarPorUpload(file);
+    } else {
+      showToast("Solo se aceptan archivos PDF");
+    }
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // BLOQUES — render y edición
+  // ══════════════════════════════════════════════════════════════════════════
+
+  _poblarFiltro() {
+    const sel = $("filtro-clase");
+    if (!sel) return;
+    const clases = ["Todos", ...new Set(State.bloques.map(b => b.clasificacion))];
+    sel.innerHTML = clases.map(c => `<option value="${c}">${esc(c)}</option>`).join("");
+  },
+
+  filtrarBloques(clase) {
+    const lista = clase === "Todos"
+      ? State.bloques
+      : State.bloques.filter(b => b.clasificacion === clase);
+    App._renderBloques(lista);
+  },
+
+  _renderBloques(bloques) {
+    const container = $("bloques-container");
+    if (!container) return;
+
+    const opciones = State.config.opciones || [];
+    const optsHtml = opciones.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+
+    container.innerHTML = `
+      <div class="bloques-toolbar">
+        <span style="font-weight:600">${bloques.length} bloque${bloques.length !== 1 ? "s" : ""}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-light)">
+          Clic en el texto para editar · Selector para reclasificar
+        </span>
+      </div>
+      <div class="bloques-list" id="bloques-list"></div>
+    `;
+
+    const lista = $("bloques-list");
+    bloques.forEach(b => {
+      const idx = b.id ?? 0;
+      const div = document.createElement("div");
+      div.className       = "bloque-item";
+      div.dataset.clase   = b.clasificacion;
+      div.dataset.idx     = idx;
+
+      // Construimos el select con la opción correcta pre-seleccionada
+      const optsConSelected = opciones
+        .map(o => `<option value="${esc(o)}"${o === b.clasificacion ? " selected" : ""}>${esc(o)}</option>`)
+        .join("");
+
+      div.innerHTML = `
+        <div class="bloque-num">${idx + 1}</div>
+        <textarea class="bloque-texto"
+          oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+          onblur="App._onBloqueTextoBlur(${idx}, this.value)"
+        >${esc(b.contenido)}</textarea>
+        <select class="bloque-select"
+          onchange="App._onBloqueClaseChange(${idx}, this.value, this.closest('.bloque-item'))">
+          ${optsConSelected}
+        </select>
+        <button class="bloque-del" title="Marcar como Ignorar"
+          onclick="App._ignorarBloque(${idx}, this.closest('.bloque-item'))">✕</button>
+      `;
+
+      lista.appendChild(div);
+    });
+
+    // Auto-altura inicial de todas las textareas
+    lista.querySelectorAll(".bloque-texto").forEach(ta => {
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    });
+  },
+
+  async _onBloqueTextoBlur(idx, valor) {
+    const b = State.bloques.find(b => b.id === idx);
+    if (b) b.contenido = valor;
+    try { await API.patch(`/api/bloques/${idx}`, { idx, contenido: valor }); }
+    catch (_) {}
+  },
+
+  async _onBloqueClaseChange(idx, clase, rowEl) {
+    const b = State.bloques.find(b => b.id === idx);
+    if (b) b.clasificacion = clase;
+    if (rowEl) rowEl.dataset.clase = clase;
+    try { await API.patch(`/api/bloques/${idx}`, { idx, clasificacion: clase }); }
+    catch (_) {}
+  },
+
+  _ignorarBloque(idx, rowEl) {
+    App._onBloqueClaseChange(idx, "Ignorar", rowEl);
+    if (rowEl) {
+      const sel = rowEl.querySelector(".bloque-select");
+      if (sel) sel.value = "Ignorar";
+    }
+  },
+
+  // ── Leyenda ──────────────────────────────────────────────────────────────
+
+  mostrarLeyenda() {
+    const cont = $("leyenda-contenido");
+    const cols = State.config.colores || {};
+    if (!cont) return;
+    cont.innerHTML = Object.entries(cols).map(([nombre, color]) => `
+      <div class="leyenda-item">
+        <div class="leyenda-dot" style="background:${color}"></div>
+        <span class="leyenda-name">${esc(nombre)}</span>
+        <span style="font-size:11px;color:var(--text-light)">${color}</span>
+      </div>
+    `).join("");
+    $("modal-leyenda").style.display = "flex";
+  },
+
+  cerrarLeyenda() {
+    $("modal-leyenda").style.display = "none";
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // AUTORES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async agregarAutor() {
+    App._leerInputsAutores();   // guardar valores actuales antes de redibujar
+    State.autores.push({ nombre: "", orcid: "" });
+    App._renderAutores();
+    await App._pushAutores();
+    // Hacer foco en el último input de nombre
+    const rows = document.querySelectorAll(".autor-row");
+    if (rows.length) {
+      const lastInput = rows[rows.length - 1].querySelector(".autor-input");
+      lastInput?.focus();
+    }
+  },
+
+  async limpiarAutores() {
+    State.autores = [];
+    App._renderAutores();
+    await App._pushAutores();
+    showToast("Autores eliminados");
+  },
+
+  async cargarAutoresExcel() {
+    try {
+      if (window.pywebview) {
+        const ruta = await window.pywebview.api.abrir_excel();
+        if (!ruta) return;
+        setStatus("Importando Excel...", "idle");
+        const data = await API.post("/api/autores/excel", { ruta });
+        State.autores = data.autores || [];
+        App._renderAutores();
+        showToast(`✓ ${data.importados} autores importados`);
+        setStatus("Autores importados desde Excel");
+      } else {
+        const input = document.createElement("input");
+        input.type   = "file";
+        input.accept = ".xlsx,.xls";
+        input.onchange = async () => {
+          if (!input.files[0]) return;
+          const fd = new FormData();
+          fd.append("file", input.files[0]);
+          const data = await API.postForm("/api/autores/excel-upload", fd);
+          State.autores = data.autores || [];
+          App._renderAutores();
+          showToast(`✓ ${data.importados} autores importados`);
+        };
+        input.click();
+      }
+    } catch (e) {
+      setStatus("Error importando Excel: " + e.message, "error");
+      showToast("Error al importar Excel", 4000);
+    }
+  },
+
+  _renderAutores() {
+    const lista = $("autores-list");
+    if (!lista) return;
+
+    if (State.autores.length === 0) {
+      lista.innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2"
+            style="width:48px;height:48px;opacity:.25">
+            <circle cx="20" cy="16" r="8"/><path d="M4 40c0-8.8 7.2-16 16-16s16 7.2 16 16"/>
+          </svg>
+          <p>Sin autores cargados</p>
+          <p class="empty-hint">Haz clic en "Agregar autor" para comenzar</p>
+        </div>`;
+      return;
+    }
+
+    lista.innerHTML = State.autores.map((a, i) => `
+      <div class="autor-row" data-autor-idx="${i}">
+        <div class="autor-num">${i + 1}</div>
+        <input class="autor-input" type="text"
+          placeholder="Apellido, Nombre"
+          value="${esc(a.nombre || "")}"
+          onblur="App._onAutorBlur(${i}, 'nombre', this.value)"
+        />
+        <input class="autor-input" type="text"
+          placeholder="0000-0001-2345-6789"
+          value="${esc(a.orcid || "")}"
+          onblur="App._onAutorBlur(${i}, 'orcid', this.value)"
+        />
+        <button class="autor-del" onclick="App._eliminarAutor(${i})" title="Eliminar">✕</button>
+      </div>
+    `).join("");
+  },
+
+  async _onAutorBlur(idx, campo, valor) {
+    if (State.autores[idx]) {
+      State.autores[idx][campo] = valor.trim();
+      await App._pushAutores();
+    }
+  },
+
+  async _eliminarAutor(idx) {
+    App._leerInputsAutores();
+    State.autores.splice(idx, 1);
+    App._renderAutores();
+    await App._pushAutores();
+  },
+
+  /** Lee los valores actuales de los inputs y los guarda en State.autores */
+  _leerInputsAutores() {
+    document.querySelectorAll(".autor-row").forEach(row => {
+      const i = parseInt(row.dataset.autorIdx, 10);
+      if (isNaN(i) || !State.autores[i]) return;
+      const inputs = row.querySelectorAll(".autor-input");
+      if (inputs[0]) State.autores[i].nombre = inputs[0].value.trim();
+      if (inputs[1]) State.autores[i].orcid  = inputs[1].value.trim();
+    });
+  },
+
+  async _pushAutores() {
+    try { await API.put("/api/autores", { autores: State.autores }); }
+    catch (_) {}
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // AFILIACIONES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  syncAfiliaciones() {
+    clearTimeout(State._afilTimer);
+    State._afilTimer = setTimeout(async () => {
+      const txt = $("afiliaciones-txt");
+      if (!txt) return;
+      try { await API.put("/api/afiliaciones", { texto: txt.value }); }
+      catch (_) {}
+    }, 700);
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REFERENCIAS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async _cargarReferencias() {
+    try {
+      const data = await API.get("/api/referencias");
+      let refs = data.referencias || [];
+
+      // Fallback: referencias detectadas en los bloques
+      if (refs.length === 0) {
+        refs = State.bloques
+          .filter(b => b.clasificacion === "Referencia")
+          .map(b => b.contenido);
+      }
+
+      const count = $("refs-count");
+      if (count) count.textContent = `${refs.length} referencia${refs.length !== 1 ? "s" : ""}`;
+
+      const lista = $("refs-list");
+      if (!lista) return;
+
+      if (refs.length === 0) {
+        lista.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2"
+              style="width:48px;height:48px;opacity:.25">
+              <rect x="6" y="6" width="36" height="36" rx="2"/>
+              <path d="M14 16h20M14 24h20M14 32h12"/>
+            </svg>
+            <p>Sin referencias detectadas</p>
+            <p class="empty-hint">Las referencias se clasifican automáticamente al cargar el PDF</p>
+          </div>`;
+        return;
+      }
+
+      lista.innerHTML = refs.map((r, i) => `
+        <div class="ref-item">
+          <span class="ref-num">${i + 1}.</span>
+          <span>${esc(r)}</span>
+        </div>
+      `).join("");
+    } catch (e) {
+      setStatus("Error cargando referencias: " + e.message, "error");
+    }
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // FIGURAS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async _cargarFiguras() {
+    try {
+      const data  = await API.get("/api/figuras");
+      const figs  = data.figuras || [];
+      const count = $("figs-count");
+      const grid  = $("figuras-grid");
+
+      if (count) count.textContent = `${figs.length} figura${figs.length !== 1 ? "s" : ""}`;
+      if (!grid) return;
+
+      if (figs.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column:1/-1">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2"
+              style="width:48px;height:48px;opacity:.25">
+              <rect x="4" y="8" width="40" height="32" rx="2"/>
+              <path d="M4 32l10-10 8 8 8-10 10 12"/><circle cx="16" cy="20" r="4"/>
+            </svg>
+            <p>Sin figuras detectadas</p>
+            <p class="empty-hint">Las figuras se extraen automáticamente al cargar el PDF</p>
+          </div>`;
+        return;
+      }
+
+      grid.innerHTML = figs.map((f, i) => {
+        const pie = esc(f.pie || f.caption || f.texto || `Figura ${i + 1}`);
+        const img = f.img_b64
+          ? `<img class="figura-img"
+               src="data:${f.img_mime || "image/png"};base64,${f.img_b64}"
+               alt="Figura ${i + 1}">`
+          : `<div class="figura-img-placeholder">
+               <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1"
+                 style="width:36px;height:36px;opacity:.3">
+                 <rect x="4" y="8" width="40" height="32" rx="2"/>
+                 <path d="M4 32l10-10 8 8 8-10 10 12"/>
+               </svg>
+             </div>`;
+        return `
+          <div class="figura-card">
+            ${img}
+            <div class="figura-body">
+              <p class="figura-pie">${pie}</p>
+            </div>
+          </div>`;
+      }).join("");
+    } catch (e) {
+      setStatus("Error cargando figuras: " + e.message, "error");
+    }
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TABLAS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async _cargarTablas() {
+    try {
+      const data  = await API.get("/api/tablas");
+      const tabs  = data.tablas || [];
+      const count = $("tabs-count");
+      const lista = $("tablas-list");
+
+      if (count) count.textContent = `${tabs.length} tabla${tabs.length !== 1 ? "s" : ""}`;
+      if (!lista) return;
+
+      if (tabs.length === 0) {
+        lista.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2"
+              style="width:48px;height:48px;opacity:.25">
+              <rect x="4" y="6" width="40" height="36" rx="2"/>
+              <path d="M4 18h40M4 30h40M20 18v24M32 18v24"/>
+            </svg>
+            <p>Sin tablas detectadas</p>
+            <p class="empty-hint">Las tablas se detectan automáticamente al cargar el PDF</p>
+          </div>`;
+        return;
+      }
+
+      lista.innerHTML = tabs.map((t, i) => {
+        const titulo  = esc(t.titulo || t.title || `Tabla ${i + 1}`);
+        const preview = t.contenido || t.content || t.texto || "";
+        return `
+          <div class="tabla-card">
+            <div class="tabla-titulo-text">${titulo}</div>
+            ${preview
+              ? `<div class="tabla-preview">${esc(preview.substring(0, 220))}${preview.length > 220 ? "…" : ""}</div>`
+              : ""}
+          </div>`;
+      }).join("");
+    } catch (e) {
+      setStatus("Error cargando tablas: " + e.message, "error");
+    }
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // EXPORTAR
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async exportar(formato) {
+    if (!State.tienePDF) {
+      showToast("Primero carga un PDF");
+      return;
+    }
+
+    // Guardar autores antes de exportar
+    App._leerInputsAutores();
+    await App._pushAutores();
+
+    try {
+      if (window.pywebview) {
+        // ── Producción: diálogo nativo → guardar en disco ──
+        const fn = { html: "guardar_html", xml: "guardar_xml", epub: "guardar_epub" }[formato];
+        const ruta = await window.pywebview.api[fn]();
+        if (!ruta) return;   // usuario canceló
+
+        setStatus(`Exportando ${formato.toUpperCase()}...`, "idle");
+        showLoading(true);
+        await API.post(`/api/exportar/${formato}`, { formato, ruta_destino: ruta });
+        showLoading(false);
+        setStatus(`${formato.toUpperCase()} guardado`);
+        showToast(`✓ ${formato.toUpperCase()} exportado correctamente`);
+
+      } else {
+        // ── Desarrollo: descarga en el browser ──
+        setStatus(`Exportando ${formato.toUpperCase()}...`, "idle");
+        showLoading(true);
+        const blob = await API.postBlob(`/api/exportar/${formato}/preview`);
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement("a");
+        a.href     = url;
+        a.download = `articulo.${formato === "xml" ? "xml" : formato}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showLoading(false);
+        setStatus(`${formato.toUpperCase()} descargado`);
+        showToast(`✓ ${formato.toUpperCase()} descargado`);
+      }
+    } catch (e) {
+      showLoading(false);
+      setStatus("Error al exportar: " + e.message, "error");
+      showToast("Error al exportar: " + e.message, 4500);
+    }
+  },
+
+};   // fin App
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inicialización
+// ─────────────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    // 1. Cargar configuración (opciones de clasificación + colores)
+    State.config = await API.get("/api/config");
+
+    // 2. Ver si ya hay un PDF cargado en el servidor (por recarga de ventana)
+    const estado = await API.get("/api/estado");
+
+    if (estado.tiene_pdf) {
+      State.tienePDF = true;
+      const bloqData = await API.get("/api/bloques");
+      State.bloques  = bloqData.bloques || [];
+
+      const info = estado.pdf_info || {};
+      const sv = (id, v) => { const el=$(id); if(el) el.textContent = v||"—"; };
+      sv("info-nombre",  info.nombre);
+      sv("info-paginas", info.paginas);
+      sv("info-tamanio", info.tamanio);
+      const badge = $("info-estado");
+      if (badge) { badge.textContent = "Cargado"; badge.className = "badge badge--green"; }
+
+      const dz = $("dropzone");
+      const bc = $("bloques-container");
+      if (dz) dz.style.display = "none";
+      if (bc) bc.style.display = "block";
+      $("btn-leyenda") && ($("btn-leyenda").style.display = "inline-flex");
+      $("filtro-grupo") && ($("filtro-grupo").style.display = "flex");
+
+      App._poblarFiltro();
+      App._renderBloques(State.bloques);
+    }
+
+    // 3. Cargar autores
+    const autData = await API.get("/api/autores");
+    State.autores  = autData.autores || [];
+
+    // 4. Cargar afiliaciones
+    const afilData = await API.get("/api/afiliaciones");
+    const ta = $("afiliaciones-txt");
+    if (ta && afilData.texto) ta.value = afilData.texto;
+
+    // 5. Mostrar sección inicial
+    App.irSeccion("pdf");
+    setStatus("Listo para comenzar");
+
+  } catch (e) {
+    setStatus("Error iniciando: " + e.message, "error");
+    console.error("[init]", e);
+  }
+}
+
+// Arrancar cuando esté listo (PyWebView o browser)
+if (window.pywebview) {
+  window.addEventListener("pywebviewready", init);
+} else {
+  document.addEventListener("DOMContentLoaded", init);
+}
