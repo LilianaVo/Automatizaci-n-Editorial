@@ -26,3 +26,7 @@ desktop.ini
 .idea/
 *.swp
 *.swo
+
+# Build/dist específicos de Programa
+Programa/build/
+Programa/dist/
