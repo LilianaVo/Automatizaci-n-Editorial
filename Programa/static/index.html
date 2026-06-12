@@ -30,6 +30,11 @@
   </div>
 
   <div class="topbar-actions">
+    <button class="btn-export btn-export--preview" onclick="App.verPreview()" title="Ver cómo quedará el artículo en HTML">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
+      Vista previa
+    </button>
+    <span class="topbar-separator"></span>
     <span class="topbar-label">Exportar a:</span>
     <button class="btn-export btn-export--primary" onclick="App.exportar('html')" title="Exportar HTML">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M10 2a14 14 0 0 1 0 16M10 2a14 14 0 0 0 0 16M2 10h16"/></svg>
@@ -498,6 +503,33 @@
         <button class="btn-sm btn-secondary" onclick="App._cerrarConfirmarPDF()">Cancelar</button>
         <button class="btn-sm btn-danger" onclick="App._confirmarCambiarPDF()">Sí, cambiar PDF</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal vista previa HTML -->
+<div class="modal-overlay modal-overlay--full" id="modal-preview" style="display:none" onclick="App.cerrarPreview()">
+  <div class="modal modal--preview" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="width:16px;height:16px;vertical-align:-2px;margin-right:6px"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
+        Vista previa HTML
+      </h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="preview-nombre" style="font-size:11px;color:var(--text-light);font-weight:400"></span>
+        <button class="btn-sm btn-secondary" onclick="App.exportar('html')">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M10 3v10M5 8l5 5 5-5M4 17h12"/></svg>
+          Exportar HTML
+        </button>
+        <button class="modal-close" onclick="App.cerrarPreview()">✕</button>
+      </div>
+    </div>
+    <div class="modal-preview-body">
+      <div class="preview-loading" id="preview-loading">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;opacity:.3;animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="10"/></svg>
+        <span>Generando vista previa...</span>
+      </div>
+      <iframe id="preview-iframe" class="preview-iframe" style="display:none" title="Vista previa del artículo"></iframe>
     </div>
   </div>
 </div>

@@ -1086,6 +1086,49 @@ const App = {
     showToast("PDF eliminado — carga el nuevo archivo");
   },
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // VISTA PREVIA HTML
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async verPreview() {
+    if (!State.tienePDF) {
+      showToast("Primero carga un PDF");
+      return;
+    }
+
+    // Guardar autores antes de generar
+    App._leerInputsAutores();
+    await App._pushAutores();
+
+    // Abrir modal con spinner
+    const modal   = $("modal-preview");
+    const iframe  = $("preview-iframe");
+    const loading = $("preview-loading");
+    const nombre  = $("preview-nombre");
+    if (!modal) return;
+
+    modal.style.display   = "flex";
+    loading.style.display = "flex";
+    iframe.style.display  = "none";
+    if (nombre) nombre.textContent = State.pdfInfo?.nombre || "";
+
+    // Cuando el iframe termine de cargar, ocultar spinner
+    iframe.onload = () => {
+      loading.style.display = "none";
+      iframe.style.display  = "block";
+    };
+
+    // Cargar la URL directamente — el servidor genera el HTML al vuelo
+    iframe.src = `http://127.0.0.1:8765/api/exportar/html/vista-previa`;
+  },
+
+  cerrarPreview() {
+    const modal  = $("modal-preview");
+    const iframe = $("preview-iframe");
+    if (modal)  modal.style.display  = "none";
+    if (iframe) { iframe.src = "about:blank"; iframe.style.display = "none"; }
+  },
+
   async validarXML() {
     if (!State.tienePDF) {
       showToast("Primero carga un PDF");

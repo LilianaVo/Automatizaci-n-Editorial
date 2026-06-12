@@ -272,6 +272,22 @@ def exportar_html_preview():
     return FastAPIResponse(content=html_str, media_type="text/html",
         headers={"Content-Disposition": "attachment; filename=articulo.html"})
 
+
+@app.get("/api/exportar/html/vista-previa")
+def vista_previa_html():
+    """Devuelve el HTML generado sin header de descarga — para mostrarlo en iframe."""
+    if not _estado["bloques"]:
+        raise HTTPException(status_code=400, detail="No hay bloques cargados.")
+    html_str = build_html(
+        bloques=_bloques_snapshot(),
+        referencias_externas=_estado["referencias_externas"],
+        autores_orcid=_estado["autores_orcid"],
+        afiliaciones_txt=_estado["afiliaciones_txt"],
+        figuras=_estado["figuras_manuales"],
+        tablas=_estado["tablas_manuales"],
+    )
+    return FastAPIResponse(content=html_str, media_type="text/html")
+
 @app.post("/api/exportar/xml/preview")
 def exportar_xml_preview():
     if not _estado["bloques"]:
