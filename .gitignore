@@ -30,3 +30,6 @@ desktop.ini
 # Build/dist específicos de Programa
 Programa/build/
 Programa/dist/
+
+#Ignorar sesión guardada
+Programa/sesion_guardada.json
