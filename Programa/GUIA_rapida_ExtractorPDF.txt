@@ -1,74 +1,81 @@
 ══════════════════════════════════════════════════════════════════
-  GUÍA RÁPIDA — Extractor de PDF Semántico  v2.0
+  GUÍA RÁPIDA — Editor Semántico / Extractor de PDF Semántico
   Paleontología Mexicana · Instituto de Geología, UNAM
 ══════════════════════════════════════════════════════════════════
 
   La aplicación convierte artículos científicos en PDF a tres
   formatos editoriales: HTML, EPUB y XML JATS (SciELO SPS).
 
+  Al abrir el programa se inicia un servidor local y se abre una
+  ventana con la interfaz. No requiere conexión a internet para
+  procesar el PDF (solo si el HTML usa fuentes en línea).
+
 ──────────────────────────────────────────────────────────────────
   PANTALLA PRINCIPAL
 ──────────────────────────────────────────────────────────────────
 
-  Barra superior
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Extractor de PDF Semántico   [⬡ HTML]  [◻ XML]  [◻ EPUB] │
-  └─────────────────────────────────────────────────────────────┘
+  La interfaz se organiza en tres zonas:
 
-  Los tres botones de exportación siempre están visibles.
-  No importa en qué pestaña estés al exportar.
+    • Barra superior  →  Título de la app y estado general
+    • Barra lateral (sidebar) → Navegación entre secciones y
+                                acceso a Configuración
+    • Barra inferior (stepper) → Avanza paso a paso por el flujo
+                                de trabajo y exporta el artículo
 
-  Pestañas disponibles:
-    📄 PDF          →  Cargar y revisar bloques del artículo
-    👥 Autores      →  Agregar autores y sus ORCID
-    🏛️ Afiliaciones →  Cargar afiliaciones institucionales
-    📋 Referencias  →  Cargar referencias bibliográficas
-    🖼️ Figuras      →  Agregar figuras y tablas
+  Secciones disponibles (sidebar / stepper):
+    1. PDF           →  Cargar y revisar bloques del artículo
+    2. Autores       →  Agregar autores y sus ORCID
+    3. Afiliaciones  →  Cargar afiliaciones institucionales
+    4. Referencias   →  Cargar referencias bibliográficas
+    5. Figuras       →  Agregar figuras con pie y texto ancla
+    6. Tablas        →  Agregar tablas desde Excel
+    ⚙ Configuración  →  Información de la versión de la app
 
-  Barra inferior (status bar)
-    Muestra el resultado de cada acción:  ✓ éxito  /  ✗ error
+  Mensajes de estado y notificaciones (toasts) confirman el
+  resultado de cada acción: ✓ éxito  /  ✗ error.
 
 ──────────────────────────────────────────────────────────────────
-  PASO 1 · CARGAR EL PDF  (pestaña 📄 PDF)
+  PASO 1 · CARGAR EL PDF  (sección PDF)
 ──────────────────────────────────────────────────────────────────
 
-  1. Haz clic en [📂 Cargar PDF] y selecciona el archivo.
+  1. Arrastra el PDF a la zona indicada, o haz clic en ella para
+     abrir el selector de archivos.
   2. El programa analiza el PDF y muestra cada bloque de texto
      con una clasificación automática asignada.
   3. Revisa los bloques. Puedes:
        - Cambiar la clasificación usando el menú desplegable
-         de cada bloque (ej. "Cuerpo", "Encabezado sección",
-         "Título principal", "Ignorar", etc.)
+         de cada bloque
        - Editar el texto directamente en el campo de cada bloque
-       - Usar el buscador (esquina superior derecha) para
-         localizar texto específico dentro de los bloques
+       - Filtrar por tipo de bloque con el selector superior
+         derecho, para revisar más fácilmente
+  4. En "Información del documento" puedes ver el nombre del
+     archivo, número de páginas, tamaño y estado del análisis.
+  5. Si necesitas empezar de nuevo, usa "Cambiar PDF" para
+     limpiar el documento actual y cargar otro.
 
-  Clasificaciones principales:
-    Título principal      →  Título en español
-    Título secundario     →  Título en inglés (cursiva)
-    Cuerpo                →  Párrafos del artículo
-    Encabezado sección    →  Introducción, Métodos, etc.
-    Subencabezado         →  Subtítulos numerados (ej. 2.1)
-    Subencabezado-bajo    →  Subtítulos de tercer nivel
-    Abstract              →  Resumen (español)
-    Abstract-EN           →  Resumen (inglés, cursiva gris)
-    Palabras clave        →  Keywords
-    Filiación             →  Institución del autor en portada
-    Pie de figura         →  Leyenda de figura en el PDF
-    Ignorar               →  Bloque que no debe exportarse
-    Referencia            →  Solo si se extraen del PDF *
+  Clasificaciones disponibles:
+    Cuerpo                 →  Párrafos del artículo
+    Cuerpo del abstract    →  Texto del resumen (estilo diferenciado)
+    Título principal       →  Título en español
+    Título secundario      →  Título en inglés (cursiva)
+    Encabezado sección     →  Introducción, Métodos, etc.
+    Subencabezado          →  Subtítulos numerados (ej. 2.1)
+    Subencabezado-bajo     →  Subtítulos de tercer nivel
+    Palabras clave         →  Keywords
+    Referencia             →  Solo si se extraen del PDF *
+    Cómo citar             →  Bloque "Cómo citar este artículo"
+    Fecha manuscrito       →  Fechas de recepción/aceptación
+    Título tabla           →  Pie/título de tabla
+    Pie de figura          →  Leyenda de figura
+    Filiación              →  Institución del autor en portada
+    Email / Metadatos      →  Correos y metadatos de contacto
+    Ignorar                →  Bloque que no debe exportarse
 
   * Se recomienda siempre cargar las referencias desde un .txt
-    externo (pestaña 📋 Referencias) en lugar de extraerlas del PDF.
-
-  Botón "Leyenda": muestra un resumen de todos los tipos de
-  clasificación disponibles con su descripción.
-
-  Filtro: permite ver solo los bloques de un tipo específico
-  para revisar más fácilmente.
+    externo (sección Referencias) en lugar de extraerlas del PDF.
 
 ──────────────────────────────────────────────────────────────────
-  PASO 2 · AUTORES Y ORCID  (pestaña 👥 Autores)
+  PASO 2 · AUTORES Y ORCID  (sección Autores)
 ──────────────────────────────────────────────────────────────────
 
   Opción A — Cargar desde Excel:
@@ -76,21 +83,22 @@
     - La primera fila puede ser encabezado (se ignora)
     - El ORCID puede ser el link completo
       (https://orcid.org/0000-0001-2345-6789) o solo los números
-    - Clic en [📂 Cargar Excel]
+    - Arrastra el Excel o haz clic en "Cargar Excel"
 
   Opción B — Agregar manualmente:
-    - Clic en [➕ Agregar autor]
+    - Clic en "+ Agregar autor"
     - Escribe en formato:  Apellido, Nombre
     - Escribe el ORCID en formato:  0000-0001-2345-6789
     - Repite para cada autor
+    - Usa el botón ✕ de cada fila para eliminar un autor
 
-  [🗑 Limpiar todo] elimina todos los autores cargados.
+  "Limpiar todo" elimina todos los autores cargados.
 
 ──────────────────────────────────────────────────────────────────
-  PASO 3 · AFILIACIONES  (pestaña 🏛️ Afiliaciones)
+  PASO 3 · AFILIACIONES  (sección Afiliaciones)
 ──────────────────────────────────────────────────────────────────
 
-  Prepara un archivo .txt con una afiliación por línea.
+  Carga un archivo .txt con una afiliación por línea.
   Formatos aceptados para el prefijo:
 
     1 Colección de Paleontología, Facultad de Ciencias, UNAM
@@ -100,87 +108,95 @@
 
   - El prefijo puede ser número o letra (1, 2, a, b, ...)
   - Los correos con prefijo * se vinculan automáticamente
-  - Clic en [📂 Cargar .txt] para importar el archivo
-
-  [🗑 Limpiar] elimina las afiliaciones cargadas.
+  - Arrastra el .txt o haz clic en la zona de carga
 
 ──────────────────────────────────────────────────────────────────
-  PASO 4 · REFERENCIAS  (pestaña 📋 Referencias)
+  PASO 4 · REFERENCIAS  (sección Referencias)
 ──────────────────────────────────────────────────────────────────
 
-  Prepara un archivo .txt con las referencias numeradas.
+  Carga un archivo .txt con las referencias numeradas.
   Formatos de numeración aceptados:
 
     1. Autor, A. (2020). Título...
     1) Autor, A. (2020). Título...
     [1] Autor, A. (2020). Título...
 
-  - Clic en [📂 Cargar .txt] para importar el archivo
+  - Arrastra el .txt o haz clic en la zona de carga
+  - El contador muestra cuántas referencias se cargaron
   - Las referencias del PDF se ignoran; solo se usan las del .txt
 
-  [🗑 Limpiar] elimina las referencias cargadas.
-
 ──────────────────────────────────────────────────────────────────
-  PASO 5 · FIGURAS Y TABLAS  (pestaña 🖼️ Figuras)
+  PASO 5 · FIGURAS  (sección Figuras)
 ──────────────────────────────────────────────────────────────────
 
-  En esta pestaña hay dos paneles: Figuras y Tablas.
-  Cambia entre ellos con el selector en la parte superior.
+  Clic en "Agregar figura" o arrastra una o varias imágenes
+  (.png, .jpg, .jpeg, .gif, .webp, .bmp).
 
-  ── Figuras ──────────────────────────────────────────────────
-
-  Clic en [➕ Agregar figura] para añadir cada imagen.
   Por cada figura debes indicar:
 
-    Archivo de imagen   →  .png, .jpg, .jpeg, .gif, .bmp, .tiff
     Pie de figura       →  Texto descriptivo de la figura
     Texto ancla         →  Fragmento del cuerpo del artículo
                            donde debe insertarse la figura
                            (ej. "...como se observa en la Fig. 1")
 
   Si el texto ancla no se encuentra en el cuerpo, la figura
-  se inserta al final del documento.
+  se inserta al final del documento. El contador muestra cuántas
+  figuras hay cargadas. Cada figura puede editarse o eliminarse
+  individualmente.
 
-  ── Tablas ───────────────────────────────────────────────────
+──────────────────────────────────────────────────────────────────
+  PASO 6 · TABLAS  (sección Tablas)
+──────────────────────────────────────────────────────────────────
 
-  Clic en [➕ Agregar tabla (.xlsx)] para añadir cada tabla.
+  Clic en "Agregar tabla" o arrastra uno o varios archivos Excel
+  (.xlsx). Cada hoja del Excel se convierte en una tabla.
+
   Por cada tabla debes indicar:
 
-    Archivo Excel       →  .xlsx con los datos de la tabla
-                           (cada hoja del Excel = una tabla)
     Pie de tabla        →  Texto descriptivo de la tabla
     Texto ancla         →  Fragmento del cuerpo donde debe
                            insertarse la tabla
 
-  La numeración (Tabla 1, Tabla 2...) es automática.
+  La numeración (Tabla 1, Tabla 2...) es automática. El contador
+  muestra cuántas tablas hay cargadas. Cada tabla puede editarse
+  o eliminarse individualmente.
 
 ──────────────────────────────────────────────────────────────────
-  PASO 6 · EXPORTAR
+  PASO 7 · EXPORTAR
 ──────────────────────────────────────────────────────────────────
 
-  Usa los botones en la barra superior. Los tres son independientes
-  entre sí: no es necesario generar HTML antes de exportar EPUB o XML.
+  Usa el paso "Exportar" en la barra inferior (stepper). Las tres
+  exportaciones son independientes entre sí: no es necesario
+  generar HTML antes de exportar EPUB o XML.
 
-  [⬡ HTML]  →  Genera el artículo en HTML con estilos editoriales.
-                Tipografía: Source Serif 4 / Times New Roman.
-                Compatible con cualquier navegador web.
+  HTML  →  Genera el artículo en HTML con estilos editoriales.
+           Tipografía: Source Serif 4 / Times New Roman.
+           Compatible con cualquier navegador web.
 
-  [◻ XML]   →  Genera el artículo en formato JATS XML
-                orientado a SciELO SPS. Incluye metadatos,
-                front, body y referencias estructuradas.
+  XML   →  Genera el artículo en formato JATS XML orientado a
+           SciELO SPS. Incluye metadatos, front, body y
+           referencias estructuradas. El programa valida
+           automáticamente la estructura del XML generado y
+           reporta errores o advertencias.
 
-  [◻ EPUB]  →  Genera el artículo en formato EPUB 2.0.
-                Compatible con Calibre, Thorium Reader
-                y Apple Books.
+  EPUB  →  Genera el artículo en formato EPUB 2.0.
+           Compatible con Calibre, Thorium Reader y Apple Books.
 
   En todos los casos el programa pedirá dónde guardar el archivo.
-  La barra de estado confirma el guardado con ✓ o indica el error.
+  Las notificaciones confirman el guardado con ✓ o indican el error.
+
+──────────────────────────────────────────────────────────────────
+  CONFIGURACIÓN
+──────────────────────────────────────────────────────────────────
+
+  Desde la sidebar puedes acceder al panel de Configuración, donde
+  se muestra la versión actual de la aplicación.
 
 ──────────────────────────────────────────────────────────────────
   CONSEJOS DE USO
 ──────────────────────────────────────────────────────────────────
 
-  · Revisa siempre la pestaña 📄 PDF antes de exportar. Un bloque
+  · Revisa siempre la sección PDF antes de exportar. Un bloque
     mal clasificado afecta los tres formatos de salida.
 
   · Usa "Ignorar" para cornisas, números de página, encabezados
@@ -195,25 +211,28 @@
   · Los guiones tipográficos de fin de línea (pa-
     labra) se eliminan automáticamente al unir los bloques.
 
+  · Si el XML generado tiene errores o advertencias, revisa el
+    detalle que muestra el validador antes de enviarlo a SciELO.
+
   · Para reportar errores, usa la pestaña Issues del repositorio
     en GitHub e incluye: descripción, número de página del PDF
     donde ocurre, y si es posible adjunta el PDF y el archivo
     generado.
 
 ──────────────────────────────────────────────────────────────────
-  FORMATOS DE ARCHIVO POR PESTAÑA (resumen)
+  FORMATOS DE ARCHIVO POR SECCIÓN (resumen)
 ──────────────────────────────────────────────────────────────────
 
-  Pestaña           Archivo de entrada         Notas
+  Sección         Archivo de entrada          Notas
   ─────────────────────────────────────────────────────────────
-  📄 PDF            .pdf                       Artículo completo
-  👥 Autores        .xlsx  (Autor | ORCID)     Opcional
-  🏛️ Afiliaciones   .txt   (una por línea)     Opcional
-  📋 Referencias    .txt   (numeradas)         Recomendado
-  🖼️ Figuras        .png / .jpg / ...          Opcional
-  🖼️ Tablas         .xlsx  (una hoja = tabla)  Opcional
+  PDF             .pdf                        Artículo completo
+  Autores         .xlsx  (Autor | ORCID)      Opcional
+  Afiliaciones    .txt   (una por línea)      Opcional
+  Referencias     .txt   (numeradas)          Recomendado
+  Figuras         .png / .jpg / .gif / .webp  Opcional
+  Tablas          .xlsx  (una hoja = tabla)   Opcional
 
 ══════════════════════════════════════════════════════════════════
   Servicio Social de Programación Editorial
-  Instituto de Geología · UNAM · v2.0
+  Instituto de Geología · UNAM
 ══════════════════════════════════════════════════════════════════
