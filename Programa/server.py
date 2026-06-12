@@ -25,6 +25,7 @@ from core.pdf_processor    import procesar_pdf
 from core.jats_exporterv2  import build_jats_xml
 from core.html_exporter    import build_html
 from core.epub_exporter    import build_epub
+from core.xml_validator    import validar_jats
 from core.constans import (
     OPCIONES,
     CLASE_COMPAT,
@@ -181,6 +182,20 @@ async def cargar_pdf(file: UploadFile = File(...)):
 @app.get("/api/pdf/info")
 def get_pdf_info():
     return _estado["pdf_info"]
+
+
+@app.post("/api/pdf/limpiar")
+def limpiar_pdf():
+    """Borra solo los bloques y la info del PDF. Conserva autores, afiliaciones y referencias."""
+    if _estado["fig_dir"] and os.path.isdir(_estado["fig_dir"]):
+        shutil.rmtree(_estado["fig_dir"], ignore_errors=True)
+    _estado["bloques"]          = []
+    _estado["figuras_manuales"] = []
+    _estado["tablas_manuales"]  = []
+    _estado["fig_dir"]          = None
+    _estado["pdf_info"]         = {}
+    _guardar_sesion()
+    return {"ok": True}
 
 
 class RutaPDFPayload(BaseModel):
@@ -789,6 +804,32 @@ def exportar_epub(payload: ExportPayload):
         with open(payload.ruta_destino, "wb") as f:
             f.write(epub_bytes)
         return {"ok": True, "ruta": payload.ruta_destino}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/validar/xml")
+def validar_xml_endpoint():
+    """
+    Genera el XML del estado actual y lo valida contra las reglas JATS/SciELO.
+    No guarda ningún archivo — solo valida y devuelve el resultado.
+    """
+    if not _estado["bloques"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay bloques cargados. Carga un PDF primero."
+        )
+    try:
+        xml_str = build_jats_xml(
+            bloques              = _bloques_snapshot(),
+            referencias_externas = _estado["referencias_externas"],
+            autores_orcid        = _estado["autores_orcid"],
+            afiliaciones_txt     = _estado["afiliaciones_txt"],
+            figuras              = _estado["figuras_manuales"],
+            tablas               = _estado["tablas_manuales"],
+        )
+        resultado = validar_jats(xml_str)
+        return resultado.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

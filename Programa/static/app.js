@@ -115,15 +115,109 @@ function showLoading(on) {
   }
 }
 
+function _progresoSteps() {
+  /**
+   * Evalúa cada paso y devuelve su estado:
+   * "complete" — tiene datos suficientes ✅
+   * "warn"     — tiene algo pero incompleto ⚠️
+   * "empty"    — sin datos
+   */
+  const e = State;
+  return {
+    pdf: (() => {
+      if (!e.tienePDF) return { estado: "empty", msg: "Sin PDF cargado" };
+      const n = e.bloques.length;
+      return { estado: "complete", msg: `${n} bloques clasificados` };
+    })(),
+    autores: (() => {
+      const n = e.autores?.length || 0;
+      if (n === 0) return { estado: "empty", msg: "Sin autores agregados" };
+      const sinOrcid = e.autores.filter(a => !a.orcid?.trim()).length;
+      if (sinOrcid > 0) return { estado: "warn", msg: `${n} autor(es) — ${sinOrcid} sin ORCID` };
+      return { estado: "complete", msg: `${n} autor(es) con ORCID ✓` };
+    })(),
+    afiliaciones: (() => {
+      const txt = (State._afilTxt || "").trim();
+      if (!txt) return { estado: "empty", msg: "Sin afiliaciones" };
+      const lineas = txt.split("\n").filter(l => l.trim()).length;
+      return { estado: "complete", msg: `${lineas} afiliación(es) ✓` };
+    })(),
+    referencias: (() => {
+      const n = State._numRefs || 0;
+      if (n === 0) return { estado: "empty", msg: "Sin referencias cargadas" };
+      return { estado: "complete", msg: `${n} referencia(s) ✓` };
+    })(),
+    figuras: (() => {
+      const n = State._numFiguras || 0;
+      if (n === 0) return { estado: "empty", msg: "Sin figuras (opcional)" };
+      const sinPie = State._figurasSinPie || 0;
+      if (sinPie > 0) return { estado: "warn", msg: `${n} figura(s) — ${sinPie} sin pie de figura` };
+      return { estado: "complete", msg: `${n} figura(s) ✓` };
+    })(),
+    tablas: (() => {
+      const n = State._numTablas || 0;
+      if (n === 0) return { estado: "empty", msg: "Sin tablas (opcional)" };
+      return { estado: "complete", msg: `${n} tabla(s) ✓` };
+    })(),
+    exportar: (() => {
+      const tienePDF  = e.tienePDF;
+      const tieneAut  = (e.autores?.length || 0) > 0;
+      if (!tienePDF) return { estado: "empty", msg: "Completa los pasos anteriores" };
+      if (!tieneAut) return { estado: "warn",  msg: "Faltan autores para exportar" };
+      return { estado: "complete", msg: "Listo para exportar ✓" };
+    })(),
+  };
+}
+
 function actualizarStepper() {
-  const orden = ["pdf","autores","afiliaciones","referencias","figuras","tablas","exportar"];
-  const idx   = orden.indexOf(State.seccionActiva);
+  const orden  = ["pdf","autores","afiliaciones","referencias","figuras","tablas","exportar"];
+  const idx    = orden.indexOf(State.seccionActiva);
+  const progreso = _progresoSteps();
+
+  // Iconos SVG para cada estado
+  const iconoCheck  = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 10l4 4 8-8"/></svg>`;
+  const iconoWarn   = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 4v7M10 14v1"/><circle cx="10" cy="10" r="8"/></svg>`;
+
   orden.forEach((s, i) => {
     const el = $(`step-${s}`);
     if (!el) return;
-    el.classList.remove("step--active","step--done");
-    if (i === idx)       el.classList.add("step--active");
-    else if (i < idx)    el.classList.add("step--done");
+
+    const p = progreso[s];
+    const esActivo = i === idx;
+
+    // Limpiar clases de estado
+    el.classList.remove("step--active","step--done","step--complete","step--warn");
+
+    if (esActivo) {
+      el.classList.add("step--active");
+    } else if (p.estado === "complete") {
+      el.classList.add("step--complete");
+      // Cambiar ícono del círculo a checkmark
+      const circle = el.querySelector(".step-circle");
+      if (circle) circle.innerHTML = iconoCheck;
+    } else if (p.estado === "warn") {
+      el.classList.add("step--warn");
+      const circle = el.querySelector(".step-circle");
+      if (circle) circle.innerHTML = iconoWarn;
+    }
+
+    // Actualizar tooltip
+    let tip = el.querySelector(".step-tooltip");
+    if (!tip) {
+      tip = document.createElement("div");
+      tip.className = "step-tooltip";
+      el.appendChild(tip);
+    }
+    tip.textContent = p.msg;
+  });
+
+  // Colorear líneas entre pasos
+  const lineas = document.querySelectorAll(".step-line");
+  lineas.forEach((linea, i) => {
+    linea.classList.remove("step-line--complete","step-line--warn");
+    const p = progreso[orden[i]];
+    if (p?.estado === "complete") linea.classList.add("step-line--complete");
+    else if (p?.estado === "warn") linea.classList.add("step-line--warn");
   });
 }
 
@@ -232,11 +326,13 @@ const App = {
     if (dz) dz.style.display = "none";
     if (bc) bc.style.display = "block";
 
-    // Mostrar controles de filtro
+    // Mostrar controles de filtro y botón cambiar PDF
     const btnLey = $("btn-leyenda");
     const grpFil = $("filtro-grupo");
-    if (btnLey) btnLey.style.display = "inline-flex";
-    if (grpFil) grpFil.style.display = "flex";
+    const btnCambiar = $("btn-cambiar-pdf");
+    if (btnLey)     btnLey.style.display     = "inline-flex";
+    if (grpFil)     grpFil.style.display     = "flex";
+    if (btnCambiar) btnCambiar.style.display = "inline-flex";
 
     App._poblarFiltro();
     App._renderBloques(State.bloques);
@@ -548,8 +644,12 @@ const App = {
 
   syncAfiliaciones() {
     clearTimeout(State._afilTimer);
+    const txt = $("afiliaciones-txt");
+    if (txt) {
+      State._afilTxt = txt.value;
+      actualizarStepper();
+    }
     State._afilTimer = setTimeout(async () => {
-      const txt = $("afiliaciones-txt");
       if (!txt) return;
       try { await API.put("/api/afiliaciones", { texto: txt.value }); }
       catch (_) {}
@@ -612,6 +712,8 @@ const App = {
   },
 
   _renderRefs(refs) {
+    State._numRefs = refs.length;
+    actualizarStepper();
     const lista = $("refs-list");
     const count = $("refs-count");
     if (!lista) return;
@@ -687,6 +789,9 @@ const App = {
   },
 
   _renderFiguras(figs) {
+    State._numFiguras    = figs.length;
+    State._figurasSinPie = figs.filter(f => !f.pie?.trim()).length;
+    actualizarStepper();
     const grid  = $("figuras-grid");
     const count = $("figs-count");
     if (!grid) return;
@@ -807,6 +912,8 @@ const App = {
   },
 
   _renderTablas(tabs) {
+    State._numTablas = tabs.length;
+    actualizarStepper();
     const lista = $("tablas-list");
     const count = $("tabs-count");
     if (!lista) return;
@@ -932,6 +1039,131 @@ const App = {
     }
   },
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // VALIDAR XML JATS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  cambiarPDF() {
+    // Mostrar modal de confirmación en lugar del feo window.confirm
+    const modal = $("modal-confirmar-pdf");
+    if (modal) modal.style.display = "flex";
+  },
+
+  _cerrarConfirmarPDF() {
+    const modal = $("modal-confirmar-pdf");
+    if (modal) modal.style.display = "none";
+  },
+
+  _confirmarCambiarPDF() {
+    App._cerrarConfirmarPDF();
+
+    // Limpiar solo los bloques y la info del PDF
+    State.bloques  = [];
+    State.tienePDF = false;
+
+    // Resetear la UI del PDF
+    const dz = $("dropzone");
+    const bc = $("bloques-container");
+    if (dz) dz.style.display = "flex";
+    if (bc) { bc.style.display = "none"; bc.innerHTML = ""; }
+
+    $("btn-leyenda")     && ($("btn-leyenda").style.display     = "none");
+    $("filtro-grupo")    && ($("filtro-grupo").style.display    = "none");
+    $("btn-cambiar-pdf") && ($("btn-cambiar-pdf").style.display = "none");
+
+    // Resetear info del documento
+    sv("info-nombre",  "—");
+    sv("info-paginas", "—");
+    sv("info-tamanio", "—");
+    const badge = $("info-estado");
+    if (badge) { badge.textContent = "Sin cargar"; badge.className = "badge badge--gray"; }
+
+    // Limpiar solo bloques en el servidor
+    API.post("/api/pdf/limpiar", {}).catch(() => {});
+
+    actualizarStepper();
+    setStatus("Listo para cargar nuevo PDF");
+    showToast("PDF eliminado — carga el nuevo archivo");
+  },
+
+  async validarXML() {
+    if (!State.tienePDF) {
+      showToast("Primero carga un PDF");
+      return;
+    }
+    App._leerInputsAutores();
+    await App._pushAutores();
+
+    setStatus("Validando XML...", "idle");
+    showLoading(true);
+    try {
+      const resultado = await API.post("/api/validar/xml", {});
+      showLoading(false);
+      App._mostrarResultadoValidacion(resultado);
+    } catch (e) {
+      showLoading(false);
+      setStatus("Error al validar: " + e.message, "error");
+      showToast("Error al validar XML", 4000);
+    }
+  },
+
+  _mostrarResultadoValidacion(r) {
+    setStatus(r.valido ? "XML válido ✅" : "XML con errores ❌", r.valido ? "ok" : "error");
+
+    const errores      = r.errores      || [];
+    const advertencias = r.advertencias || [];
+
+    const filaHTML = (item, tipo) => {
+      const color = tipo === "error" ? "#EF4444" : "#D97706";
+      const icono = tipo === "error" ? "✕" : "⚠";
+      const linea = item.linea > 0
+        ? `<span style="color:#9AA3B5;font-size:10px;margin-left:6px">línea ${item.linea}</span>`
+        : "";
+      return `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;
+          border-bottom:1px solid #E4E9F0;">
+          <span style="color:${color};font-weight:700;font-size:13px;flex-shrink:0">${icono}</span>
+          <span style="font-size:12px;color:#1A2236;flex:1">${esc(item.mensaje)}${linea}</span>
+        </div>`;
+    };
+
+    let cuerpo = `
+      <div style="margin-bottom:16px;padding:12px 16px;border-radius:8px;
+        background:${r.valido ? "#DCFCE7" : "#FEE2E2"};
+        color:${r.valido ? "#16A34A" : "#EF4444"};
+        font-size:13px;font-weight:600;">
+        ${esc(r.resumen)}
+      </div>`;
+
+    if (errores.length > 0) {
+      cuerpo += `<div style="font-size:11px;font-weight:700;color:#EF4444;
+        text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">
+        Errores (${errores.length})</div>`;
+      cuerpo += errores.map(e => filaHTML(e, "error")).join("");
+    }
+
+    if (advertencias.length > 0) {
+      cuerpo += `<div style="font-size:11px;font-weight:700;color:#D97706;
+        text-transform:uppercase;letter-spacing:.04em;
+        margin-top:${errores.length ? "16px" : "0"};margin-bottom:6px;">
+        Advertencias (${advertencias.length})</div>`;
+      cuerpo += advertencias.map(a => filaHTML(a, "advertencia")).join("");
+    }
+
+    if (errores.length === 0 && advertencias.length === 0) {
+      cuerpo += `<div style="text-align:center;padding:24px;color:#9AA3B5;font-size:13px;">
+        No se encontraron problemas.</div>`;
+    }
+
+    // Reutiliza el modal de leyenda que ya existe en el HTML
+    const contenido = $("leyenda-contenido");
+    const titulo    = document.querySelector("#modal-leyenda .modal-header h3");
+    if (contenido) contenido.innerHTML = cuerpo;
+    if (titulo)    titulo.textContent  = "Validación JATS / SciELO";
+    const modal = $("modal-leyenda");
+    if (modal) modal.style.display = "flex";
+  },
+
 };   // fin App
 
 
@@ -963,8 +1195,9 @@ async function init() {
       const bc = $("bloques-container");
       if (dz) dz.style.display = "none";
       if (bc) bc.style.display = "block";
-      $("btn-leyenda") && ($("btn-leyenda").style.display = "inline-flex");
-      $("filtro-grupo") && ($("filtro-grupo").style.display = "flex");
+      $("btn-leyenda")      && ($("btn-leyenda").style.display      = "inline-flex");
+      $("filtro-grupo")     && ($("filtro-grupo").style.display     = "flex");
+      $("btn-cambiar-pdf")  && ($("btn-cambiar-pdf").style.display  = "inline-flex");
 
       App._poblarFiltro();
       App._renderBloques(State.bloques);
@@ -978,10 +1211,29 @@ async function init() {
     const afilData = await API.get("/api/afiliaciones");
     const ta = $("afiliaciones-txt");
     if (ta && afilData.texto) ta.value = afilData.texto;
+    State._afilTxt = afilData.texto || "";
+
+    // 4b. Cargar conteos para el indicador de progreso
+    const refsData = await API.get("/api/referencias");
+    State._numRefs = (refsData.referencias || []).length;
+
+    const figsData = await API.get("/api/figuras");
+    const figs = figsData.figuras || [];
+    State._numFiguras    = figs.length;
+    State._figurasSinPie = figs.filter(f => !f.pie?.trim()).length;
+
+    const tabsData = await API.get("/api/tablas");
+    State._numTablas = (tabsData.tablas || []).length;
 
     // 5. Mostrar sección inicial
     App.irSeccion("pdf");
-    setStatus("Listo para comenzar");
+
+    if (estado.tiene_pdf && estado.sesion_restaurada) {
+      setStatus("Sesión restaurada ✓");
+      showToast("✓ Se recuperó tu sesión anterior — puedes continuar donde lo dejaste", 4500);
+    } else {
+      setStatus("Listo para comenzar");
+    }
 
   } catch (e) {
     setStatus("Error iniciando: " + e.message, "error");

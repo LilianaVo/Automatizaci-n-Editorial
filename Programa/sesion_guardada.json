@@ -1,0 +1,903 @@
+{
+  "bloques": [
+    {
+      "id": 0,
+      "contenido": "Paleontología Mexicana",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 10.0
+    },
+    {
+      "id": 1,
+      "contenido": "ISSN:2007-5189 Volumen 15, núm. 1, 2026, p. 85 – 108",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 10.0
+    },
+    {
+      "id": 2,
+      "contenido": "(Enero – Junio 2026)",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 10.0
+    },
+    {
+      "id": 3,
+      "contenido": "Raíces de la paleobotánica mexicana: avances y aportaciones de Alicia Silva Pineda",
+      "clasificacion": "Título principal",
+      "italic": false,
+      "bold": true,
+      "size": 14.0
+    },
+    {
+      "id": 4,
+      "contenido": "Roots of Mexican Paleobotany: Advances and Contributions of Alicia Silva Pinedas",
+      "clasificacion": "Título secundario",
+      "italic": true,
+      "bold": true,
+      "size": 14.0
+    },
+    {
+      "id": 5,
+      "contenido": "Velasco-de León, Maria Patricia1,",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": false,
+      "size": 10.289499998092651
+    },
+    {
+      "id": 6,
+      "contenido": "*; Hernández-Damián, Ana L.2",
+      "clasificacion": "Filiación",
+      "italic": false,
+      "bold": false,
+      "size": 9.385999997456869
+    },
+    {
+      "id": 7,
+      "contenido": "[IMAGEN 9×9px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 8,
+      "contenido": "[IMAGEN 9×9px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 9,
+      "contenido": "; Ramos Amézquita, Sandra3",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 11.192999998728434
+    },
+    {
+      "id": 10,
+      "contenido": "; Enríquez Flores, Nordi Verónica del Rocío4",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": false,
+      "size": 10.289499998092651
+    },
+    {
+      "id": 11,
+      "contenido": "[IMAGEN 9×9px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 12,
+      "contenido": "[IMAGEN 9×9px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 13,
+      "contenido": "1 Colección de Paleontología, Facultad de Estudios Superiores Zaragoza, Universidad Nacional Autónoma de México, Batalla 5 de mayo s/n esquina Fuerte de Loreto, Col. Ejército de Oriente, C.P. 09230, Iztapalapa, Ciudad de México, México.\n\n2 Departamento de Paleontología, Instituto de Geología, Universidad Nacional Autónoma de México, Ciudad Universitaria, Circui",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 7.123500108718872
+    },
+    {
+      "id": 14,
+      "contenido": "to de la Investigación Científica, 04510, Coyoacán, Ciudad de México, México.",
+      "clasificacion": "Filiación",
+      "italic": false,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 15,
+      "contenido": "4 Departamento Editorial, Instituto de Geología, Universidad Nacional Autónoma de México, Ciudad Universitaria, Circuito de la",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 7.123500108718872
+    },
+    {
+      "id": 16,
+      "contenido": "Investigación Científica, 04510, Coyoacán, Ciudad de México, México.",
+      "clasificacion": "Filiación",
+      "italic": false,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 17,
+      "contenido": "4 Escuela Nacional de Antropología e Historia. Periférico Sur y Zapote s/n. Colonia Isidro Fabela. 14030, Tlalpan, Ciudad de Méxi",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 7.123500108718872
+    },
+    {
+      "id": 18,
+      "contenido": "co, México.",
+      "clasificacion": "Filiación",
+      "italic": false,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 19,
+      "contenido": "* pativel@unam.mx",
+      "clasificacion": "Email / Metadatos",
+      "italic": false,
+      "bold": false,
+      "size": 7.123500108718872
+    },
+    {
+      "id": 20,
+      "contenido": "Resumen",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 21,
+      "contenido": "En el siglo XIX, la Paleontología se consideraba una rama auxiliar de la Geología, utilizada principalmente para identificar estratos y facilitar la exploración de minerales. Con el tiempo, la disciplina comenzó a buscar su autonomía; fue impulsada por un grupo de especialistas que destacaron la importancia de los fósiles no solo en la geología, sino también en la reconstrucción de ecosistemas pasados y en el estudio de la evolución biológica. En México, la Paleobotánica fue realizada por geólogos extranjeros y nacionales de forma aislada, lo que provocó la falta de especialistas en el país que permitiera un estudio continuo de la vegetación del pasado hasta mediados del siglo XX.\n\nLa primera paleobotánica en México fue la doctora Alicia Silva Pineda (1933–2020), quien se especializó en macroflora de gimnospermas así como en grupos afines del Paleozoico y Mesozoico, cuyas investigaciones y técnicas aportaron al conocimiento de su taxonomía y distribución en el territorio mexicano. En los años 70´s, siendo la única investigadora de macrofósiles, comenzó su trabajo de investigación con los primeros estudios en la macroflora del Triásico de Sonora (1961). Posteriormente trabajó en el Pensilvánico de la Formación Matzitzi, con 24 nuevos registros para el territorio nacional, lo que permitió proponer su relación con floras de América del Norte y Europa. Además, su tesis de doctorado la realizó en la tipificación del material del Jurásico del estado de Oaxaca publicado 70 años antes. Sin embargo, su trayectoria no estuvo exenta de dificultades, la estructura patriarcal incrustada en el ámbito geológico que desde el siglo XIX preservaba el dominio de los hombres. El primero y más relevante de estos obstáculos fue el techo de cristal académico, el cual genera distintas barreras que limitan el desarrollo académico de las mujeres promoviendo estereotipos y prejuicios. En este sentido, la personalidad introvertida de Alicia Pineda resultaba atípica en un entorno marcado por la competencia y la visibilidad pública, a la vez que replantea el modelo de carácter fuerte e indulgente de carácter masculino.\n\nLas mujeres han desempeñado un papel fundamental en la Paleontología, a pesar de las dificultades que han enfrentado a lo largo de la historia. Investigadoras como la doctora Alicia Silva Pineda han realizado aportes significativos al estudio del registro fósil y han abierto camino para nuevas generaciones de científicas. Su legado se encuentra también en la visibilización del trabajo femenino en un campo que tradicionalmente ha estado dominado por hombres. La historia de la Paleobotánica en México está marcada por el esfuerzo de sus investigadores por consolidarla como disciplina, y en este proceso, las mujeres han tenido un papel clave, por lo cual es fundamental promover estrategias que impulsen y promuevan la incursión y continuidad de las carreras de mujeres geocientíficas atendiendo problemáticas estructurales.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 22,
+      "contenido": "Palabras clave: brecha de género, gimnospermas fósiles, mujeres en la paleontología, taxonomía, pionera, mujeres geocientíficas.",
+      "clasificacion": "Palabras clave",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 23,
+      "contenido": "Cómo citar / How to cite: Velasco-de León, M.P., Hernández-Damián, A.L., Ramos Amézquita, S. & Enríquez Flores, N.V.R. (2026).",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 24,
+      "contenido": "Raíces de la paleobotánica mexicana: avances y aportaciones de Alicia Silva Pineda. Paleontología Mexicana, 15(1), 85–108.",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 25,
+      "contenido": "https://doi.org/10.22201/igl.05437652e.2026.15.1.410 Manuscrito recibido: Junio 5, 2025. Manuscrito corregido: Diciembre 10, 2025. Manuscrito aceptado: Diciembre 12, 2025.",
+      "clasificacion": "Fecha manuscrito",
+      "italic": false,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 26,
+      "contenido": "[IMAGEN 51×18px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 27,
+      "contenido": "Velasco-de León et al.",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 28,
+      "contenido": "Abstract",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 29,
+      "contenido": "In the 19th century, paleontology was considered an auxiliary branch of geology, and it was used mainly to identify strata and facilitate mineral exploration. Over time, however, the discipline began to seek its autonomy, driven by a group of specialists who emphasized the importance of fossils not only in geology but also in the reconstruction of past ecosystems and the study of biological evolution. In Mexico, paleobotany was carried out by foreign and national geologists in isolation.\n\nThe first paleobotanist in Mexico was Dr. Alicia Silva Pineda (1933–2020), who specialized in the macroflora of gymnosperms and related groups from the Paleozoic and Mesozoic. Her research and techniques contributed to the knowledge of their taxonomy and distribution in Mexico. Her research began in the 1960s, when she conducted the first studies on the macroflora of the Triassic of Sonora (1961). She later worked on the Pennsylvanian Matzitzi Formation, with 24 new records for the national territory, which allowed her to propose its relationship with floras of North America and Europe. Her doctoral thesis focused on the typification of Jurassic material from the state of Oaxaca, a topic that had been published 70 years earlier. However, her career was not without its difficulties. The patriarchal structure of the geological field, which since the 19th century had preserved male dominance and marginalized female researchers, depriving them of the necessary funding and recognition their projects deserved. The first and most significant of these obstacles was the academic glass ceiling, which creates various barriers that limit the academic development of women by promoting stereotypes and prejudices. In this sense, Alicia Pineda's introverted personality was atypical in an environment marked by competition and public visibility, but also transgressive, rethinking the model of a strong and indulgent masculine character.\n\nWomen have played a fundamental role in paleontology despite the difficulties they have faced throughout history. Researchers such as Dr. Alicia Silva Pineda have made significant contributions to the study of the fossil record and have paved the way for new generations of women scientists. Her legacy is also found in the visibility of women's work in a field that has traditionally been dominated by men. The history of Paleobotany in Mexico is marked by the efforts of its researchers to consolidate it as a discipline. In this process, women have played a key role, although on many occasions their work has not received the recognition it deserves.",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 30,
+      "contenido": "Keywords: gender gap, fossil gimnosperms, women in paleontology, pioneer, women geoscientists.",
+      "clasificacion": "Palabras clave",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 31,
+      "contenido": "Resumen no técnico",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 32,
+      "contenido": "Hace más de 100 años la aplicación del estudio de los fósiles era poco valorada y su uso se limitaba a la relación de los estratos con minerales. Con el tiempo los fósiles cobraron relevancia al ser reconocidos como evidencia de la vida pasada, aportando información única sobre la evolución y el cambio de los ambientes. En el siglo XX fueron surgiendo estudios más especializados sobre paleontología como el de las plantas encontradas en los yacimientos de carbón. Sin embargo, en México continuaban siendo investigaciones aisladas; esta situación cambió con la creación de revistas especializadas en español donde se difunden las investigaciones de paleontólogos mexicanos, como es el caso de la revista “Paleontología Mexicana”.\n\nLa primera paleobotánica mexicana fue Alicia Silva Pineda (1933–2020) quien realizó su tesis con plantas gimnospermas de edad Triásica del norte de México; este trabajo sería una de las muchas contribuciones que realizó a lo largo de sus 54 años de vida académica sobre la taxonomía de fósiles de plantas de diferentes edades del actual territorio nacional. Su juventud, personalidad tímida y su rol como madre de familia fueron algunos obstáculos que tuvo que equilibrar y superar para continuar con sus investigaciones. El ambiente de trabajo, donde abundaban geólogos y paleontólogos varones y muy pocas mujeres, no fue fácil, pues generalmente veían el trabajo de la Dra. Alicia como complementario para sus informes a través del trabajo de identificación de plantas fósiles, demeritando el trabajo taxonómico de la investigadora en proceso de formación.\n\nInvestigadoras como Alicia Silva, quien supo destacar en un campo donde los hombres fueron líderes por mucho tiempo, allanaron el camino para las paleobotánicas de las nuevas generaciones. Sus investigaciones sobre floras que vivieron en el Paleozoico y Mesozoico dejaron un amplio camino por seguir y es una inspiración para las mujeres-madres que se dedican a la investigación.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 33,
+      "contenido": "Palabras clave: brecha de género, gimnospermas fósiles, mujeres en la paleontología, taxonomía, pionera, mujeres geocientíficas.",
+      "clasificacion": "Palabras clave",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 34,
+      "contenido": "Non-technical Abstract",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 35,
+      "contenido": "Over 100 years ago, the study of fossils was of little interest and mainly limited to correlating rock strata with mineral deposits. Over time, fossils gained importance as they were recognized as evidence of past life, providing unique information about evolution and environmental change. In the 20th century, more specialized paleontological studies began to emerge, including those on plants found in coal deposits. However, in Mexico, such research remained isolated until the creation of specialized Spanish-language journals, which provided a platform for the dissemination of work by Mexican paleontologists, such was the case of the journal “Paleontología Mexicana”.\n\nThe first Mexican paleobotanist was Alicia Silva Pineda (1933–2020), who completed her thesis on Triassic-age gymnosperm plants from northern Mexico. This work was one of many contributions she made over 54 years of academic life, focusing on the taxonomy of fossil plants from various geological periods within what is now Mexican territory. Her youth, shy personality, and role as a mother posed challenges she had to balance and overcome to continue her research. The professional environment, dominated by male geologists and paleontologists, with very few women, was not easy. Her work was often seen as merely complementary, supporting others' reports through fossil plant identification, which diminished the value of her taxonomic efforts during her formative years.\n\nResearchers like Alicia Silva, who managed to stand out in a field long dominated by men, paved the way for new generations of female paleobotanists. Her studies of Paleozoic and Mesozoic floras laid a broad foundation for future research and remained a source of inspiration for mother-women scientists committed to academic work.",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 36,
+      "contenido": "Keywords: gender gap, fossil gymnosperms, pioneer, taxonomy, women in paleontology, women geoscientists.",
+      "clasificacion": "Palabras clave",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 37,
+      "contenido": "1. Estructuras de desigualdad de género en el ámbito académico de las geociencias",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 38,
+      "contenido": "En la actualidad, en el campo de las geociencias se ha reconocido que existen desigualdades organizacionales profundas, especialmente aquellas relacionadas con la brecha de género: injusticias que parecen haberse perpetuado y reproducido a lo largo del tiempo tanto en el ámbito académico como en la industria (Williams et al., 2012; Berhe et al., 2022; Heimann, 2025). Particularmente, la desigualdad de género en el ámbito académico impacta de manera significativa las condiciones laborales, incluyendo las oportunidades de desarrollo de carrera y empleo sostenible (Heimann, 2025). Desafortunadamente, hasta el momento son escasos los estudios enfocados explícitamente en analizar la estructura patriarcal dentro de las geociencias y su impacto en América Latina; la mayor parte de estos se centran en Europa, Estados Unidos y Canadá (Heimann, 2025).\n\nDe acuerdo con Kurdziel y Libarkin (2003), existen dos teorías principales que buscan explicar la desigualdad de género en las geociencias, particularmente en el ámbito académico, destacan: el llamado “techo de cristal”, así como la tensión entre las obligaciones profesionales y familiares. El término de “techo de cristal” se refiere a la aculturación artificial y sistemática que afecta a cada individuo a lo largo de su vida. Según la teoría, para las mujeres, esta aculturación se traduce en un patrón de discriminación que resulta en la incapacidad de tener éxito plenamente en campos tradicionalmente dominados por los hombres (Kurdziel y Libarkin, 2003).\n\nEl techo de cristal impide a mujeres con un perfil profesional ocupar cargos de responsabilidad a causa de estructuras androcéntricas y asocia el liderazgo a rasgos considerados masculinos, como la agresividad o competitividad (Camarena-Adame y Saavedra-García, 2018). Ejemplos de manifestación cotidiana de estas barreras son las conductas de invisibilización y descalificación que son toleradas incluso por las mujeres afectadas, creando un mecanismo estructural de desigualdad de género (Guil Bozal, 2008). En las geociencias, estas estructuras de poder están enraizadas en las estructuras institucionales consolidadas durante el porfiriato.\n\nLa naturaleza simbólica y estructural del techo de cristal permite identificar los niveles superiores dentro de la jerarquía profesional, sin embargo traspasarlos es muy difícil, así que han sido descritos como un \"techo de cemento\" dada la intensidad y naturalización de las desigualdades (Gallego-Morón et al., 2020). Esta metáfora alude a la noción de “fugas en la tubería”, la cual refleja la disminución constante de la participación femenina en etapas avanzadas de la carrera por desigualdades en reconocimiento, oportunidades y asignación de recursos (Segovia-Saiz et al., 2020). De este modo, a pesar de que la excelencia profesional se presenta como un parámetro neutral, se fundamenta en estándares masculinos que dificultan la evaluación de las mujeres en igualdad de condiciones (Segovia-Saiz et al., 2020).\n\nSonnert (1995) sugiere que la metáfora del \"techo de cristal\" puede ser inapropiada, ya que existen claramente varios obstáculos progresivos que tienden a limitar las carreras Velasco-de León et al.\n\nacadémicas de las mujeres. Debido a la implementación de “neutralidad objetiva” en los ámbitos académicos, no es de extrañar que las mujeres se encuentren excluidas o en desventaja con respecto a los hombres dentro del ámbito académico. En las geociencias, el modelo positivista masculinizado con el cual se consolidó la geología es en sí mismo un techo de cristal que impide el crecimiento de las mujeres dentro de esta área académica.\n\nPor otro lado, las recientes formas de maternidad junto con las expectativas sociales sobre embarazo y crianza contribuyen a consolidar ese límite invisible, forzando a gran parte de las mujeres a equilibrar constantemente su vida laboral y los estereotipos de género, situación que puede implicar la renuncia parcial o total a su trayectoria profesional (Sánchez-Bringas, 2004). Esta complejidad ha llevado a proponer una metáfora más integral: el “laberinto de cristal”, que refleja la superposición de obstáculos familiares, sociales, organizacionales y emocionales que atraviesan las trayectorias profesionales femeninas en la ciencia (Gallego-Morón et al., 2020).\n\nEn entornos universitarios el techo o laberinto de cristal restringe el acceso a cargos directivos, a su vez se mantiene vigente por medio de mecanismos simbólicos como la deslegitimación de méritos, resistencia al reconocimiento salarial y cuestionamientos permanentes a la valía profesional de las mujeres que logran ascender (Castelao-Huerta, 2023). Los procesos de contratación y evaluación científica se ven determinados por redes masculinas de poder y criterios androcéntricos que distorsionan los supuestos principios meritocráticos. Así, los méritos de las mujeres son evaluados con menores valoraciones, limitando su acceso a posiciones estratégicas dentro del sistema científico (Gallego-Morón et al., 2020).\n\nA lo largo del tiempo, la exclusión femenina se ha reflejado incluso en comités, sociedades intelectuales y órganos de decisión, como bien documenta Lamas (2002) al retomar el análisis de Virginia Woolf sobre el acceso restringido y la resistencia masculina a reconocer la autoridad femenina. Este fenómeno se traduce en acciones institucionales y renuncias colectivas que evidencian la persistencia de un orden patriarcal en la esfera intelectual. Dicha persistencia histórica conecta con las experiencias contemporáneas de mujeres científicas, quienes siguen enfrentando limitaciones estructurales asociadas a mandatos de género y expectativas sociales.\n\nAdemás, la doble jornada que implica gestionar obligaciones familiares y laborales afecta mayoritariamente a las mujeres, restringiendo su disponibilidad y energía para consolidar una carrera científica competitiva. La falta de políticas efectivas de conciliación y corresponsabilidad masculina exacerba esta situación, reforzando un modelo tradicional de división sexual del trabajo que castiga la maternidad y premia la dedicación absoluta, históricamente asociada con la masculinidad (Gallego-Morón et al., 2020). En este contexto, las desigualdades no solo se reproducen a través de estructuras institucionales, sino también mediante mecanismos simbólicos que legitiman la exclusión femenina bajo una apariencia de neutralidad académica. Este fenómeno tiene raíces profundas, desde la exclusión institucionalizada de las mujeres en la educación superior hasta las formas contemporáneas de precariedad, desigualdad en recursos y obstáculos que afrontan las mujeres en la promoción profesional (Guil Bozal, 2008).\n\nOtro aspecto relevante es la resistencia específica contra mujeres que provienen de líneas académicas no hegemónicas. Según Castelao-Huerta (2023), estas mujeres enfrentan una exclusión simbólica que cuestiona la legitimidad epistémica de sus aportes, catalogándolas como “intrusas” dentro del espacio académico. A ello se suma una dimensión emocional y cultural de violencia sutil, manifestada en recelos y envidias que obstaculizan su aceptación plena en departamentos dominados por modelos masculinos (Castelao-Huerta, 2023). La exclusión, ya sea de manera abierta o encubierta, ha tenido una continuidad histórica que revela su sólido arraigo en los entramados del poder académico.\n\nLos testimonios y análisis sobre las aspiraciones femeninas en la ciencia evidencian la interferencia constante de mandatos de género y la cultura del “reloj biológico”, que condicionan las trayectorias de las mujeres científicas al tiempo que mantienen el ideal de disponibilidad total como filtro excluyente (Sánchez Bringas, 2004). Así, el techo de cristal en los espacios científicos refleja un entramado complejo de normas, prácticas y expectativas que requieren un enfoque integral para promover la igualdad sustantiva. Entre los dictados de género y las demandas institucionales, la tensión se hace más patente en la esfera familiar, donde la maternidad sigue funcionando como un hito relevante en las carreras académicas. Con relación a las estructuras familiares, se ha señalado de manera puntual el conflicto entre la maternidad y/o la formación de un núcleo familiar y el desarrollo de una carrera académica, lo que ha generado que un número significativo de mujeres abandone la ciencia, especialmente antes de obtener puestos académicos o de que se tomen decisiones sobre la titularidad (Kurdziel y Libarkin, 2003). Diversos estudios indican que existe una fuerte correlación entre el matrimonio, la crianza y la obtención de un título de posgrado en el caso de las mujeres, pero no en el de los hombres (Clune et al., 2001; Kurdziel y Libarkin, 2003). Bajo esta perspectiva, la maternidad funciona como un dispositivo estructural que perpetúa la desigualdad de género en el campo científico, al tiempo que señala la importancia de replantear los esquemas organizacionales que la mantienen.\n\nEn suma, la maternidad y la doble jornada de trabajo no son fenómenos aislados o personales, sino expresiones profundas de un modelo organizacional patriarcal que penaliza a las mujeres, restringe sus oportunidades laborales y perpetúa brechas de género en todos los ámbitos, incluida la academia, donde estas cargas invisibilizadas limitan la igualdad real y el potencial de muchas investigadoras y profesionales. A pesar de ciertos avances legales para la conciliación laboral y familiar, la realidad cotidiana continúa marcada por inconsistencias y falta de políticas institucionales que atiendan de manera efectiva dicha problemática (Astelarra, 2003; Secretaría General, 2022) En este contexto, visibilizar la trayectoria de geocientíficas como la Dra. Alicia Silva Pineda resulta fundamental, ya que constituye un modelo inspirador para promover transformaciones en el entorno académico y contribuir a reducir la brecha de género en el número de mujeres que completan estudios superiores en geociencias, especialmente en la paleobotánica. Su labor pionera en la paleobotánica en México destaca la importancia de reconocer y fortalecer la participación de las mujeres en la investigación científica. Para ello necesitamos primero situar la paleobotánica mundial.",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 39,
+      "contenido": "2. Panorama de la Paleobotánica mundial",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 40,
+      "contenido": "La Paleobotánica es la rama de la paleontología que se encarga de estudiar a los fósiles de origen vegetal, así como su historia evolutiva a lo largo del tiempo geológico. Antes del siglo XVII, los fósiles eran recolectados como “curiosidades” y catalogados como errores de la naturaleza (lusus naturae), es hasta el siglo XVIII cuando comenzaron a ser entendidos como restos de organismos vivos que vivieron en el pasado geológico (Strullu-Derrien et al., 2023).\n\nLos fósiles de origen vegetal han sido estudiados por casi trescientos años. Uno de los primeros trabajos con enfoque paleobotánico es el de James Parkinson titulado Organic reminder of a Former World, publicado a inicios del siglo XIX (1804-1811). En esta obra se aborda el origen del carbón generado por restos de plantas; medio a través del cual frecuentemente se preservan fósiles y señala la importancia de estos depósitos de carbón en correlación con otros estratos, sobre todo del Reino Unido (Cleal y Thomas, 2019). Durante este mismo periodo de tiempo, Kaspar Maria von Sternberg (1820) publica ocho volúmenes en los cuales emplea la primera nomenclatura aceptada como válida. Otro paleobotánico Velasco-de León et al.\n\ndestacado fue Adolphe Brongniart (1822) quien en su obra emplea conceptos de los procesos de fosilización, además de una clasificación similar a la de las plantas actuales. Otra figura importante fue Ernst Friedrich von Schlothheim (1820), quien a pesar de que su nomenclatura no fue aceptada y sus descripciones eran breves, las ilustraciones que acompañaron su trabajo eran sumamente detalladas, de tal manera que proporcionaron las referencias visuales de plantas fósiles. Los autores anteriormente mencionados son considerados, por tanto, como los fundadores de la paleobotánica moderna (Cleal et al., 2021; Strullu-Derrien et al., 2023) y forman parte de la etapa conocida como la “Edad de Oro” (1800- 1840) al establecer las bases del sistema binomial de las plantas fósiles, así como un tratado taxonómico acompañado de descripciones e ilustraciones detalladas (Andrews, 1980; Cleal et al., 2005).\n\nDentro de las investigaciones de los fósiles de plantas, el carbón jugó un papel relevante en el desarrollo de la paleobotánica, ya que los fósiles de plantas (que formaron depósitos de carbón) se empezaron a asociar con su posición estratigráfica y con la edad de los diferentes yacimientos. Lo anterior se ejemplifica con la contratación de Joseph Dalton Hooker (1817- 1911) por el servicio geológico británico para interpretar los fósiles de plantas asociadas al carbón. Dentro de estos estudios se ubican contribuciones de mujeres, tal es el caso de Marie C. Stopes (1880-1958), quien fue la primera mujer en obtener su doctorado en 1904, en la Universidad de Munich, por su trabajo sobre la reproducción de las cícadas. Marie fue elegida miembro de la Linnean Society of London, y aportó información fundamental acerca de las plantas del Paleozoico y Mesozoico (p. ej., Stopes, 1905, 1906, 1907). Junto con Richard Vernon Wheeler, Marie publicó en 1919 un trabajo sobre la constitución del carbón, donde ambos autores proponían en éste los términos claraina, duraina, fusaina y vitraina para los diferentes tipos petrográficos de esta roca. Sumado a esto, Marie es también conocida por su defensa a los derechos reproductivos de las mujeres con su publicación Married love. A mitad del siglo XIX se reconoce en general la relevancia de las plantas fósiles, no sólo como una herramienta para la exploración de recursos como el carbón, sino como una fuente de información única para el estudio y entendimiento de los patrones y procesos de las plantas del pasado. Por ejemplo, la investigación de la pionera paleobotánica sudafricana Edna P. Plumstead (1903-1989) sobre Glossopteris proporcionó evidencia convincente de la existencia del antiguo supercontinente Gondwana y de la Deriva Continental (p. ej., Plumstead, 1956), de la cual fue una ferviente defensora mucho antes de que se estableciera formalmente (Ryberg et al., 2021).\n\nAl finalizar el siglo XX la paleobotánica es reconocida como disciplina formal, cuyo objeto de estudio se encuentra enmarcado en la teoría evolutiva, destacando la relevancia de los caracteres morfológicos, por ser prácticamente la única fuente de información disponible para el estudio de fósiles de plantas, pues es fundamental para el trabajo taxonómico y sistemático. En México, el trabajo del naturalista Villada (1897), manifestó estas ideas y constató la importancia de la información morfológica utilizada para clasificar los grupos principales de plantas, así como su significado en la evolución y en la sucesión de los tiempos geológicos.\n\nNo obstante, para comprender cómo se desarrolló la paleobotánica, es importante estudiar cómo fue consolidada la geología en México. Con esto se podrán señalar características específicas del desarrollo geológico en el país.",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 41,
+      "contenido": "3. El papel del positivismo en la consolidación de la Geología como disciplina científica en el México del Porfiriato",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 42,
+      "contenido": "La geología se consolidó como una disciplina científica en México durante la segunda mitad del siglo XIX, un escenario de transformación en el que el Estado pretendía fortalecerse adoptando modelos científicos europeos. En dicha adopción, el positivismo tuvo una fuerte influencia, pues esta corriente filosófica impactó significativamente la política científica del régimen porfirista. Notablemente el positivismo ya había sido introducido en México por Gabino Barreda, quien promovió una reforma educativa que otorgaba prioridad a las ciencias exactas y naturales, sustentada en el positivismo comtiano. Acorde a esta perspectiva, el conocimiento válido se construye a partir de la observación y la experiencia directa. Una década y media más tarde, el positivismo fue retomado por un grupo de funcionarios e intelectuales cercanos al gobierno denominado “los científicos”, para elaborar políticas públicas respaldadas en datos y principios científicos. En consecuencia, disciplinas como la geología se profesionalizaron y se unieron estrechamente al proyecto modernizador del Estado.\n\nBajo el gobierno de Porfirio Díaz (1876- 1911), el positivismo se erigió como la ideología oficial del Estado, en gran medida gracias al grupo de “los científicos”. Este gremio de pensadores abrazó la filosofía positivista como soporte de un modelo gubernamental autoritario y tecnocrático, que privilegiaba el progreso económico, la industrialización y la estabilidad social (Brehme, 2010). La legitimación de la ciencia conlleva la marginación de otras racionalidades, afianzando un modelo de poder centralizado.\n\nLa configuración ideológica del positivismo en la etapa porfirista se articuló, en buena medida, en torno a una noción de masculinidad que constituyó uno de sus rasgos más visibles y determinantes. En consonancia con ello, la noción de ciudadanía ideal se desarrolló a partir de un conjunto de valores culturalmente vinculados con lo masculino, entre los cuales destacan la racionalidad, la disciplina, la productividad y el compromiso con el Estado. Por el contrario, lo femenino que estaba asociado a la emotividad, la intuición y la religiosidad, fue descartado debido a su incompatibilidad con el proyecto modernizador nacional (Lamas, 1994; Tuñón, 1998). De esta manera, durante el Porfiriato, la ciencia se fundamentó en la neutralidad, la objetividad y la búsqueda de leyes universales independientes del contexto social. Basada en la ideología positivista, en 1888, se fundó el Instituto Geológico Nacional, dirigido por Antonio del Castillo. Su objetivo era generar y sistematizar el conocimiento geológico del territorio mexicano. Esta institución representó el primer intento formal de estudiar los recursos naturales del país, diseñar mapas geológicos e indagar en torno a temáticas paleontológicas. Así, la paleontología se incorporó a la geología a partir de la lógica del enfoque clasificatorio y ordenado característico del pensamiento positivista.\n\nSin embargo, de acuerdo con Donna Haraway (1988), Helen Longino (2020), Sandra Harding (1986) y Nancy Hartsock (2025), esta visión de la ciencia basada en el positivismo es epistemológicamente limitada e ideológicamente excluyente. Respecto al supuesto de la neutralidad de la ciencia, Haraway (1988) critica “la visión desde ningún lugar”, que representa la pretensión positivista de una ciencia universal y libre de subjetividades, señalando que todo conocimiento está situado en contextos históricos y sociales específicos. Así, esta crítica desarma dicha “neutralidad absoluta de la ciencia” del positivismo porfiriano, el cual ignoraba cómo las relaciones patriarcales influyen en los métodos científicos y en la definición legítima de ciencia, con lo que limitaba la inclusión y representación de determinados grupos. Por lo tanto, tal cuestionamiento abre el debate sobre la objetividad científica como un concepto problemático y situado en las relaciones de poder.\n\nLongino (2020) complementa la reflexión de Haraway subrayando que el positivismo tradicional invisibiliza el género y las estructuras del poder en la producción del conocimiento. De hecho, introduce la noción de “objetividad fuerte” como valoración de la neutralidad, proponiendo una ciencia que integre explícitamente las experiencias marginadas, incluyendo las de las mujeres. Por ello, este replanteamiento de la objetividad revela que la ciencia no es imparcial, sin embargo, podría alcanzar la justicia epistemológica si reconoce y corrige esas exclusiones estructurales. En este sentido, Velasco-de León et al.\n\nsu enfoque precisa la necesidad urgente de diversificar las perspectivas para fortalecer la validez del conocimiento.\n\nLa autora continúa con su propuesta al exponer que la homogeneidad epistemológica del positivismo de la época porfirista bloqueó la crítica necesaria para identificar sesgos y perpetuó jerarquías sociales dominantes. Al juicio anterior se une Hartsock (2025) señalando que la ciencia oficial prescindió la heterogeneidad social y los saberes femeninos, consolidando un sistema excluyente. En consecuencia, esta exclusión sistemática muestra que la ciencia no solo reflejaba un sesgo epistemológico, sino que también era un proyecto social que restringía la legitimidad del conocimiento a los discursos de los grupos dominantes, principalmente masculinos y privilegiados.\n\nDebido a ello, Haraway (1988) cuestiona la pretensión de ciencia universal y descontextualizada, mientras que Hartsock (2025) presenta un enfoque situado y materialista que reclama cómo la ciencia positivista fue un proyecto ideológico que legitima exclusivamente a sujetos privilegiados. Por consiguiente, dejan en claro que el positivismo porfiriano era una visión epistemológica y una herramienta para profundizar las desigualdades sociales, al eludir la pluralidad y heterogeneidad de experiencias.\n\nLas reflexiones de Haraway y Hartsock evidencian que el positivismo porfiriano constituyó un paradigma epistemológicamente limitado y socialmente excluyente que cimentó la creación de injusticias epistémicas. Su pretensión de neutralidad ocultaba intereses de poder que perpetúan la exclusión de las mujeres y de diversos saberes, lo cual restringió el desarrollo científico en México a un modelo cerrado y jerárquico. Reconocer esta crítica resulta esencial para reconsiderar la historia de la ciencia en el país y avanzar hacia epistemologías situadas, inclusivas y transformadoras.\n\nDe esta manera la propuesta comtiana de organizar las ciencias en un esquema jerárquico no estaba exenta de sesgos culturales: reflejaba una concepción patriarcal donde lo racional y lo técnico eran considerados dominios propios de los hombres. En ese imaginario, el patriarca ilustrado encarnado en el maestro, el científico o el funcionario representaba el ideal de orden y autoridad que el porfirismo promovía.\n\nLas mujeres fueron excluidas de las geociencias desde su instalación epistémica en México como un saber positivista. Mientras ellas eran instruidas únicamente en aspectos morales y domésticos, los hombres recibían una educación que los capacitaba para desempeñarse en cargos públicos, técnicos o intelectuales. De esta manera, la geología durante el Porfiriato era un campo exclusivo para los hombres. La creencia de que el trabajo de campo era rudo, peligroso e inadecuado para las mujeres limitaron notablemente su participación en los ámbitos académicos y profesionales. Esta exclusión de género permaneció hasta el periodo posrevolucionario, momento en que comenzaron a integrarse de manera más activa las mujeres en las geociencias. Según la economía política feminista, el capitalismo integra a las mujeres como mano de obra “barata, dócil y manipulable”, sosteniendo una estructura de aparente igualdad formal, pero de exclusión persistente y velada. Bajo dicho sistema, lo masculino está vinculado a la producción y al ámbito público, mientras que lo femenino se circunscribe a la reproducción y al cuidado, lo cual bloquea su ascenso en las jerarquías económicas y laborales (Hernández, 2023).\n\nDurante el Porfiriato, el positivismo no operó únicamente como una filosofía, sino como una herramienta ideológica de gran alcance que moldeó diversas esferas de la vida nacional. Bajo la apariencia de neutralidad científica y promesas de progreso, se consolidó un orden autoritario y patriarcal que invisibiliza otras formas de pensar y excluyó a las mujeres de la participación pública. Esta racionalidad, lejos de ser objetiva, sostuvo un modelo de saber y poder estrechamente vinculado a una lógica masculina dominante. El positivismo contribuyó a consolidar una estructura de género que presentaba como naturales tanto la subordinación femenina como la primacía masculina en los espacios de conocimiento y de poder (Olavarría, 2006). En este sentido, es importante examinar también cómo las raíces culturales y los prejuicios patriarcales influyeron en la organización misma del saber científico, particularmente en las geociencias.\n\nCon base en lo anterior, resulta pertinente examinar la trayectoria académica de la Dra. Alicia Silva Pineda, cuyo desarrollo profesional permite comprender cómo estas desigualdades se manifiestan y, en ciertos casos, se desafiaron dentro del contexto histórico de las geociencias en México.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 43,
+      "contenido": "4.Paleobotánica y la Dra. Alicia Silva Pineda",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 44,
+      "contenido": "Tabla 1. Lista de trabajos de investigación de la Dra. Alicia Silva-Pineda.",
+      "clasificacion": "Título tabla",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 45,
+      "contenido": "Tabla 2. Directores del Instituto de Geología, UNAM (Tomado y Modificado de Rodríguez, 2021).",
+      "clasificacion": "Título tabla",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 46,
+      "contenido": "[IMAGEN 473×635px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 47,
+      "contenido": "Figura 1. (A) Mapa de distribución de áreas de estudio de la Silva-Pineda, 1-2. Fm. Huizachal, 3. Fm. Totolapa, 4. Fm. Huayacocotla, 5. Fm. Divisadero, 6. Fm. Huayacocotla y Totolapa, 7. Fm. Huayacocotla, 8. Fm. Tecomazuchil, 10. Fm. Rosario, 11. Fm. Simón, 12. Fm. Zorrillo, 13-17 Fm. Todos Santos y 18. Fm. Santa Clara (Tomado y modificado de Silva-Pineda, 1978). (B) Producción de artículos de Silva-Pineda de 1961 a 2014.",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 48,
+      "contenido": "[IMAGEN 245×436px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 49,
+      "contenido": "Figura 2. Título de Biólogo de la Dra. Alicia Silva-Pineda, 14 de febrero de 1962.",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 50,
+      "contenido": "[IMAGEN 516×309px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 51,
+      "contenido": "Figura 3. Alicia Silva Pineda con su esposo Humberto Valladares Trujillo.",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 52,
+      "contenido": "[IMAGEN 246×305px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 53,
+      "contenido": "Figura 4 Festejo de cumpleaños, Alicia cargando a su hijo Humberto, a la izquierda su hija María Elena y su prima Bertha. Abajo Gustavo, sobrino de Alicia.",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 54,
+      "contenido": "[IMAGEN 246×218px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 55,
+      "contenido": "Figura 5. Homenaje a Alicia Silva Pineda y festejo de los 30 años de la Colección de Paleontología de la Facultad de Estudios Superiores Zaragoza. Parte superior de izquierda a derecha: sus hijas Laura, María Elena, Alejandra, Claudia, Dra. Alicia, Eduardo (yerno), nietas Ana Laura, Ana Isabel y Mariana. Parte inferior de izquierda a derecha: nietos Miguel Angel y Alejandro.",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 56,
+      "contenido": "[IMAGEN 507×293px]",
+      "clasificacion": "Ignorar",
+      "italic": false,
+      "bold": false,
+      "size": 0
+    },
+    {
+      "id": 57,
+      "contenido": "Figura 6. Gráfica de barras muestra la frecuencia absoluta de mujeres y hombres que realizan trabajo Paleobotánico en México con afiliación institucional. Instituto de Geología, UNAM (IGL-UNAM) incluyendo Estación Regional del Noroeste (ERNO), Facultad de Estudios Superiores, Zaragoza (FES-Zaragoza), Benemérita Universidad Autónoma de Puebla (BUAP), Instituto Politécnico Nacional (IPN).",
+      "clasificacion": "Pie de figura",
+      "italic": false,
+      "bold": true,
+      "size": 9.0
+    },
+    {
+      "id": 58,
+      "contenido": "§SUB§4.1 Inicios de la Paleobotánica en el siglo XIX en México\n\nLos primeros registros de paleoflora del territorio mexicano datan de finales del siglo XIX como parte de expediciones geológicas. En su mayoría, éstas fueron realizadas por geólogos de origen europeo, motivadas por la búsqueda de recursos no renovables como los hidrocarburos (Carreño y Montellano-Ballesteros, 2005). Cabe resaltar que durante todo este siglo no se documenta la contribución de mujeres en el estudio registro fósil de México (Buitrón-Sánchez et al., 2020). Entre los primeros trabajos que se reportan plantas fósiles en México, se encuentra el de Franz Unger en 1845, quien colectó el primer ejemplar de madera fósil de una leguminosa en Veracruz (Cevallos-Ferriz y Barajas-Morales, 1994). Posteriormente, Aguilera en 1870 documenta datos de paleoflora (Wieland, 1914; Morales y Silva-Pineda, 1995), aunado a los trabajos de Martins en 1871 y Grisebach en 1883 que mencionan la evolución de las comunidades vegetales en el país (Carreño y Montellano-Ballesteros, 2005).\n\nNewberry en 1876, describe 13 especies de plantas del Triásico mexicano de las cuales nueve son nuevas. Los fósiles fueron colectados por Augusto Remond de Corbincan y M. Hartley (Aguilera, 1904), esta es la primera flora fósil con restos de plantas vasculares que fue descubierta en México, perteneciente a la Formación Santa Clara en el estado de Sonora (Weber y Cevallos-Ferriz, 1994; Villanueva-Amadoz et al., 2014). En 1882, el ingeniero Santiago Ramírez reportó la impresión del género Zamia en un afloramiento entre Oaxaca y Puebla, así como otros fósiles en Morelos y Michoacán (Morales-Lara y Silva-Pineda, 1995; Aguilera et al., 1896) también mencionarían plantas fósiles en su “Bosquejo Geológico de México”, reportando impresiones relacionadas a cícadas encontradas en San Juan Diquiyú (Weber y Cevallos-Ferriz, 1994; Morales-Lara y Silva-Pineda, 1995; Pérez-Crespo, 2011; Villanueva-Amadoz et al., 2014).\n\nAdicionalmente, Felix y Lenk en 1889 estudiarían la fauna y flora del cenozoico mexicano y describirían maderas fósiles de gimnospermas y angiospermas pertenecientes al Cretácico (Aguilera, 1904; Pérez-Crespo, 2011) y plantas del Neocomiano (Aguilera, 1904). Ellos fueron de los primeros en abordar la importancia de los fósiles de plantas para hacer hipótesis sobre los ambientes pasados, llegando a la conclusión de que los suelos de México pudieron estar cubiertos de bosques en el Plioceno (Maldonado-Koerdell, 1950). De acuerdo con Cevallos-Ferriz et al. (2022), esta podría ser considerada la primera publicación en la que se hacía mención de una paleoflora.\n\nEn 1907 el ingeniero T. Flores realizó pequeñas colectas en Puebla de Alethopteris oaxacensis (especie no reconocida actualmente) y hojas de Zamites. Por otro lado, Wieland (1914) estudió material recolectado en cinco localidades de los estados de Puebla y Oaxaca y registró 56 especies (Wieland, 1914). En esta época continúan las investigaciones en Sonora por Humprey; mientras que Díaz Lozano (1916) publica la Flora Liásica de Huayacocotla Veracruz, sin embargo, este trabajo paleobotánico no es continuado por dicho autor. Se realizan otros estudios en Veracruz y Tabasco por Berry (1923); en este año también Müllerried discutió la sistemática y estratigrafía de plantas del Rético colectadas en el cauce del río Acatlán (Maldonado-Koerdell, 1950). Hasta este momento, se puede señalar que la paleobotánica se desarrollaba como una disciplina complementaria Velasco-de León et al.\n\ny subordinada a la geología, cuya relevancia se centraba en su aplicación para la exploración de recursos económicos como los yacimientos de carbón. Sin embargo, el valor informativo de las plantas fósiles como evidencia de vida pasada comienza a manifestarse a finales del siglo XIX e inicios de XX con el trabajo de Wieland, quien compara la flora de la Mixteca con la de Yorkshire y la India; estableciendo hipótesis entorno a patrones observados en las hojas del género de Otozamites, a los que refiere como “series evolutivas”, abriendo paso al análisis integrativo de las plantas fósiles a través de la geología y biología, y a la que daría continuidad Alicia Silva Pineda como la primera paleobotánica mexicana.\n\n§SUB§4.2 Desarrollo de la Paleobotánica en México siglo XX: Contribuciones de Alicia Silva Pineda\n\nDurante el siglo XX en México, la incursión profesional de las mujeres en la paleontología tuvo que esperar algunas décadas (Buitrón-Sánchez et al., 2020). Esta situación era común debido a que la plantilla académica del Instituto Geológico, del Departamento de Estudios Geológicos y de Exploración por lo menos hasta 1920 estaba formada por el 90% de hombres (Acervo Histórico del Instituto de Geología, UNAM [AHIG en adelante], caja 549, exp. 1966 \"Informe anual\". f.1). El porcentaje de mujeres que estudiaron la carrera de ingeniería en 1947 representaba el 1%; hasta 1951 se tituló la primera mujer en la facultad de ingeniería (Sánchez y Tagüeña, 2011) por lo que en esta profesión continuaba el predominio masculino. Debido a esto, no es de extrañar que desde la fundación del Instituto Geológico (1888) hasta la consolidación del Instituto de Geología (1917) después de 100 años de historia 17 directores varones geólogos; únicamente en el periodo 2010-2018 ha estado a la cabeza del instituto una mujer, la Dra. Elena Centeno (Tabla 1). En 2021 el Instituto de Geología contaba con 105 académicos, cuarenta y siete mujeres y cincuenta y ocho hombres (Morelos, 2021).\n\nOtra profesión que está ligada a la paleontología es la biología. Gloria Alencáster es la primera bióloga que se dedicó a esta área de manera formal en 1956 (Perrilliat-Montoya 2012). Durante sus estudios en la universidad de Columbia, Alencáster comprendió la importancia de las colecciones de fósiles y la necesidad de que se formen más paleontólogos mexicanos. Al regresar a la Ciudad de México inició la dirección de tesis de licenciatura con éste propósito, e influencia la tesis de Silva Pineda quien, después de titularse con el trabajo Flora fósil de la Formación Santa Clara (Cárnico) Estado de Sonora, ingresó al Instituto de Geología contratada como investigadora auxiliar de tiempo completo. Hasta 1965 la planta académica estaba compuesta por el 80% de hombres, en este contexto, Silva trabajó en el departamento de micropaleontología cuya jefa era la doctora Alencáster. El departamento estaba integrado por 5 adjuntos de investigación: 2 hombres y tres mujeres; sin embargo, como se cita en el plan de trabajo (1965) dirigido al director del Instituto de Geología “los informes paleontológicos para los geólogos de campo, a los cuales se les da preferencia en este departamento serán atendidos por Blanca Buitrón” (AHIG, caja 549, exp. 1967 “Trabajos realizados de 1966-1967”, f.2).\n\nEn este ambiente, Alicia Silva se dedicó al estudio de los macrófosiles de plantas de México; hasta ese momento no se habían formado paleontólogas y paleontólogos de nacionalidad mexicana de manera formal. En este sentido Alicia Silva Pineda se erige como una figura precursora de la paleontología en México, al formarse y desarrollar su carrera en el país. Su trabajo no solo destaca por la contribución taxonómica, sino que representa un primer acercamiento hacia la innovación y modernización a través del uso de técnicas para el análisis de improntas fósiles por medio de la extracción de cutículas, a pesar de ser un método “no exitoso” como lo indica la misma autora (Silva, 1961; Tablas-Alcazar, 2021).\n\nSilva inició sus investigaciones con la flora del Triásico en el estado de Sonora donde hizo una aportación taxonómica excelente con el registro de 12 especies de helechos, Pteridospermas, Bennettitales y Cicadales, con descripciones detalladas. En 1970 publicó el primer estudio de la flora fósil del Paleozoico de México, donde investigó 25 especies. La mayoría de éstos corresponden a los órdenes: Calamitales, Lepidodendrales, y Marattiales del Misisípico y Pensilvánico de Estados Unidos; Silva además propuso una edad Pensilvánica para la flora, comparó el listado que realizó con floras de otros países y concluyó que la paleoflora de Puebla tiene alta afinidad con el Paleozoico superior de Europa (Silva, 1970a). Si bien no es un estudio biogeográfico, éste cimentó un área importante hacia la cual puede dirigirse la paleobotánica.\n\nEsta fase de su trayectoria permite conocer la diversidad alfa presente en diferentes estados. En 1979 en su trabajo sobre floras triásicas de México le permitió incrementar la lista para la Formación Santa Clara a 39 especies y 13 para la Fm. Huizachal que aflora en Hidalgo y Tamaulipas. En este tiempo se proponía la existencia de tres zonas paleo florísticas de acuerdo con Ash (1977), el mismo autor comenta que hay otra zona “más joven”, la de Santa Clara, con helechos y cicadofitas a la que asigna una edad Rética. Esta investigación marca el inicio de estudios paleobotánicos modernos enfocados a la re-examinación y descripción de localidades mesozoicas, dando continuación a trabajos predecesores incluyendo el de Wieland (1914) en el Grupo El Consuelo. Del Paleozoico también estudió la flórula de Izúcar de Matamoros (Silva, 2003) y volvió a realizar estudios del Pérmico, ahora en el estado de Hidalgo para proponer el género y especie Calnalia hidalguensis (Hernández-Castillo et al., 2014).\n\nEn la década de 1970's era la única paleobotánica en México, sin tener el grado de doctora, incursiona en edades y grupos que eran un reto, como lo fue su estudio sobre el Jurásico. En 1968 estudió la flora de Tecomatlán, Puebla, donde describió 16 especies, ocho de ellas se registraron por primera vez en México. Las especies más características del Jurásico medio y superior son: Z. feneonis, Ptilophyllum cutchense, P. acutifolium y Otozamites reglei, y Silva propuso su pertenencia a la Fm. Tecomazúchil. Este es el período en que la Dra. Silva fue más productiva, consolidándose como investigadora con su trabajo “Revisión y tipificación de las plantas jurásicas colectadas por Wieland”, redujo su listado de 56 especies a 23, argumentando que el criterio empleado por Wieland fue monotípico y era necesaria una revisión que permitiera la validación de especies y nombres que deberían quedar en sinonimia (Silva-Pineda, 1984). De igual manera, el trabajo de la Silva-Pineda incursiona en el enfoque biogeográfico, analizando la distribución de las estructuras reproductivas de las Bennettitales y es coautora de tres especies nuevas holotipos, Weltrichia mixtequensis, Ginkgoidium nundichi y Sphenobaiera mixteca, que se distribuyeron en el estado de Oaxaca (Velasco-de León et al., 2014). Su trayectoria académica se soporta con 29 artículos de investigación (Tabla 2), y es durante las décadas de los 1980-90’s el período de mayor producción, aportando información fundamental para el estudio y conocimiento de la flora del Paleozoico y Mesozoico de México principalmente en el centro y sur del país (Figura 1A-B).\n\nSilva-Pineda, también participó en numerosos congresos nacionales e internacionales con temas de vanguardia como la tafonomía, cutículas y aplicación de técnicas de barrido en ejemplares de fósiles de plantas. Fue miembro de Comités tutorales de posgrado además de participar como responsable y corresponsable de proyectos de investigación financiados por la DGAPA-UNAM (2000-2020) con grupos de diferentes dependencias de la UNAM, por ejemplo, con localidades del Terreno Mixteco. Entre sus actividades también destaca el ser miembro fundador de la Sociedad Mexicana de Paleontología en el año de 1986, que junto con la aparición de la revista Paleontología Mexicana en 1987, representan espacios esenciales para dar a conocer su trabajo de investigación.\n\nCon relación a la formación de recursos humanos, Silva-Pineda dirigió las tesis de Socorro González Gallardo (1987), Gloria Arambarri Reyna (1987), Dulce María Villalobos de Oaxaca (Aramberri, 1987; Morales, 1996; Adame, 2007); en Guerrero y Oaxaca (Garibay, 1994) o la síntesis de información sobre el registro paleobotánico en México (González, 1987; Colmenares, 1995). Dirigió dos tesis de Maestría, por un lado, en el 2000, Galván realizó un estudio más dirigido hacia la paleoecología de la Fm. Matzitzi y mientras que en el trabajo de Aguilar-Arellano (2004) realiza un análisis biogeográfico de las formaciones Rosario y Cualac en el estado de Oaxaca.\n\nVelasco-de León et al.\n\n§SUB§4.3 Alicia, la mujer y legado\n\nAlicia Pineda quien fue hija de José Silva y María Pineda originarios de Villa Victoria, Municipio de Chinicuila, en el estado de Michoacán. Sus padres se dedicaron a las actividades de su rancho, donde nació Alicia el 5 de julio de 1933, penúltima hija y única mujer. Tuvo cuatro hermanos varones; quedó huérfana de padre a los cinco años, el hermano de su padre la trajo a vivir a la Ciudad de México con su familia y gracias a su tío pudo tener acceso a la educación (comunicación personal Laura Valladares). En 1953 ingresó a la Escuela Nacional Preparatoria para posteriormente cursar su licenciatura en la Facultad de Ciencias de la UNAM, donde obtuvo su título de Licenciada en Biología el 10 de enero de 1962 (Figura 2). Se casó con Humberto Valladares Trujillo quien fue licenciado en leyes (Figura 3), y con quien tuvo cinco hijos: Laura, María Elena, Humberto, Alejandra y Claudia (Figura 4). Esta historia establece un puente entre el análisis teórico de la desigualdad y su expresión en vidas concretas.\n\nEn particular, la maternidad y el cuidado de los hijos suelen perfilarse como las actividades que condicionan la eficiencia laboral de las mujeres, fenómeno conocido como “maternal wall” o “pared maternal” (Williams y Segal, 2003; Williams, 2005; Kruk et al., 2020). A partir de este contexto, resulta imprescindible reconocer los logros personales y profesionales de mujeres como Alicia Silva Pineda, quien, a pesar de las dificultades domésticas y profesionales, construyó una sólida carrera académica. En 1976 obtuvo el grado de maestra en Ciencias (Facultad de Ciencias UNAM); en 1984 se doctoró con la tesis Revisión y tipificación de las plantas jurásicas colectadas por Wieland; continuó sus estudios de maestría y en 1972 se le promueve a investigador asociado C. A partir de 1975 se incorporó como docente a la Facultad de Ciencias donde impartió el curso de Botánica y Paleontología en la Facultad de Ingeniería (1976-1991). En 1985 enviudó y se convirtió en la cabeza de la familia, se organizó para asistir a congresos y reuniones académicas sin descuidar a sus hijos. En 1988 se le promueve a investigador titular A, en esta etapa se consolida como investigadora, se jubila en 2013 después de 50 años de servicio, período donde se le otorga la distinción Sor Juana Inés de la Cruz. Tímida pero perseverante fue una académica respetada y querida por los paleontólogos que tuvimos la fortuna de gozar de su amistad; prueba de ello son las especies dedicadas a su persona como lo ha hecho Rubén Rodríguez de la Rosa con Tricostatocarpon silvapinedae (Rodríguez de la Rosa y Cevallos Ferriz, 1994), Velasco-de León et al.\n\nMorales-Toledo et al. (2022) con frondas de Aspidistes silvapinedae y Rubalcava-Knoth y Cevallos-Ferriz (2022) con hojas palmado-lobuladas de Araliaephyllum silvapinedae. Del mismo modo se le realizó un muy merecido homenaje en vida, por los miembros de la Colección de Paleontología de la FES Zaragoza, quienes tuvimos la fortuna de aprender con ella (Figura 5), disfrutar salidas a campo y congresos. Falleció el 10 de octubre de 2020, dejando un vacío en el campo de la Paleobotánica.\n\nAlicia Silva Pineda destacó por su actitud transgresora y crítica, que permitió retar, afrontar y desafiar la normativa establecida, convirtiéndose en un modelo de dedicación y audacia para quienes buscan trascender los límites tradicionales de la ciencia. Si bien su trayectoria representa un ejemplo de compromiso y audacia en la ciencia, es fundamental también reconocer que las condiciones sociales que afectan a muchas mujeres, como las responsabilidades familiares, son desafíos individuales y reflejan una estructura patriarcal que perpetúa la división sexual del trabajo.\n\nEn este sentido, podemos observar la vida académica de Alicia Pineda como un logro en donde fungía dos o tres trabajos: académica, madre y esposa. La maternidad en la trayectoria profesional de la Doctora Alicia Silva Pineda ejemplifica cómo las estructuras laborales patriarcales influyen en la experiencia de las mujeres en la academia. Silva Pineda ha enfrentado los desafíos ocasionados por la doble jornada y la responsabilidad materna, las cuales se convierten en obstáculos que limitan tanto su desarrollo profesional como la igualdad efectiva dentro de su entorno laboral. Su caso pone en evidencia que las barreras para la contratación y permanencia laboral de mujeres con responsabilidades familiares no son incidentales, sino parte de un sistema institucional que requiere transformaciones profundas. Por ende, la trayectoria de la Doctora Silva constituye una muestra de la necesidad de diseñar políticas universitarias sensibles a la maternidad, orientadas a visibilizar las desigualdades persistentes y a fomentar una auténtica conciliación entre la vida familiar y el ejercicio académico. El desarrollo de esta experiencia, en los ámbitos individual y profesional, no se limita a mostrar las desigualdades estructurales, sino que además reivindica la urgencia de destacar ejemplos tangibles que contribuyan a modificar las dinámicas institucionales.\n\n§SUB§4.4 La Paleobotánica en México del siglo XXI: Alcances y Retos\n\nLa vegetación juega un papel fundamental en la dinámica de la Tierra, interactuando con la biósfera, la litósfera y la atmósfera. Las plantas tienen relevancia en distintos aspectos para la vida humana entre las cuales podemos mencionar que son fuente de alimentación primaria, de ellas se obtienen metabolitos secundarios para fármacos, proporcionan servicios ecosistémicos como captura de carbono, e incluso promueven la recreación y el bienestar emocional (Cleal et al., 2021). En este sentido, estudiar el registro fósil de plantas es crítico, ya que es la única fuente de información física y directa que nos permite conocer cómo han cambiado las comunidades vegetales a lo largo de miles y millones de años, así como su respuesta ante cambios en el ambiente y clima (Taylor et al., 2009).\n\nLa paleobotánica es, por tanto, una disciplina clave para poder entender, enfrentar y resolver algunas de las problemáticas del siglo XXI, incluyendo la crisis de la pérdida de la biodiversidad y el cambio climático (McElwain, 2018; Kiessling et al., 2023). El legado de la Dra. Alicia Silva sentó las bases para estudios taxonómicos, sistemáticos, paleoclimáticos, biogeográficos y evolutivos de las plantas fósiles de México, por lo que es considerada la madre de la paleobotánica en México. Apoyó la consolidación de grupos interdisciplinarios de investigación, favoreciendo la investigación en esta disciplina, donde se ha incrementado Velasco-de León et al.\n\nel número de mujeres paleobotánicas. Actualmente en la Universidad Nacional Autónoma de México (UNAM), Instituto de Geología están adscritas 4 investigadoras, una de ellas estudia angiospermas del Cenozoico y tres palinólogas, así como un investigador; en la Facultad de Estudios Superiores Zaragoza están adscritas 4 profesoras que estudian las Gimnospermas del Paleozoico superior y Jurásico. Si sumamos a los 2 docentes hombres de la Benemérita Universidad Autónoma de Puebla (BUAP) y otro docente más de la Escuela Nacional de Ciencias Biológicas del Instituto Politécnico Nacional (IPN) encontramos que 13 paleobotánicos estudian nuestro territorio, mientras que el número de mujeres es del 61%, número que está muy por encima del que existía a principios del siglo XXI (Figura 6). Sin embargo, la investigación continúa concentrándose en la Ciudad de México pues a nivel estatal sólo están representados el estado de Puebla y Sonora, de este primer punto se puede concluir que es necesario impulsar la Paleobotánica en el resto de los estados.\n\nPese a ligeros cambios en la política de investigación, en la actualidad continúa una problemática grave en la ciencia en general, los subsidios para realizar investigación, ya que estos pueden obtenerse vía proyecto financiado por dependencias externas (p.ej. SECI HTY) o en las instituciones en donde se práctica e investiga la paleobotánica (escuelas, facultades y/o institutos). Todo esto nos hace volver la mirada en la figura de los académicos que son los tiempos completos, que son los que dirigen dichas investigaciones y a la par incorporan a estudiantes de licenciatura, posgrado y posdoctorantes a su proyecto. Es importante resaltar la falta de nuevas plazas para estos paleontólogos ya que es imposible que continúen realizando estancias posdoctorales de por vida.\n\nLa falta de especialistas en paleobotánica y su centralización, permite plantearse la siguiente problemática ¿qué falta por estudiar? Actualmente el estudio de material paleobotánico en México abarca prácticamente todos los periodos geológicos en donde se han registrado fósiles de plantas (Carbonífero-Cuaternario), pero estos muestran un sesgo temporal y taxonómico, afectando nuestro conocimiento de la diversidad del pasado. Asimismo, la mayoría de los estudios tiene un enfoque sistemático, que si bien es parte medular del trabajo paleobotánico, el análisis del registro fósil requiere integrarse en el contexto actual, ya que sólo algunas investigaciones se centran en el paleoclima y origen de la flora moderna de México (Cevallos et al., 2012; Martínez-Cabrera et al., 2014; Hernández-Hernández et al., 2020; Velasco de León et al., 2020; Rubalcava-Knoth y Cevallos-Ferriz, 2021), siendo una región subrepresentada al compararse con otras partes del mundo. Con base en lo anterior, es importante optimizar los bajos recursos empleados en investigación para impulsar trabajos paleoecológicos, paleobiogeográficos y evolutivos. Una vía para afrontar este problema es la participación en workshops y simposios de la mayor cantidad de paleobotánicos, dejando de lado la problemática del género para proponer el trabajo colaborativo en estos temas poco abordados. Así podremos retomar el trabajo que nos legó Alicia Silva Pineda, que sigue estando vigente, pues corresponde a las siguientes generaciones la responsabilidad de no perder la continuidad a su trabajo, en miras de estudiar la diversidad de las plantas fósiles de México de forma inclusiva.\n\n§SUB§4.5. Acciones para impulsar la igualdad de género en las geociencias\n\nEl modelo de Women in Global Health Equity (WGHE) ofrece una visión general de las políticas públicas y los factores sociales sistémicos que obstaculizan el acceso y el desempeño de las mujeres en puestos de liderazgo, como la ciencia. Este modelo identifica barreras a distintos niveles: políticas públicas (p. ej., marcos legales), comunidad (p. ej., normas sociales y de género), institucional (p. ej., políticas de recursos humanos), interpersonal (p. ej., acoso sexual) e individual (p. ej., síndrome del impostor) (Smith y Sinkford, 2022).\n\nPara atender estas barreras, resulta fundamental impulsar normativas y programas institucionales. Un ejemplo relevante es la Universidad Nacional Autónoma de México, cuyo modelo institucional promueve la implementación de políticas en materia de igualdad de género. Entre estas destaca el Reglamento de la Defensoría de los Derechos Universitarios, Igualdad y Atención de la Violencia de Género, aprobado por el Consejo Universitario el 8 de septiembre de 2021. La Máxima Casa de Estudios muestra un compromiso declarado a través de la Coordinación para la Igualdad de Género (CIGU) y las Comisiones Internas para la Igualdad de Género (CInIGs), con énfasis en erradicar la discriminación y promover interseccionalidad en contrataciones y financiamiento (CIEG, 2024 ; Avendaño, 2025). La ausencia de reformas estructurales, como la democratización del trabajo doméstico o plazas con perspectiva de cuidados, responde a resistencias culturales y presupuestales en un contexto pospandemia que visibilizó estas inequidades sin catalizarlas plenamente (Martínez-Ruíz, 2025).\n\nEn la UNAM, la doble y triple jornada laboral persiste como un obstáculo estructural para la plena incorporación de las mujeres en la ciencia, limitando su participación a un 30 o 35% en áreas STEM y exacerbando desigualdades salariales de hasta un 20% menos que sus pares hombres (López-Suárez, 2025). A pesar de iniciativas, como el Programa de Mujeres en las STEM impulsado por la CIGU, que busca fomentar vocaciones desde la infancia mediante actividades del Día Internacional de las Mujeres y Niñas en la Ciencia (11F), no hay cambios concretos en políticas de conciliación familiar-laboral, por ejemplo, flexibilidad horaria o corresponsabilidad en cuidados, que aborden directamente esta carga desproporcionada (CIGU, 2025; Romero-Mireles, 2025).\n\nOtra acción, son los programas de mentorías como el de Mentoras en la Ciencia, Mentees por el British Council, en el cual jóvenes Velasco-de León et al.\n\ninvestigadoras reciben mentorías de investigadoras consolidadas para superar la discriminación y mejorar sus carreras académicas (British Council México, s. f.). De acuerdo con O’connell y McKinnon (2021), las mentorías eficaces pueden ser vitales para retener a las mujeres en el ámbito académico y mejorar su desarrollo profesional, ya que permiten el desarrollo de espacios seguros donde es posible compartir experiencias entre pares.\n\nAsimismo, el reconocimiento y el acceso a becas representan incentivos fundamentales. Un ejemplo, es el caso Premio AWG/PS a la Excelencia en Paleontología para Estudiantes de Pregrado de La Asociación de Mujeres Geocientíficas (The Association for Women Geoscientists) y la Sociedad Paleontológica (Paleontological Society).\n\nLos ejemplos anteriores representan acciones concretas para atender barreras que enfrentan las mujeres en las carreras geocientíficas. No obstante, estas barreras persisten a lo largo del desarrollo profesional y parecen resistirse al cambio, lo que evidencia la necesidad de mantener estas y otras acciones de forma sostenida y coordinada (O’connell y McKinnon, 2021). Esto es especialmente relevante si consideramos que la desigualdad de género en la ciencia es multifactorial y atraviesa distintos niveles: sociales, estructurales, institucionales, culturales, económicos y personales.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 59,
+      "contenido": "5. Conclusiones",
+      "clasificacion": "Subencabezado",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 60,
+      "contenido": "Existen varias maneras de enviar mensajes a la comunidad estudiantil, académica y al público en general sobre quién obtendrá mayor beneficio en una carrera profesional. En particular, la academia manda mensajes a través del tipo de contratación académica que realiza tomando en cuenta los siguientes aspectos: quiénes son contratados, a qué clase social pertenecen, qué nacionalidad tienen, cuál es su género, a qué grupo racial pertenecen, etc. El colocar en puestos de liderazgo institucional y académicos a perfiles repetitivos envía el mensaje que dichos puestos están reservados para un sector social particular.\n\nOtra forma de enviar mensajes a la comunidad es a través de la invisibilización. Si en el estudio de las Ciencias de la Tierra se celebran únicamente los resultados de investigación del género masculino, se está enviando el mensaje a las estudiantes que el género masculino será el que escribirá los textos importantes en la materia a pesar de que existen mujeres pioneras que abrieron la brecha para nuevas disciplinas en México como la paleobotánica.\n\nEl análisis del devenir histórico y científico de la Paleobotánica en México ha encontrado en la figura de la Doctora Alicia Silva un pilar fundamental para su consolidación como disciplina formal. Sus contribuciones, tanto en el ámbito taxonómico como en el desarrollo metodológico, permitieron sentar las bases para una paleobotánica moderna, integral y nacionalmente reconocida. Pionera entre sus contemporáneos, Silva Pineda no solo fue la primera paleobotánica mexicana en desarrollarse profesionalmente en el país, sino que también rompió con las restricciones estructurales de género, construyendo una trayectoria que integra con rigor el trabajo de campo, la producción científica y la formación de nuevas generaciones de especialistas. Su legado no solo radica en la magnitud de su producción académica, sino en su visión crítica y transgresora, que desafió las normas establecidas y de estereotipos en un campo históricamente masculino.\n\nLa Paleobotánica posee importancia estratégica para comprender procesos ambientales de largo plazo, fundamentales para abordar los retos actuales como el cambio climático y la pérdida de biodiversidad. En este contexto, el llamado es claro: es urgente ampliar y descentralizar los espacios de investigación, fomentar la colaboración interdisciplinaria y asegurar el financiamiento sostenido de proyectos paleobotánicos a través de estrategias que impulsen en particular a las mujeres. Estas acciones son una contribución al conjunto de esfuerzos que tienen el propósito de preservar el legado de la Dra. Alicia Silva Pineda y de sentar las bases para el trabajo de futuros paleobotánicos, para así lograr que la Paleobotánica continúe floreciendo en nuestro país, y se reconozca como un campo donde las mujeres puedan desarrollar una carrera geocientífica.\n\nDesafortunadamente, la invisibilización y limitación de las mujeres en la academia se debe en gran medida al llamado techo de cristal. Esta desigualdad se manifiesta principalmente en los casos de maternidad y la doble jornada laboral que sobrecargan a las mujeres, a la vez que son mecanismos sistemáticos de exclusión y subordinación. A pesar de los avances formales en su incorporación en el mundo laboral y educativo, las normas patriarcales y las culturas organizacionales continúan limitando su desarrollo autónomo y pleno reconocimiento profesional.\n\nPara lograr una igualdad de género en las geociencias, y particularmente en la paleobotánica es fundamental reconocer que las inequidades son resultado del sistema patriarcal que articula roles y estereotipos de género. De este modo, romper el techo de cristal requiere de transformaciones integrales que incluyan políticas de corresponsabilidad en el hogar, transparencia en procesos institucionales, así como la valoración social y económica del trabajo reproductivo. Sólo entonces será posible crear ambientes académicos y laborales donde las mujeres puedan desarrollar plenamente su potencial.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 61,
+      "contenido": "Contribuciones de los autores",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 62,
+      "contenido": "(1) Conceptualización: VLMP, HDAL; (2) Administración: VLMP, HDAL, RS; (3) Supervisión: VLMP; (4) Visualización: VLMP, HDA; (5) Redacción (borrador original): VLMP, HDAL, RS; (6) Escritura (revisión y edición): VLMP, HDAL, NVR.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 63,
+      "contenido": "Conflicto de intereses",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 64,
+      "contenido": "Las autoras declaran que no existen conflictos de interés.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 65,
+      "contenido": "Agradecimientos",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 66,
+      "contenido": "Las autoras agradecen a Laura Alicia Valladares Silva, la información personal y fotografías de la Dra. Alicia Silva Pineda, proporcionadas para ilustrar este trabajo. A la Dra. Lucero Morelos Rodríguez por facilitar acceso a documentos e información del Acervo Histórico del Instituto de Geología, UNAM. También agradecen al Mtro. León Felipe Álvarez, a la Mtra. Mónica Antúnez Argüelles y a la Lic. Lia Rodríguez por su apoyo editorial. Finalmente agradecemos al Mtro. Alejandro Silva por su apoyo informático.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 12.0
+    },
+    {
+      "id": 67,
+      "contenido": "Referencias",
+      "clasificacion": "Encabezado sección",
+      "italic": false,
+      "bold": true,
+      "size": 12.0
+    },
+    {
+      "id": 68,
+      "contenido": "Acervo Histórico del Instituto de Geología. (1966). Informe anual (No.\n\ncaja 549, exp). Universidad Nacional Autónoma de México. Aguilera, J.C., Ordoñez, E. & Buelna, R. (1896). Bosquejo Geológico",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 69,
+      "contenido": "de México Boletín del Instituto Geológico de México, Núm. 4–6, pp. 268. https://doi.org/10.22201/10.22201/igl.01855530e.1896.4 Aguilera, J.G. (1904). Reseña del desarrollo de la geología en México.",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 70,
+      "contenido": "Boletín de la Sociedad Geológica de mexicana, Tomo I, 135–147. Adame Juárez, H. (2007). Flórula del Jurásico medio de la región de Ayu quila, Noroeste del Estado de Oaxaca [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. https:// ru.dgb.unam.mx/server/api/core/bitstreams/fc80b0f2-9b60- 4f9f-9783-e2182392d0d7/content Aguilar Arellano, F.J. (2004). Plantas jurásicas de la región noroccidental",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 71,
+      "contenido": "de Oaxaca (formaciones Rosario y Cualac): implicaciones paleogeográficas [Tesis de maestría no publicada]. Universidad Nacional Autónoma de México. https://ru.dgb.unam.mx/server/api/core/ bitstreams/725a7a97-68bb-465e-8556-9e467ee828ed/content Aguilar-Arellano, F.J., Silva-Pineda, A., & Velasco-de León, M.P. (2002).",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 72,
+      "contenido": "Registro de Equisetum hyemale en el Plioceno de la región de Santa María Amajac, Hidalgo, México [resumen] Memorias VII Congreso Latinoamericano de Botánica y II Congreso Colombiano de Botánica: Cartagena de Indias, Colombia, Asociación Latinoamericana de Botánica, p. 83. Andrews, H.N. (1980). The fossil hunters. In search of ancient plants. Cor nell University Press. Arambarri Reyna, G. (1987). Florula jurásica de una nueva localidad del estado de Oaxaca. [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. Arellano-Gil, J., Velasco-de León, M.P., Silva-Pineda, A., Salvador-Flo",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 73,
+      "contenido": "res, R., & Beltrán-Romero, F. (2018). Origin and geologic characteristics of the paleo-Lake of Amajac, Hidalgo. Revista Mexicana De Ciencias Geológicas, 22(2), 199–211. Arrambarri, R.G., & Silva-Pineda, A. (1987). Flora fósil de la región de",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 74,
+      "contenido": "Yucuquimi, Oaxaca (Formación Rosario). Revista de la Sociedad Mexicana de Paleontología, 1, 55–71. Ash, S.R. (1977). Upper Triassic floral zones of North American: North American paleontological convention.Resumen. Journal of paleontology, 51(suplement 2), part 3, 1-1. Astelarra, J. (2003). Veinte años de políticas de igualdad de oportu nidades en España. Debate Feminista, 28, 179–210. https://doi. org/10.22201/cieg.2594066xe.2003.28.969",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 75,
+      "contenido": "Velasco-de León et al.",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 76,
+      "contenido": "Avendaño, M. (2025, 6 de abril). CIGU UNAM: Cinco años luchando por la igualdad de género. Coordinación de género UNAM. https:// coordinaciongenero.unam.mx/2025/04/cigu-unam-cincoanos-luchando-por-la-igualdad-de-genero Berry, E.W. (1923). Miocene plants from southern Mexico. Proceedings of the United States National Museum, 62(2465) 1–27. Berhe, A.A., Barnes, R.T., Hastings, M.G., Mattheis, A., & Schneider B., et al., (2022). Scientists from historically excluded groups face a hostile obstacle course. Nature Geoscience, 15(1), 2–4. https://doi.org/10.1038/s41561-021-00868-0 Brehme, C. (2010). La modernidad porfiriana: discursos de progreso y ciencia en el México decimonónico. El Colegio de México. British Council México. (s. f.). Mentoras en la Ciencia. https://www.bri tishcouncil.org.mx/mentoras-en-la-ciencia. Buitrón Sánchez, B.E., Cuadros Mendoza, I.M., Campos Madrigal, E., & Suárez Noyola, M.E. (2020). The Paleontological Collection of the Facultad de Ingeniería of the Universidad Nacional Autónoma de México. Paleontología mexicana, 6(1), 1–9. https:// doi.org/10.22201/igl.05437652e.2020.9.1.175 Camarena-Adame, M.E., & Saavedra-García, M.L. (2018). El techo de cristal en México. La ventana. Revista de estudios de género, 5(47), 312–347. Recuperado en 11 de octubre de 2025, de http://www.scielo.org.mx/scielo.php?script=sci_arttext&pid=S1405-94362018000100312&lng=es&tlng=es. Castelao-Huerta, I. (2023). Recelos y envidias: violencias su tiles de género en la academia neoliberalizada. Debate Feminista, 65(2339), 273–302. https://doi.org/10.22201/ cieg.2594066xe.2023.65.2339. Carreño, A.L. & Montellano-Ballesteros, M. (2005). La paleontología mexicana; pasado, presente y futuro. Boletín de la Sociedad Geológica Mexicana, Volumen conmemorativo del centenario: Aspectos históricos de la geología en México, Tomo LVII, (2), 137–147. Centro de Investigaciones y Estudios de Género (CIEG). (2024). Igual dad de género en la UNAM. https://cieg.unam.mx/igualdad-genero.php Cevallos-Ferriz, S.R., & Barajas-Morales, J. (1994). Fossil woods from",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 77,
+      "contenido": "the El Cien formation in Baja California sur: Leguminosae. IAWA Journal, 15(3), 229–245. https://doi.org/10.1163/22941932- 90000600 Cevallos-Ferriz, S.R., & Silva-Pineda, A. (1996). Aspectos de la histo",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 78,
+      "contenido": "ria de la vegetación de México con base en macrofósiles de angiospermas. Botanical Sciences, (58), 99–111. https://doi. org/10.17129/botsci.1491 Cevallos-Ferriz, S.R., González-Torres, E.A., & Calvillo-Canadell, L.\n\n(2012). Perspectiva paleobotánica y geológica de la biodiversidad en México. Acta botánica mexicana, (100), 317–350. https:// doi.org/10.21829/abm100.2012.39 Cevallos-Ferriz, S.R., Hernández-Damián, A.L., Beraldi-Campesi, H., Ruvalcaba-Knoth, M.A., & Huerta-Vergara, A.R. (2022). Paleobotany to understand evolution and biodiversity in Mexico. Botanical Sciences, 100(SPE), 34–65. https://doi.org/10.17129/ botsci.3122 CIGU. (2025, 10 de febrero). UNAM, por la igualdad sustantiva en la ciencia. Gaceta UNAM. https://www.gaceta.unam.mx/unampor-la-igualdad-sustantiva-en-la-ciencia/ Cleal, C.J., Lazarus, M., & Townsend, A. (2005). Illustrations and illus trators during the ‘Golden Age’ of palaeobotany: 1800–1840. Geological Society, London, Special Publications, 241(1), 41–61. https://doi.org/10.1144/GSL.SP.2003.207.01.05 Cleal, C.J., & Thomas, B.A. (2019). Introduction to plant fossils. Cam bridge University press. Cleal, C.J., Pardoe, H.S., & Stolle, E. (2021). Plant evolution, floral diversity and the response of plants to environmental stress in deep time. Palaeogeography, Palaeoclimatology and Palaeocology, 584(8), 110674–110675. https://doi.org/10.1016/j.palaeo.2021.110674 Colmenares López, M.E. (1995). Registro paleobotánico de las cicadofi tas en México [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México.\n\nCorona-Esquivel, R., Silva-Pineda, A. & Morales-Isunza, A. (1995). Es tratigrafía y Flora Jurásica de Cerro el Temichi, Municipio de Acaxtlahuacan, Edo. de Puebla, México. Revista de la Sociedad Mexicana de Paleontología, 8, 25–40. Clune, M.S., Nuñez, A.M., & Choy, S.P. (2001). Competing choices:\n\nMen’s and women’s paths after earning a bachelor’s degree (NCES 2001-154). U. S. Department of Education, National Center for Education Statistic. Díaz-Lozano, E., (1916). Descripción de unas plantas liásicas de Hua yacocotla, Veracruz. Algunas plantas de la flora Liásica de Huauchinango, Puebla, Instituto Geológico de México, Boletín, 34, 1–18. Félix, J., & Lenk, H. (1899). Ubersicbt über die geologischen Verháltnisse",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 79,
+      "contenido": "des Mexica-nischen Staates Oaxaca. Beitr. z. Geol. u. Palao. d. Rep. Mexico, II theil, pp. 1–38. Gallego-Morón, N., Matus-López, M.A., & Gálvez-Muñoz, L. (2020).",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 80,
+      "contenido": "Revisión sistemática de la literatura sobre el fenómeno del techo de cristal en las universidades españolas. Revista Iberoamericana de Educación Superior, 11(31), 130–149. https://doi. org/10.22201/iisue.20072872e.2020.31.710 Galván Mendoza, E. (2000). Contribución al conocimiento paleoecológico de la tafoflora Matzitzi, Paleozoico Tardío, sur del estado de Puebla [Tesis de maestría no publicada]. Universidad Nacional Autónoma de México. https://tesiunamdocumentos.dgb.unam.mx/ pd2000/285615/Index.html Garibay Romero, L.M. (1994). Flora jurásica de nuevas localidades de Guerrero y Oaxaca [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. https://hdl.handle. net/20.500.14330/TES01000213583 González Gallardo, S. (1987). Estado actual del conocimiento de plantas fósiles superiores de México [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. https://tesiunamdocumentos.dgb.unam.mx/ptd2014/anteriores/microformas/0053819/0053819.pdf Guil Bozal, A. (2008). Mujeres y ciencia: techos de cristal. Eccos Revista",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 81,
+      "contenido": "Científica, 10(1), 213–232. Haraway, D. J. (1988). Situated knowledges: The science question in",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 82,
+      "contenido": "feminism and the privilege of partial perspective. En Simians, cyborgs and women: The reinvention of nature (pp. 183–201). Routledge. Harding, S. (1986). The science question in feminism. Cornell University Press. Hartsock, N.C.M. (2025). Money, sex, and power: Toward a feminist his torical materialism. Longman. Heimann, S. (2025). Perceiving gendered organizations: positions, power, and gender in geoscience. Journal of Geoethics and Social Geosciences, 1(1), 1–34. https://doi.org/10.13127/jgsg-48 Hernández-Castillo, G.R., Silva-Pineda, A., & Cevallos-Ferriz, S.F.S.\n\n(2014). Early Permian conifer remains from central Mexico and reevaluation of Paleozoic conifer morphotaxa. Boletín de la Sociedad Geológica Mexicana, 66, 85–96. Hernández-Hernández, M., Cruz, J.A., & Castañeda-Posadas, C.\n\n(2020). Paleoclimatic and vegetation reconstruction of the Miocene southern Mexico using fossil flowers. Journal of South American Earth Sciences, 104, 102827. https://doi.org/10.1016/j. jsames.2020.102827 Hernández López, D. (2023). Feminicidio: elementos para su com prensión desde la crítica de la economía política feminista. Debate Feminista, 67, 17–19. https://doi.org/10.22201/ cieg.2594066xe.2024.67.2403 Kiessling, W., Smith, J. A., & Raja, N. B. (2023). Improving the relevan ce of paleontology to climate change policy. Proceedings of the National Academy of Sciences, 120(7), e2201926119. https://doi. org/10.1073/pnas.2201926119 Kruk, C., Trinchin, R., De Mello, S., Vélez-Rubio, G. M., & Cantieri, R.\n\n(2020). Mujeres Con-Ciencia. Descentrada, 4. Kurdziel, J.P., & Libarkin, J.C. (2003). Research methodologies in",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 83,
+      "contenido": "science education: Gender and the geosciences. Journal of Geoscience Education, 51(4), 446–452. Lamas, M. (1994). Usos, costumbres y resistencias. Cal y Arena.",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 84,
+      "contenido": "Lamas, M. (2002). El feminismo de Virginia Woolf: el caso de Tres gui neas. Debate Feminista, 25, 397–401. https://doi.org/10.22201/ cieg.2594066xe.2002.25.649. Longino, H. (2020). Science as social knowledge: Values and objectivity in scientific inquiry. Princeton University Press. López Suárez, P. (2025, 20 de febrero). Doble jornada laboral, uno de los obstáculos para el desarrollo de las mujeres en la ciencia. Coordinación de género UNAM. https://coordinaciongenero.unam. mx/2025/02/doble-jornada-laboral-uno-de-los-obstaculos-para-el-desarrollo-de-las-mujeres-en-la-ciencia/ Maldonado-Koerdell, M. (1950). Los estudios paleobotánicos en Méxi co, con un catálogo sistemático de sus plantas fósiles. Boletín del Instituto de Geología, (55), 1–72. https://doi.org/10.22201/10.22201/ igl.01855530e.1950.55.79 Martínez-Cabrera, H.I., Ramírez-Garduño, J.L., & Estrada-Ruiz, E.",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 85,
+      "contenido": "(2014). Plantas fósiles e inferencia paleoclimática: aproximaciones metodológicas y algunos ejemplos para México. Boletín de la Sociedad Geológica Mexicana, 66(1), 41–52. Martínez-Ruíz, D.T. (2025, enero). Igualdad de género en la UNAM - CIGU-",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 86,
+      "contenido": ". Coordinación de género UNAM. https://coordinaciongenero. unam.mx/wp-content/uploads/2025/01/UNAM-CIGU-memoria-universitaria-2023.pdf McElwain, J.C. (2018). Paleobotany and global change: Important les sons for species to biomes from vegetation responses to past global change. Annual review of plant biology, 69(1), 761–787. https:// doi.org/10.1146/annurev-arplant-042817-040405 Morales Lara, A. (1996). Flórula jurásica de una nueva localidad en la re gión de San Miguelito, Oaxaca [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. Morales-Lara, A., & Silva-Pineda, A. (1995). Flora Jurásica de una nue va localidad en la región de San Miguelito. Boletín de la Sociedad Geológica Mexicana, 52(3), 31–41. http://dx.doi.org/10.18268/BSG M1995v52n3a4 Morales-Toledo, J., Mendoza-Ruiz, A.C., & Cevallos-Ferriz, S.R. (2022).\n\nThe ferns in a new Middle Jurassic locality from the Otlaltepec Formation, Puebla, Mexico. Earth and Environmental Science Transactions of The Royal Society of Edinburgh, 113(2), 127–140. https://doi.org/10.1017/S1755691022000093 Morelos Rodríguez, L. (2021). The Institute of Geology of Mexico and its precedents: History and legacy. In Oxford Research Encyclopedia of Latin American History. Oxford University Press. Newberry, J.S. (1876). Descriptions of the Carboniferous and Triassic fossils collected on the San Juan Exploring Expedition under Captain J. N. Macomb. In U.S. Army Corps of Engineers, Report of the exploring expedition from Santa Fe, New Mexico, to the junction of the Grand and Green Rivers (pp. 148–185). Government Printing Office. O’connell, C., & McKinnon, M. (2021). Perceptions of barriers to career progression for academic women in STEM. Societies, 11(2), 27. https://doi.org/10.3390/soc11020027 Ochoa-Camarillo, H.R., Buitrón, B.E., & Silva-Pineda, A. (1998). Con",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 87,
+      "contenido": "tribución al conocimiento de la bioestratigrafía, paleoecología y tectónica del Jurásico (anticlinorio de Huayacocotla) en la región de Molango, Hidalgo, México. Revista Mexicana de Ciencias Geológicas, 15(1), 57-63. Olavarría, J. (2006). Masculinidades en América Latina: Una revisión",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 88,
+      "contenido": "de estudios cualitativos. Revista de Estudios de Género La Ventana, 3(24), 198–220. Pérez-Crespo, V.A. (2011). Estado actual del conocimiento de las plantas",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 89,
+      "contenido": "fósiles de Oaxaca. México: Naturaleza y Desarrollo, 9(1), 47–59. Perrilliat-Montoya, M. del C. (2012). Semblanza de la Doctora Gloria",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 90,
+      "contenido": "Alencáster Ybarra. Paleontología Mexicana, (62), 2012, p. 1–3. https://doi.org/10.22201/igl.05437652e.2012.1.1.113 Plumstead, E.P. (1956). Bisexual fructifications borne on Glossopteris leaves from South Africa. Palaeontographica, B, 100, 1–25. Ramírez, J. L., Cevallos-Ferriz, S.R., & Silva-Pineda, A. (2000). Recons truction of the leaves of two new species of Pseudosmodingium (Anacardiaceae) from Oligocene strata of Puebla, Mexico. International Journal of Plant Sciences, 161(3), 509–519. https://doi. org/10.1086/314261 Rodríguez-de la Rosa, R.A., & Cevallos Ferriz, S.R.S., (1994). Upper Cre taceous Zingiberalean fruits with in situ seeds from Southeastern Coahuila, Mexico. International Journal of Plant Sciences, 155(6), 786–705. https://doi.org/10.1086/297218 Romero-Mireles, L.L. (2025, 10 de febrero). Piden fomentar inclusión de las mujeres en la ciencia desde la infancia. Coordinación de género UNAM. https://coordinaciongenero.unam.mx/2025/02/ piden-fomentar-inclusion-de-las-mujeres-en-la-ciencia-desde-la-infancia/ Rubalcava-Knoth, M.A., & Cevallos-Ferriz, S.R. (2021). Paleoclimate and paleoecology of the Upper Oligocene Tehuacán formation, Puebla State, Mexico, as determined from wood anatomical characters. Palaeontologia Electronica, 24, 24.2.a17. Rubalcava-Knoth, M.A., & Cevallos-Ferriz, S.R. (2022). Lauraceous palmately lobed leaf from the middle Cretaceous Cintura Formation (Albian–Cenomanian), Sonora, Mexico: Identification based on two comparative models. Cretaceous Research, 140, 105355. https://doi.org/10.1016/j.cretres.2022.105355 Ryberg, P.E., Harper, C.J., & Decombeix, A.L. (2021). Celebrating Women in Paleobotany: A Tribute to Edith L. Taylor—Introduction and Dedication. International Journal of Plant Sciences, 182(6), 415–417. https://doi.org/10.1086/714608 Sánchez Bringas, A. (2004). Nuevas maternidades o la deconstruc ción de la maternidad en México. Debate Feminista, 30, 55–86. https://doi.org/10.22201/cieg.2594066xe.2004.30.1048 Sánchez, A.M. y Tagüeña, J., (2011). La primera geóloga mexicana.",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 91,
+      "contenido": "Revista digital universitaria, 12(10), 3–8. Secretaria General, (Diciembre 2022). Análisis de las brechas de género",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 92,
+      "contenido": "en el mercado laboral en México (p.p. 12, 21–34, 41–42). Cámara de Diputados LXV Legislatura. Segovia-Saiz, C., Briones-Vozmediano, E., Pastells-Peiró, R., Gon zález-María, E., & Gea-Sánchez, M. (2020). Techo de cristal y desigualdades de género en la carrera profesional de las mujeres académicas e investigadoras en ciencias biomédicas. Gaceta Sanitaria, 34(4), 403–410. https://dx.doi.org/10.1016/j. gaceta.2018.10.008 Silva Pineda, A. (1961). Paleontología del Triásico Superior de Sono ra. Parte II Flora fósil de la Formación Santa Clara (Cárnico) Estado de Sonora. Paleontología Mexicana, (11), 1–25. https:// doi.org/10.22201/igl.05437652e.1961.0.11.254 Silva Pineda, A. (1963). Plantas del Triásico superior del Estado de Hidalgo. Paleontología Mexicana, (18), 1–28. https://doi. org/10.22201/igl.05437652e.1963.0.18.107 Silva Pineda, A. (1969). Parte I: Plantas fósiles del Jurásico Medio de Tecomatlán, Estado de Puebla. Paleontología Mexicana, (27), 3–73. https://doi.org/10.22201/igl.05437652e.1969.0.27.284 Silva-Pineda, A. (1970a). Plantas del Pensilvánico de la región de Te huacán, Puebla. Paleontología Mexicana, (29), 9–107. https:// doi.org/10.22201/igl.05437652e.1970.0.29.267 Silva-Pineda, A. (1970b). Plantas fósiles del Jurásico medio de la re gión de Tezoatlán. Oaxaca: Sociedad Geológica Mexicana, Libreto guía de la excursión México-Oaxaca, 129–153. Silva-Pineda, A. (1977). Goniolina geométrica (Chlorophyta-Dasyclada ceae) de la Formación San Ricardo (Jurásico Superior) del Estado de Chiapas. Revista mexicana de ciencias geológicas, 1(1), 9. Silva-Pineda, A. (1978a). Paleobotánica del Jurásico de México.\n\nPaleontología Mexicana, (44), Parte I 1, 1–16. https://doi. org/10.22201/igl.05437652e.1978.0.44.323 Silva-Pineda, A. (1978b). Plantas del Jurásico medio del sur de Puebla y noroeste de Oaxaca. Revista Paleontología Mexicana, (44), Parte III, 27–56. https://doi.org/10.22201/ igl.05437652e.1978.0.44.323 Silva-Pineda, A. (1979). La Flora Triásica de México. Revista Mexicana",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 93,
+      "contenido": "De Ciencias Geológicas, 3(2), 138–145. Silva-Pineda, A. (1981). Astheroteca y plantas asociadas de la Forma",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 94,
+      "contenido": "ción Huizachal (Triásico Tardío) del estado de Hidalgo. Revista Mexicana De Ciencias Geológicas, 5(1), 47–54. Silva-Pineda, A. (1984). Revisión taxonómica y tipificación de las plan",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 95,
+      "contenido": "tas jurásicas colectadas y estudiadas por Weiland (1914) en la",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 96,
+      "contenido": "Velasco-de León et al.",
+      "clasificacion": "Filiación",
+      "italic": true,
+      "bold": false,
+      "size": 9.0
+    },
+    {
+      "id": 97,
+      "contenido": "región de El Consuelo, Oaxaca. Paleontología Mexicana, (49), 1-102. https://doi.org/10.22201/igl.05437652e.1984.0.49.331 Silva-Pineda, A. (1987a). Algunos elementos paleoflorísticos del Pér",
+      "clasificacion": "Cuerpo",
+      "italic": false,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 98,
+      "contenido": "mico de la región de Calnali. Hidalgo: Revista de la Sociedad Mexicana de Paleontología, 1(1), 313–327. Silva-Pineda, A., & Villalobos-Carmona, D.M. (1987b). Conocimiento",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 99,
+      "contenido": "actualizado de la flora paleozoica de México. Revista de la Sociedad Mexicana de Paleontología, 1, 328–346. Silva-Pineda, A., & González-Gallardo, S. (1988). Algunas bennettita",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 100,
+      "contenido": "les (Cycadophyta) del Jurásico medio del área de Cualac, Guerrero. Revista Mexicana De Ciencias Geológicas, 7(2), 244–248. Silva-Pineda, A. (1990). Flora Fósil del Jurásico Medio de la Región de",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 101,
+      "contenido": "Chalcatongo en el suroeste del estado de Oaxaca. Revista de la Sociedad Mexicana de Paleontología, 2(2): 7–15. Silva-Pineda, A., & Alzaga-Ruiz, H. (1991). Una nueva localidad con",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 102,
+      "contenido": "plantas del Jurásico en el Estado de Puebla, México. Revista del Instituto Mexicano del Petróleo, 23(2),13-16. Silva-Pineda, A., & Arambarri, R.G. (1991). Flora Jurásica de San An",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 103,
+      "contenido": "drés Yutatío en el noroeste de Oaxaca. Boletín de la Sociedad Geológica Mexicana, 4, 57–61. Silva-Pineda, A. (1992). Presencia de Otozamites (Cycadophyta) y",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 104,
+      "contenido": "Podozomítes (Coniferophyta) en el Jurásico Superior (Kimeridgiano~ Titoniano) del sur del Estado de Veracruz. Revista mexicana de ciencias geológicas, 10(1), 94–97. Silva-Pineda, A. (2003). Flórula del Pérmico de la Región de Izúcar",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 105,
+      "contenido": "de Matamoros, Puebla. En: Castañares, A. A. (Eds.) Universitario, impulsor de la investigación científica (pp. 303–309). Instituto de Ciencias del Mar y Limnologia, UNAM. Silva-Pineda, A., Velasco-de León, M.P., Arellano Gil, J., & Ramon Grimaldo, J. (2011). A new species of Weltrichia (Bennettitales) from the Middle Jurassic of the Tecomazuchil Formation (Oaxaca, Mexico). Geobios, 44(5), 519–525. https://doi. org/10.1016/j.geobios.2011.01.004 Smith, S.G., & Sinkford, J.C. (2022). Gender equality in the 21st cen tury: Overcoming barriers to women's leadership in global health. Journal of Dental Education, 86(9), 1144–1173. https:// doi.org/10.1002/jdd.13059 Sonnert, G., & Holton, G.J. (1995). Gender differences in scientific",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 106,
+      "contenido": "careers: The \"clipping\" of women in science. American Scientist, 83(1), 46–53. Stopes, M. C. (1905). On the double nature of the cycadean integu",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 107,
+      "contenido": "ment. Annals of Botany, 19(76), 561-566. Stopes, M.C. (1906). A new fern from the Coal Measures:",
+      "clasificacion": "Cómo citar",
+      "italic": false,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 108,
+      "contenido": "Tubicaulis sutcliffi sp. nov. Memoirs and Proceedings of the Manchester Literary and Philosophical Society, 50, 1–3. Stopes, M.C. (1907). The\" Xerophytic\" Character of the Gymnosper",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 109,
+      "contenido": "ms. Is it an\" Ecological\" Adaptation? New Phytologist, 6(2), 46–50. Strullu-Derrien, C., Servais, T., & Kenrick, P. (2023). Insights into pa",
+      "clasificacion": "Cómo citar",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    },
+    {
+      "id": 110,
+      "contenido": "laeobotany. Botany Letters, 170(2), 157–164. https://doi.org/10. 1080/23818107.2023.2200293 Tablas-Alcazar, L. (2021). Registro paleobotánico en México durante los si glos XIX y XX [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. https://tesiunamdocumentos. dgb.unam.mx/ptd2021/octubre/0815677/Index.html Taylor, E.L., Taylor, T.N., & Krings, M. (2009). Paleobotany: the biology and evolution of fossil plants. Academic Press. Tuñón, J. (1998). Mujeres en México: una historia olvidada. Planeta. Velasco de León, M.P, Cevallos-Ferriz, S. R., & Silva-Pineda, A. (1998).\n\nLeaves of Karwinskia axamilpense sp. nov. (Rhamnaceae) from Oligocene sediments, near Tepexi de Rodríguez, Puebla, Mexico. Canadian Journal of Botany, 76(3), 410–419. https://doi. org/10.1139/b97-186 Velasco-de León, M.P., Lozano-Carmona D.E., Flores-Barragan, M.\n\nA., Martínez P. O. D., & Silva-Pineda, A. (2014). Two new species of Ginkgoales from the Middle Jurassic of Mexico. Historical Biology: An International Journal of Paleobiology, (3–4), 366-373. https://doi.org/10.1080/08912963.2013.874423 Velasco-de León, M.P., Ortiz Martínez, E.L., Lozano-Carmona, D.\n\nE., Flores-Barragan, M.A., Arellano Gil, J., & Santillán-Piña, N. (2020). Paleofloristic diversity and paleoenvironmental interpretation of new Cisuralian localities in the south-central sector of the Anticlinorium of Huayacocotla, Hidalgo, Mexico. Geobios, 63, 53–66. https://doi.org/10.1016/j.geobios.2020.07.004 Villada, M.M. (1897). Catálogo de fósiles del Museo Nacional de México, México. Imprenta del Museo Nacional. Villalobos Carmona, D. M. (1987). La flora paleozoica de Mexico [Tesis de licenciatura no publicada]. Universidad Nacional Autónoma de México. Villanueva-Amadoz, U., Calvillo-Canadell, L., & Cevallos-Ferriz, S.R.\n\nS. (2014). Síntesis de los trabajos paleobotánicos del Cretácico en México. Boletín de la Sociedad Geológica Mexicana, 66(1), 97– 121. http://www.redalyc.org/articulo.oa?id=94330745008 Weber, R., & Cevallos-Ferriz, S.R. (1994). Perfil actual y perspectivas de la paleo botánica en México. Botanical Sciences, (55), 141– 148. https://doi.org/10.17129/botsci.1458 Wieland, G.R. (1914). La flora Liásica de la Mixteca Alta. Bole tín del Instituto Geológico de México, 31, 1–165. https://doi. org/10.22201/10.22201/igl.01855530e.1916.31.63 Williams, J.C. (2005). The glass Ceiling and the maternal Wall in Aca demia. New Directions for Higer Education, 2005 (130), 91-105. https://doi.org/10.1002/he.181 Williams, J., & Segal, N. (2003). Motherhood and work: The maternal wall. American Association of University Women Foundation. Williams, C.L., Muller, C., & Kilanski, K. (2012). Gendered organiza tions in the new economy. Gender & Society, 26(4), 549–573. https://doi.org/10.1177/0891243212445466",
+      "clasificacion": "Cuerpo",
+      "italic": true,
+      "bold": false,
+      "size": 8.0
+    }
+  ],
+  "referencias_externas": [],
+  "figuras_manuales": [],
+  "tablas_manuales": [],
+  "autores_orcid": [],
+  "afiliaciones_txt": "",
+  "pdf_info": {
+    "nombre": "Revista.pdf",
+    "paginas": 12,
+    "resumen": "Cuerpo: 36  |  Cómo citar: 19  |  Encabezado sección: 11  |  Filiación: 11  |  Subencabezado: 7  |  Imagen: 7  |  Figuras auto: 6  |  Tablas auto: 2",
+    "tamanio": "2254.5 KB"
+  }
+}
