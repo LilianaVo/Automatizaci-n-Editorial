@@ -95,6 +95,15 @@ class AppAPI:
         )
         return list(rutas) if rutas else []
 
+    def seleccionar_carpeta(self) -> str | None:
+        """Abre diálogo para elegir carpeta de salida predeterminada."""
+        resultado = webview.windows[0].create_file_dialog(
+            webview.FOLDER_DIALOG,
+        )
+        if resultado:
+            return resultado[0] if isinstance(resultado, (list, tuple)) else resultado
+        return None
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -6,11 +6,12 @@ Uso:
     from core.pdf_processor import procesar_pdf
 
     resultado = procesar_pdf("articulo.pdf")
-    bloques   = resultado["bloques"]          # list[dict]
-    figuras   = resultado["figuras"]          # list[dict]
-    tablas    = resultado["tablas"]           # list[dict]
-    body_size = resultado["body_size"]        # int  (tamaño de fuente dominante)
-    resumen   = resultado["resumen"]          # str  (estadísticas en texto)
+    bloques   = resultado["bloques"]               # list[dict]
+    figuras   = resultado["figuras"]               # list[dict]
+    tablas    = resultado["tablas"]                # list[dict]
+    body_size = resultado["body_size"]              # int  (tamaño de fuente dominante)
+    resumen   = resultado["resumen"]                # str  (estadísticas en texto)
+    metadatos = resultado["metadatos_detectados"]   # dict (volumen, número, DOI, fechas...)
 """
 
 from __future__ import annotations
@@ -31,6 +32,11 @@ from core.utils import (
     es_doi as _es_doi,
     limpiar_prefijo_pie_figura as _limpiar_prefijo_pie_figura,
     limpiar_prefijo_titulo_tabla as _limpiar_prefijo_titulo_tabla,
+    extraer_fechas_mss as _extraer_fechas_mss,
+    fecha_mss_a_iso as _fecha_mss_a_iso,
+    extraer_doi as _extraer_doi,
+    extraer_volumen_pagina as _extraer_volumen_pagina,
+    extraer_issn as _extraer_issn,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -416,6 +422,69 @@ def extraer_tablas(doc: fitz.Document,
         diag = "find_tables() no detecto tablas en el PDF"
 
     return tablas_auto, rects_por_pagina, diag
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Metadatos del artículo (volumen, número, páginas, DOI, fechas)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def extraer_metadatos_articulo(bloques: list[dict]) -> dict[str, Any]:
+    """
+    Recorre los bloques ya clasificados buscando datos de la cabecera del
+    artículo (volumen, número, año, páginas, DOI, ISSN, fechas de manuscrito)
+    y los extrae a un diccionario plano, listo para mostrar en un formulario
+    editable.
+
+    No modifica los bloques ni su clasificación — solo lee.
+
+    Las claves que pueden venir vacías ('' o {}) si no se detectó el dato:
+      volumen, numero, anio, pagina_inicio, pagina_fin, doi, issn,
+      fecha_recibido, fecha_corregido, fecha_aceptado (texto tal como aparece)
+      fecha_recibido_iso, fecha_corregido_iso, fecha_aceptado_iso (formato XML)
+    """
+    metadatos: dict[str, Any] = {
+        "volumen": "", "numero": "", "anio": "",
+        "pagina_inicio": "", "pagina_fin": "",
+        "doi": "", "issn": "",
+        "fecha_recibido": "", "fecha_corregido": "", "fecha_aceptado": "",
+        "fecha_recibido_iso": "", "fecha_corregido_iso": "", "fecha_aceptado_iso": "",
+    }
+
+    for b in bloques:
+        texto = b.get("contenido", "")
+        if not texto:
+            continue
+
+        # El encabezado de revista (volumen/núm./año/páginas) suele venir
+        # junto con el ISSN en los primeros bloques del documento.
+        if not metadatos["volumen"]:
+            vol_info = _extraer_volumen_pagina(texto)
+            if vol_info:
+                metadatos.update({k: v for k, v in vol_info.items() if v})
+
+        if not metadatos["issn"]:
+            issn = _extraer_issn(texto)
+            if issn:
+                metadatos["issn"] = issn
+
+        # El DOI y las fechas de manuscrito normalmente viven en el bloque
+        # ya clasificado como "Fecha manuscrito" por clasificar_auto().
+        if b.get("clasificacion") == "Fecha manuscrito" or _es_fecha_mss(texto) or _es_doi(texto):
+            if not metadatos["doi"]:
+                doi = _extraer_doi(texto)
+                if doi:
+                    metadatos["doi"] = doi
+
+            fechas = _extraer_fechas_mss(texto)
+            for clave_es, valor in fechas.items():
+                campo = f"fecha_{clave_es}"
+                if not metadatos.get(campo):
+                    metadatos[campo] = valor
+                    iso = _fecha_mss_a_iso(valor)
+                    if iso:
+                        metadatos[f"{campo}_iso"] = iso
+
+    return metadatos
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -844,6 +913,9 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
     # ── Figuras automáticas ───────────────────────────────────────────────────
     figuras_auto, fig_dir = extraer_figuras(doc, ruta)
 
+    # ── Metadatos del artículo (volumen, número, páginas, DOI, fechas) ────────
+    metadatos_detectados = extraer_metadatos_articulo(bloques_utiles)
+
     # ── Resumen estadístico ───────────────────────────────────────────────────
     conteo = Counter(b["clasificacion"] for b in bloques_utiles)
     resumen_str = "  |  ".join(f"{k}: {v}" for k, v in conteo.most_common(6))
@@ -855,11 +927,12 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
     doc.close()
 
     return {
-        "bloques":     bloques_utiles,
-        "figuras":     figuras_auto,
-        "tablas":      tablas_auto,
-        "body_size":   body_size,
-        "resumen":     resumen_str,
-        "diag_tablas": diag_tablas,
-        "fig_dir":     fig_dir,
+        "bloques":              bloques_utiles,
+        "figuras":              figuras_auto,
+        "tablas":                tablas_auto,
+        "body_size":             body_size,
+        "resumen":               resumen_str,
+        "diag_tablas":           diag_tablas,
+        "fig_dir":               fig_dir,
+        "metadatos_detectados": metadatos_detectados,
     }

@@ -185,6 +185,119 @@ def es_doi(t: str) -> bool:
     return True
 
 
+# ─── Extractores de metadatos del artículo ────────────────────────────────────
+# A diferencia de los detectores anteriores (es_fecha_mss, es_doi), que solo
+# regresan True/False, estos SÍ extraen el dato real del texto del bloque.
+
+_MESES_ES = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+def extraer_fechas_mss(t: str) -> dict[str, str]:
+    """Extrae las fechas de recepción, corrección y aceptación del manuscrito.
+
+    Soporta el patrón usado por Paleontología Mexicana:
+        'Manuscrito recibido: Junio 5, 2025.'
+        'Manuscrito corregido: Diciembre 10, 2025.'
+        'Manuscrito aceptado: Diciembre 12, 2025.'
+    y su variante en inglés (received/revised/accepted).
+
+    Devuelve dict con claves 'recibido', 'corregido', 'aceptado'.
+    Las claves ausentes en el texto no se incluyen.
+    """
+    etiquetas = {
+        "recibido":  r"manuscrito\s+recibido|manuscript\s+received",
+        "corregido": r"manuscrito\s+corregido|manuscript\s+revised",
+        "aceptado":  r"manuscrito\s+aceptado|manuscript\s+accepted",
+    }
+
+    resultado: dict[str, str] = {}
+    for clave, patron_etiqueta in etiquetas.items():
+        m = re.search(
+            rf"(?:{patron_etiqueta})\s*:?\s*"
+            rf"([A-Za-zÁÉÍÓÚñÑ]+\s+\d{{1,2}}\s*,\s*\d{{4}})",
+            t, re.IGNORECASE,
+        )
+        if m:
+            resultado[clave] = m.group(1).strip().rstrip(".")
+    return resultado
+
+
+def fecha_mss_a_iso(fecha_texto: str) -> str | None:
+    """Convierte 'Junio 5, 2025' → '2025-06-05' (formato ISO para XML-JATS).
+    Devuelve None si no se reconoce el formato.
+    """
+    m = re.match(r"([A-Za-zÁÉÍÓÚñÑ]+)\s+(\d{1,2})\s*,\s*(\d{4})", fecha_texto.strip())
+    if not m:
+        return None
+    mes_texto, dia, anio = m.groups()
+    mes_num = _MESES_ES.get(mes_texto.strip().lower())
+    if not mes_num:
+        return None
+    return f"{int(anio):04d}-{mes_num:02d}-{int(dia):02d}"
+
+
+def extraer_doi(t: str) -> str | None:
+    """Extrae el DOI limpio (sin el prefijo de URL) de un bloque de texto.
+
+    'https://doi.org/10.22201/igl.05437652e.2026.15.1.410 Manuscrito...'
+    → '10.22201/igl.05437652e.2026.15.1.410'
+    """
+    m = re.search(r"https?://doi\.org/(\S+)", t)
+    if not m:
+        return None
+    doi = m.group(1).rstrip(".,;")
+    return doi
+
+
+def extraer_volumen_pagina(t: str) -> dict[str, str]:
+    """Extrae volumen, número, año y páginas del encabezado de la revista.
+
+    Soporta el patrón usado por Paleontología Mexicana:
+        'Volumen 15, núm. 1, 2026, p. 85 – 108'
+        'Volume 15, no. 1, 2026, p. 85-108'
+
+    Devuelve dict con las claves presentes entre:
+        'volumen', 'numero', 'anio', 'pagina_inicio', 'pagina_fin'
+    """
+    resultado: dict[str, str] = {}
+
+    m = re.search(
+        r"vol(?:umen|ume)?\.?\s*(\d+)\s*,\s*"
+        r"(?:n[uú]m\.?|no\.?|number)\s*(\d+)\s*,\s*"
+        r"(\d{4})"
+        r"(?:\s*,\s*p\.?\s*(\d+)\s*[–\-]\s*(\d+))?",
+        t, re.IGNORECASE,
+    )
+    if m:
+        resultado["volumen"] = m.group(1)
+        resultado["numero"]  = m.group(2)
+        resultado["anio"]    = m.group(3)
+        if m.group(4) and m.group(5):
+            resultado["pagina_inicio"] = m.group(4)
+            resultado["pagina_fin"]    = m.group(5)
+        return resultado
+
+    # Fallback: solo páginas, sin volumen/número (ej. "p. 85 – 108" suelto)
+    m2 = re.search(r"\bp\.?\s*(\d+)\s*[–\-]\s*(\d+)\b", t)
+    if m2:
+        resultado["pagina_inicio"] = m2.group(1)
+        resultado["pagina_fin"]    = m2.group(2)
+
+    return resultado
+
+
+def extraer_issn(t: str) -> str | None:
+    """Extrae el ISSN del encabezado de la revista.
+    Soporta 'ISSN:2007-5189' y 'ISSN: 2007-5189'.
+    """
+    m = re.search(r"ISSN\s*:?\s*(\d{4}-\d{3}[\dXx])", t)
+    return m.group(1) if m else None
+
+
 # ─── Limpieza de texto ────────────────────────────────────────────────────────
 
 def limpiar_prefijo_pie_figura(texto: str) -> str:

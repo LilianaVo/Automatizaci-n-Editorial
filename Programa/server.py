@@ -58,6 +58,7 @@ _estado: dict[str, Any] = {
     "afiliaciones_txt":    "",
     "fig_dir":             None, # carpeta temporal de figuras extraídas
     "pdf_info":            {},   # nombre, páginas, tamaño
+    "metadatos":           {},   # volumen, número, año, páginas, DOI, ISSN, fechas mss.
 }
 
 
@@ -91,6 +92,24 @@ class TablasPayload(BaseModel):
 class ExportPayload(BaseModel):
     formato: str          # "html" | "xml" | "epub"
     ruta_destino: str     # ruta absoluta elegida por el usuario (desde pywebview dialog)
+
+class MetadatosPayload(BaseModel):
+    """Metadatos editoriales del artículo, confirmados/corregidos por el usuario.
+    Todos los campos son opcionales: solo se actualizan los que vengan presentes.
+    """
+    volumen:             str | None = None
+    numero:              str | None = None
+    anio:                str | None = None
+    pagina_inicio:       str | None = None
+    pagina_fin:          str | None = None
+    doi:                 str | None = None
+    issn:                str | None = None
+    fecha_recibido:      str | None = None
+    fecha_corregido:     str | None = None
+    fecha_aceptado:      str | None = None
+    fecha_recibido_iso:  str | None = None
+    fecha_corregido_iso: str | None = None
+    fecha_aceptado_iso:  str | None = None
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -160,6 +179,7 @@ async def cargar_pdf(file: UploadFile = File(...)):
     _estado["tablas_manuales"]      = resultado.get("tablas", [])
     _estado["referencias_externas"] = []
     _estado["fig_dir"]              = resultado.get("fig_dir")
+    _estado["metadatos"]            = resultado.get("metadatos_detectados", {})
     _estado["pdf_info"]             = {
         "nombre":  file.filename,
         "paginas": resultado.get("body_size", "?"),   # reutilizamos para info
@@ -170,12 +190,13 @@ async def cargar_pdf(file: UploadFile = File(...)):
     os.unlink(ruta_tmp)
 
     return {
-        "ok":      True,
-        "info":    _estado["pdf_info"],
-        "bloques": bloques_ui,
-        "figuras": _estado["figuras_manuales"],
-        "tablas":  _estado["tablas_manuales"],
-        "resumen": resultado.get("resumen", ""),
+        "ok":        True,
+        "info":      _estado["pdf_info"],
+        "bloques":   bloques_ui,
+        "figuras":   _estado["figuras_manuales"],
+        "tablas":    _estado["tablas_manuales"],
+        "metadatos": _estado["metadatos"],
+        "resumen":   resultado.get("resumen", ""),
     }
 
 
@@ -194,6 +215,7 @@ def limpiar_pdf():
     _estado["tablas_manuales"]  = []
     _estado["fig_dir"]          = None
     _estado["pdf_info"]         = {}
+    _estado["metadatos"]        = {}
     _guardar_sesion()
     return {"ok": True}
 
@@ -237,6 +259,7 @@ def cargar_pdf_por_ruta(payload: RutaPDFPayload):
     _estado["tablas_manuales"]      = resultado.get("tablas", [])
     _estado["referencias_externas"] = []
     _estado["fig_dir"]              = resultado.get("fig_dir")
+    _estado["metadatos"]            = resultado.get("metadatos_detectados", {})
     _estado["pdf_info"]             = {
         "nombre":  Path(ruta).name,
         "paginas": resultado.get("body_size", "?"),
@@ -245,11 +268,12 @@ def cargar_pdf_por_ruta(payload: RutaPDFPayload):
     }
 
     return {
-        "ok":      True,
-        "info":    _estado["pdf_info"],
-        "bloques": bloques_ui,
-        "figuras": _estado["figuras_manuales"],
-        "tablas":  _estado["tablas_manuales"],
+        "ok":        True,
+        "info":      _estado["pdf_info"],
+        "bloques":   bloques_ui,
+        "figuras":   _estado["figuras_manuales"],
+        "tablas":    _estado["tablas_manuales"],
+        "metadatos": _estado["metadatos"],
     }
 
 
@@ -451,6 +475,37 @@ async def cargar_afiliaciones_txt_upload(file: UploadFile = File(...)):
     texto = contenido.decode("utf-8", errors="replace")
     _estado["afiliaciones_txt"] = texto
     return {"ok": True, "texto": texto}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Endpoints — Metadatos editoriales (volumen, número, año, páginas, DOI, ISSN,
+# fechas de manuscrito)
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# NOTA IMPORTANTE: estos metadatos (detectados automáticamente y luego
+# confirmados/corregidos por el usuario aquí) todavía NO se pasan a
+# build_jats_xml() ni a build_html(). Esos exportadores (core/jats_exporterv2.py
+# y core/html_exporter.py) tienen su propia extracción interna independiente
+# (ver _extract_doi, _extract_year_and_pages, _parse_manuscript_dates en
+# jats_exporterv2.py), que vuelve a leer directamente de los bloques del PDF.
+# Conectar ambas fuentes es trabajo pendiente (Paso 4): hay que decidir si el
+# dato corregido manualmente por el usuario debe tener prioridad sobre el
+# extraído automáticamente antes de inyectarlo en el XML/HTML.
+
+@app.get("/api/metadatos")
+def get_metadatos():
+    return {"metadatos": _estado["metadatos"]}
+
+
+@app.put("/api/metadatos")
+def set_metadatos(payload: MetadatosPayload):
+    """Actualiza (parcialmente) los metadatos editoriales del artículo.
+    Solo se sobrescriben los campos presentes en el payload; el resto
+    conserva el valor ya detectado/guardado previamente.
+    """
+    actualizados = payload.model_dump(exclude_unset=True)
+    _estado["metadatos"].update(actualizados)
+    return {"ok": True, "metadatos": _estado["metadatos"]}
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -865,6 +920,7 @@ def get_estado():
         "num_referencias": len(_estado["referencias_externas"]),
         "num_figuras":     len(_estado["figuras_manuales"]),
         "num_tablas":      len(_estado["tablas_manuales"]),
+        "tiene_metadatos": bool(_estado["metadatos"]) and any(_estado["metadatos"].values()),
         "pdf_info":        _estado["pdf_info"],
     }
 
@@ -877,7 +933,7 @@ def resetear_estado():
     _estado.update({
         "bloques": [], "referencias_externas": [], "figuras_manuales": [],
         "tablas_manuales": [], "autores_orcid": [], "afiliaciones_txt": "",
-        "fig_dir": None, "pdf_info": {},
+        "fig_dir": None, "pdf_info": {}, "metadatos": {},
     })
     return {"ok": True}
 

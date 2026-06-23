@@ -13,6 +13,7 @@ const State = {
   seccionActiva : "pdf",
   bloques       : [],   // [{id, contenido, clasificacion, italic, bold, size}]
   autores       : [],   // [{nombre, orcid}]
+  metadatos     : {},   // {volumen, numero, anio, pagina_inicio, pagina_fin, doi, issn, fecha_recibido, ...}
   config        : { opciones: [], colores: {} },
   tienePDF      : false,
   _afilTimer    : null,
@@ -52,6 +53,11 @@ const API = {
       headers : { "Content-Type": "application/json" },
       body    : JSON.stringify(body),
     });
+    if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    return r.json();
+  },
+  async delete(path) {
+    const r = await fetch(path, { method: "DELETE" });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
     return r.json();
   },
@@ -129,6 +135,17 @@ function _progresoSteps() {
       const n = e.bloques.length;
       return { estado: "complete", msg: `${n} bloques clasificados` };
     })(),
+    metadatos: (() => {
+      const m = e.metadatos || {};
+      const valores = Object.values(m).filter(v => (v || "").toString().trim());
+      if (valores.length === 0) return { estado: "empty", msg: "Sin metadatos detectados" };
+      const claves = ["volumen", "numero", "anio", "doi", "issn"];
+      const faltantes = claves.filter(k => !(m[k] || "").toString().trim());
+      if (faltantes.length > 0) {
+        return { estado: "warn", msg: `Metadatos incompletos — falta: ${faltantes.join(", ")}` };
+      }
+      return { estado: "complete", msg: "Metadatos completos ✓" };
+    })(),
     autores: (() => {
       const n = e.autores?.length || 0;
       if (n === 0) return { estado: "empty", msg: "Sin autores agregados" };
@@ -170,7 +187,7 @@ function _progresoSteps() {
 }
 
 function actualizarStepper() {
-  const orden  = ["pdf","autores","afiliaciones","referencias","figuras","tablas","exportar"];
+  const orden  = ["pdf","metadatos","autores","afiliaciones","referencias","figuras","tablas","exportar"];
   const idx    = orden.indexOf(State.seccionActiva);
   const progreso = _progresoSteps();
 
@@ -251,6 +268,7 @@ const App = {
     if (seccion === "figuras")     App._cargarFiguras();
     if (seccion === "tablas")      App._cargarTablas();
     if (seccion === "autores")     App._renderAutores();
+    if (seccion === "metadatos")   App._renderMetadatos();
   },
 
 
@@ -283,6 +301,9 @@ const App = {
     showLoading(true);
     try {
       const data = await API.post("/api/pdf/cargar-ruta", { ruta });
+      // Guardar en historial antes de aplicar resultado
+      const nombre = ruta.split(/[\\/]/).pop();
+      Historial.agregar(ruta, nombre);
       App._aplicarResultadoPDF(data);
     } catch (e) {
       showLoading(false);
@@ -308,8 +329,9 @@ const App = {
 
   _aplicarResultadoPDF(data) {
     showLoading(false);
-    State.bloques  = data.bloques || [];
-    State.tienePDF = true;
+    State.bloques   = data.bloques || [];
+    State.metadatos = data.metadatos || {};
+    State.tienePDF  = true;
 
     // Info del documento
     const info = data.info || {};
@@ -336,6 +358,12 @@ const App = {
 
     App._poblarFiltro();
     App._renderBloques(State.bloques);
+    App._renderMetadatos();
+    actualizarStepper();
+
+    // Ocultar historial mientras hay PDF activo
+    const hist = document.getElementById("historial-recientes");
+    if (hist) hist.style.display = "none";
 
     const n = State.bloques.length;
     setStatus(`PDF cargado — ${n} bloques detectados`);
@@ -598,6 +626,71 @@ const App = {
   async _pushAutores() {
     try { await API.put("/api/autores", { autores: State.autores }); }
     catch (_) {}
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // METADATOS EDITORIALES (volumen, número, año, páginas, DOI, ISSN, fechas)
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // NOTA: estos valores se detectan automáticamente al cargar el PDF
+  // (resultado["metadatos_detectados"] en core/pdf_processor.py) y el usuario
+  // puede corregirlos aquí. Por ahora esta corrección NO se inyecta en el
+  // XML/HTML exportado — los exportadores (core/jats_exporterv2.py,
+  // core/html_exporter.py) siguen extrayendo estos mismos datos por su cuenta
+  // directamente de los bloques del PDF. Conectar ambas fuentes es trabajo
+  // pendiente (ver server.py, sección Endpoints — Metadatos editoriales).
+
+  _CAMPOS_METADATOS: [
+    ["volumen",             "meta-volumen"],
+    ["numero",              "meta-numero"],
+    ["anio",                "meta-anio"],
+    ["pagina_inicio",       "meta-pagina-inicio"],
+    ["pagina_fin",          "meta-pagina-fin"],
+    ["issn",                "meta-issn"],
+    ["doi",                 "meta-doi"],
+    ["fecha_recibido",      "meta-fecha-recibido"],
+    ["fecha_corregido",     "meta-fecha-corregido"],
+    ["fecha_aceptado",      "meta-fecha-aceptado"],
+  ],
+
+  /** Pinta los inputs del panel Metadatos desde State.metadatos. */
+  _renderMetadatos() {
+    const m = State.metadatos || {};
+    App._CAMPOS_METADATOS.forEach(([campo, id]) => {
+      const el = $(id);
+      if (el) el.value = m[campo] || "";
+    });
+
+    const badge = $("metadatos-estado");
+    if (badge) {
+      if (!State.tienePDF) {
+        badge.textContent = "Sin PDF cargado";
+        badge.className = "badge badge--gray";
+      } else {
+        const valores = Object.values(m).filter(v => (v || "").toString().trim());
+        if (valores.length === 0) {
+          badge.textContent = "Nada detectado";
+          badge.className = "badge badge--gray";
+        } else {
+          badge.textContent = "Detectado desde PDF";
+          badge.className = "badge badge--green";
+        }
+      }
+    }
+  },
+
+  /** Handler de onblur de cada input de metadatos: actualiza State y guarda en el backend. */
+  async syncMetadato(campo, valor) {
+    const v = (valor || "").trim();
+    State.metadatos = State.metadatos || {};
+    State.metadatos[campo] = v;
+    actualizarStepper();
+    try {
+      await API.put("/api/metadatos", { [campo]: v });
+    } catch (e) {
+      showToast("No se pudo guardar el metadato", 3000);
+    }
   },
 
 
@@ -1005,17 +1098,29 @@ const App = {
 
     try {
       if (window.pywebview) {
-        // ── Producción: diálogo nativo → guardar en disco ──
-        const fn = { html: "guardar_html", xml: "guardar_xml", epub: "guardar_epub" }[formato];
-        const ruta = await window.pywebview.api[fn]();
-        if (!ruta) return;   // usuario canceló
+        // ── Producción: usa carpeta predeterminada si existe, si no abre diálogo ──
+        const carpeta = localStorage.getItem("carpetaSalida");
+        let ruta;
+
+        if (carpeta) {
+          // Construir ruta directamente sin diálogo
+          const ext      = formato === "xml" ? "xml" : formato;
+          const nombre   = `articulo.${ext}`;
+          const sep      = carpeta.includes("/") ? "/" : "\\";
+          ruta = carpeta.replace(/[/\\]$/, "") + sep + nombre;
+        } else {
+          // Sin carpeta configurada → diálogo nativo como antes
+          const fn = { html: "guardar_html", xml: "guardar_xml", epub: "guardar_epub" }[formato];
+          ruta = await window.pywebview.api[fn]();
+          if (!ruta) return;   // usuario canceló
+        }
 
         setStatus(`Exportando ${formato.toUpperCase()}...`, "idle");
         showLoading(true);
         await API.post(`/api/exportar/${formato}`, { formato, ruta_destino: ruta });
         showLoading(false);
         setStatus(`${formato.toUpperCase()} guardado`);
-        showToast(`✓ ${formato.toUpperCase()} exportado correctamente`);
+        showToast(`✓ ${formato.toUpperCase()} guardado en: ${ruta}`);
 
       } else {
         // ── Desarrollo: descarga en el browser ──
@@ -1054,36 +1159,68 @@ const App = {
     if (modal) modal.style.display = "none";
   },
 
-  _confirmarCambiarPDF() {
+  async _confirmarCambiarPDF() {
     App._cerrarConfirmarPDF();
+    showLoading(true);
 
-    // Limpiar solo los bloques y la info del PDF
-    State.bloques  = [];
-    State.tienePDF = false;
+    try {
+      try {
+        // Reset total en el servidor: bloques, metadatos, autores,
+        // afiliaciones, referencias, figuras y tablas — todo el artículo
+        // anterior se descarta, se empieza desde cero.
+        await API.delete("/api/estado");
+      } catch (_) { /* aunque falle la llamada, igual limpiamos localmente */ }
 
-    // Resetear la UI del PDF
-    const dz = $("dropzone");
-    const bc = $("bloques-container");
-    if (dz) dz.style.display = "flex";
-    if (bc) { bc.style.display = "none"; bc.innerHTML = ""; }
+      // ── Reset total del estado local ────────────────────────────────────
+      State.bloques      = [];
+      State.metadatos    = {};
+      State.autores      = [];
+      State.tienePDF     = false;
+      State._afilTxt     = "";
+      State._numRefs     = 0;
+      State._numFiguras  = 0;
+      State._figurasSinPie = 0;
+      State._numTablas   = 0;
 
-    $("btn-leyenda")     && ($("btn-leyenda").style.display     = "none");
-    $("filtro-grupo")    && ($("filtro-grupo").style.display    = "none");
-    $("btn-cambiar-pdf") && ($("btn-cambiar-pdf").style.display = "none");
+      // ── Panel PDF ────────────────────────────────────────────────────────
+      const dz = $("dropzone");
+      const bc = $("bloques-container");
+      if (dz) dz.style.display = "flex";
+      if (bc) { bc.style.display = "none"; bc.innerHTML = ""; }
 
-    // Resetear info del documento
-    sv("info-nombre",  "—");
-    sv("info-paginas", "—");
-    sv("info-tamanio", "—");
-    const badge = $("info-estado");
-    if (badge) { badge.textContent = "Sin cargar"; badge.className = "badge badge--gray"; }
+      $("btn-leyenda")     && ($("btn-leyenda").style.display     = "none");
+      $("filtro-grupo")    && ($("filtro-grupo").style.display    = "none");
+      $("btn-cambiar-pdf") && ($("btn-cambiar-pdf").style.display = "none");
 
-    // Limpiar solo bloques en el servidor
-    API.post("/api/pdf/limpiar", {}).catch(() => {});
+      const setInfo = (id, v) => { const el = $(id); if (el) el.textContent = v || "—"; };
+      setInfo("info-nombre",  "—");
+      setInfo("info-paginas", "—");
+      setInfo("info-tamanio", "—");
+      const badge = $("info-estado");
+      if (badge) { badge.textContent = "Sin cargar"; badge.className = "badge badge--gray"; }
 
-    actualizarStepper();
-    setStatus("Listo para cargar nuevo PDF");
-    showToast("PDF eliminado — carga el nuevo archivo");
+      // ── Resto de paneles: repintar todos en blanco ──────────────────────
+      App._renderMetadatos();
+      App._renderAutores();
+      const ta = $("afiliaciones-txt");
+      if (ta) ta.value = "";
+      App._renderRefs([]);
+      App._renderFiguras([]);
+      App._renderTablas([]);
+
+      actualizarStepper();
+      setStatus("Listo para cargar nuevo PDF");
+      showToast("Sesión reiniciada — carga el nuevo archivo");
+
+      // Volver a mostrar historial si hay entradas
+      Historial.renderizar();
+    } catch (e) {
+      console.error("[_confirmarCambiarPDF]", e);
+      setStatus("Error al reiniciar: " + e.message, "error");
+      showToast("Algo falló al reiniciar — revisa la consola", 4000);
+    } finally {
+      showLoading(false);
+    }
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1244,6 +1381,14 @@ async function init() {
 
       App._poblarFiltro();
       App._renderBloques(State.bloques);
+
+      // 2b. Recuperar metadatos editoriales ya detectados/guardados
+      try {
+        const metaData = await API.get("/api/metadatos");
+        State.metadatos = metaData.metadatos || {};
+      } catch (_) {
+        State.metadatos = {};
+      }
     }
 
     // 3. Cargar autores
@@ -1271,6 +1416,12 @@ async function init() {
     // 5. Mostrar sección inicial
     App.irSeccion("pdf");
 
+    // 6. Mostrar carpeta de salida guardada (si existe)
+    App._mostrarCarpeta(localStorage.getItem("carpetaSalida"));
+
+    // 7. Renderizar historial de PDFs recientes
+    Historial.renderizar();
+
     if (estado.tiene_pdf && estado.sesion_restaurada) {
       setStatus("Sesión restaurada ✓");
       showToast("✓ Se recuperó tu sesión anterior — puedes continuar donde lo dejaste", 4500);
@@ -1283,6 +1434,150 @@ async function init() {
     console.error("[init]", e);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Historial de PDFs recientes
+// ─────────────────────────────────────────────────────────────────────────────
+const Historial = {
+  MAX: 5,
+  KEY: "historialPDFs",
+
+  cargar() {
+    try { return JSON.parse(localStorage.getItem(this.KEY) || "[]"); }
+    catch { return []; }
+  },
+
+  guardar(lista) {
+    localStorage.setItem(this.KEY, JSON.stringify(lista));
+  },
+
+  /** Agrega una entrada {ruta, nombre, fecha} y recorta a MAX */
+  agregar(ruta, nombre) {
+    const lista = this.cargar().filter(e => e.ruta !== ruta); // evita duplicados
+    lista.unshift({ ruta, nombre, fecha: Date.now() });
+    this.guardar(lista.slice(0, this.MAX));
+    this.renderizar();
+  },
+
+  limpiar() {
+    this.guardar([]);
+    this.renderizar();
+  },
+
+  renderizar() {
+    const lista   = this.cargar();
+    const wrapper = document.getElementById("historial-recientes");
+    const ul      = document.getElementById("historial-lista");
+    if (!wrapper || !ul) return;
+
+    // Solo mostrar si hay entradas Y no hay PDF cargado
+    if (lista.length === 0 || State.tienePDF) {
+      wrapper.style.display = "none";
+      return;
+    }
+
+    wrapper.style.display = "block";
+    ul.innerHTML = lista.map(e => {
+      const fecha = _fechaRelativa(e.fecha);
+      return `
+        <li class="historial-item" onclick="App._cargarPorRuta('${e.ruta.replace(/\\/g, "\\\\")}')">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" class="historial-item-icon">
+            <path d="M4 3h8l4 4v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/>
+            <path d="M12 3v4h4"/>
+          </svg>
+          <span class="historial-item-nombre">${_escHtml(e.nombre)}</span>
+          <span class="historial-item-fecha">${fecha}</span>
+        </li>`;
+    }).join("");
+  },
+};
+
+function _fechaRelativa(ts) {
+  const diff = Date.now() - ts;
+  const min  = Math.floor(diff / 60000);
+  const hrs  = Math.floor(diff / 3600000);
+  const dias = Math.floor(diff / 86400000);
+  if (min  <  1) return "Justo ahora";
+  if (min  < 60) return `Hace ${min} min`;
+  if (hrs  < 24) return `Hace ${hrs} h`;
+  if (dias <  7) return `Hace ${dias} día${dias > 1 ? "s" : ""}`;
+  return new Date(ts).toLocaleDateString("es-MX", { day:"2-digit", month:"short" });
+}
+
+function _escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// Exponer limpiar en App
+App.limpiarHistorial = () => { Historial.limpiar(); showToast("Historial borrado"); };
+const Tema = {
+  aplicar(modo) {
+    document.documentElement.setAttribute("data-theme", modo);
+    localStorage.setItem("tema", modo);
+    // Marcar botón activo en la sección de config
+    const btnClaro  = document.getElementById("btnTemaClaro");
+    const btnOscuro = document.getElementById("btnTemaOscuro");
+    if (btnClaro && btnOscuro) {
+      btnClaro.classList.toggle("config-theme-btn--active",  modo === "light");
+      btnOscuro.classList.toggle("config-theme-btn--active", modo === "dark");
+    }
+  },
+
+  init() {
+    const guardado = localStorage.getItem("tema");
+    if (guardado === "dark") {
+      this.aplicar("dark");
+    } else {
+      this.aplicar("light");
+    }
+  },
+
+  toggle() {
+    const actual = document.documentElement.getAttribute("data-theme");
+    this.aplicar(actual === "dark" ? "light" : "dark");
+  },
+};
+
+// Exponer en App
+App.toggleTema = () => Tema.toggle();
+App.setTema    = (modo) => Tema.aplicar(modo);
+
+// ── Carpeta de salida ─────────────────────────────────────────────────────
+App.seleccionarCarpeta = async () => {
+  if (!window.pywebview) {
+    showToast("Solo disponible en la app de escritorio");
+    return;
+  }
+  const carpeta = await window.pywebview.api.seleccionar_carpeta();
+  if (!carpeta) return;
+  localStorage.setItem("carpetaSalida", carpeta);
+  App._mostrarCarpeta(carpeta);
+  showToast("✓ Carpeta de salida guardada");
+};
+
+App.limpiarCarpeta = () => {
+  localStorage.removeItem("carpetaSalida");
+  App._mostrarCarpeta(null);
+  showToast("Carpeta eliminada — se pedirá ubicación al exportar");
+};
+
+App._mostrarCarpeta = (ruta) => {
+  const el     = document.getElementById("carpeta-salida-ruta");
+  const btnDel = document.getElementById("carpeta-salida-borrar");
+  if (!el) return;
+  if (ruta) {
+    el.textContent = ruta;
+    el.classList.remove("carpeta-vacia");
+    if (btnDel) btnDel.style.display = "inline-flex";
+  } else {
+    el.textContent = "Sin carpeta configurada — se pedirá al exportar";
+    el.classList.add("carpeta-vacia");
+    if (btnDel) btnDel.style.display = "none";
+  }
+};
+
+// Inicializar tema antes de que cargue el resto para evitar flash
+Tema.init();
 
 // Arrancar cuando esté listo (PyWebView o browser)
 if (window.pywebview) {

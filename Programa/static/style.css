@@ -16,7 +16,7 @@
   --sepia-cream:   #F7F3EC;      /* fondo principal — casi blanco */
   --sepia-white:   #FDFAF6;      /* cards y panels — blanco cálido */
 
-  /* Alias semánticos */
+  /* Alias semánticos — MODO CLARO */
   --navy:          var(--sepia-deep);
   --navy-hover:    var(--sepia-mid);
   --navy-light:    var(--sepia-pale);
@@ -40,6 +40,12 @@
   --danger-light:  #F5E0E0;
   --warn:          #8B6B20;
 
+  /* Burbujas de alto contraste (tooltips, toasts) — independientes de
+     --sepia-dark/--sepia-white, que cambian de significado entre temas
+     y antes dejaban estos elementos casi ilegibles en modo oscuro. */
+  --bubble-bg:     #1C1209;
+  --bubble-text:   #FDFAF6;
+
   /* Espaciados */
   --topbar-h:    80px;
   --sidebar-w:   210px;
@@ -51,6 +57,71 @@
   --shadow-sm:   0 1px 3px rgba(44,31,14,.07), 0 1px 2px rgba(44,31,14,.05);
   --shadow-md:   0 4px 16px rgba(44,31,14,.10), 0 2px 6px rgba(44,31,14,.06);
 }
+
+/* ── MODO OSCURO ─────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --sepia-deep:    #4A7AB5;
+  --sepia-mid:     #5C8FCC;
+  --sepia-light:   #4A5568;
+  --sepia-pale:    #1E2530;
+  --sepia-cream:   #141920;
+  --sepia-white:   #1C2330;
+
+  --navy:          #4A7AB5;
+  --navy-hover:    #5C8FCC;
+  --navy-light:    #1E2530;
+  --navy-mid:      #2D3748;
+
+  --bg:            #141920;
+  --surface:       #1C2330;
+  --surface-2:     #1E2530;
+  --border:        #2D3748;
+  --border-2:      #3D4A5C;
+
+  --text-main:     #E8EDF5;
+  --text-sub:      #94A3B8;
+  --text-light:    #64748B;
+  --text-white:    #F1F5F9;
+
+  --accent:        #4A7AB5;
+  --accent-hov:    #5C8FCC;
+  --success:       #5A9C6E;
+  --danger:        #C0534F;
+  --danger-light:  #2D1F1F;
+  --warn:          #B8922A;
+
+  /* Burbujas de alto contraste — en oscuro se invierte: fondo claro,
+     texto oscuro, para que sigan resaltando sobre el resto de la UI. */
+  --bubble-bg:     #E8EDF5;
+  --bubble-text:   #141920;
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,.3), 0 1px 2px rgba(0,0,0,.2);
+  --shadow-md:   0 4px 16px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.3);
+}
+
+/* ── Botón toggle de tema ────────────────────────────────────────────────── */
+.btn-theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-sub);
+  transition: background .15s, color .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.btn-theme-toggle svg { width: 17px; height: 17px; }
+.btn-theme-toggle:hover { background: var(--surface-2); color: var(--text-main); }
+
+/* Muestra luna en claro, sol en oscuro */
+.icon-sun  { display: none; }
+.icon-moon { display: block; }
+[data-theme="dark"] .icon-sun  { display: block; }
+[data-theme="dark"] .icon-moon { display: none; }
 
 /* ── Google Fonts — Playfair Display para títulos ───────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&display=swap');
@@ -673,6 +744,88 @@ html, body {
 
 
 /* ══════════════════════════════════════════════════════════════════════════
+   HISTORIAL DE PDFs RECIENTES
+══════════════════════════════════════════════════════════════════════════ */
+#historial-recientes {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.historial-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.historial-clear {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-light);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color .12s, background .12s;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.historial-clear:hover { color: var(--danger); background: var(--danger-light); }
+
+.historial-lista {
+  list-style: none;
+  padding: 4px;
+}
+
+.historial-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .12s;
+}
+.historial-item:hover { background: var(--surface-2); }
+
+.historial-item-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: var(--text-light);
+}
+
+.historial-item-nombre {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.historial-item-fecha {
+  font-size: 11px;
+  color: var(--text-light);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
    INFO DEL DOCUMENTO
 ══════════════════════════════════════════════════════════════════════════ */
 .doc-info-grid {
@@ -727,6 +880,34 @@ html, body {
   font-weight: 600;
   color: var(--text-main);
 }
+
+/* Campo editable dentro de .doc-info-item (panel Metadatos).
+   A diferencia de .doc-info-value (texto fijo) o .autor-input (celda de
+   grid con borde solo a la derecha), este input vive suelto dentro de una
+   tarjeta y necesita su propio borde completo para ser reconocible como
+   editable. */
+.meta-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  background: var(--surface);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+
+.meta-input:hover { border-color: var(--accent); }
+
+.meta-input:focus {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.meta-input::placeholder { color: var(--text-light); font-weight: 400; }
 
 .doc-consejos {
   position: relative;
@@ -1425,6 +1606,111 @@ html, body {
   padding-top: 16px;
 }
 
+.config-group {
+  margin-bottom: 8px;
+}
+
+.config-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-light);
+  margin-bottom: 14px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.config-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.config-row-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.config-row-desc {
+  font-size: 12px;
+  color: var(--text-light);
+}
+
+/* Switcher de tema: dos botones tipo pill */
+.config-theme-switcher {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  flex-shrink: 0;
+}
+
+.config-theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, color .15s, box-shadow .15s;
+}
+
+.config-theme-btn:hover {
+  color: var(--text-main);
+}
+
+.config-theme-btn--active {
+  background: var(--surface);
+  color: var(--text-main);
+  box-shadow: 0 1px 4px rgba(0,0,0,.1);
+  font-weight: 600;
+}
+
+/* Caja que muestra la ruta de carpeta de salida */
+.carpeta-salida-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  min-height: 36px;
+}
+
+.carpeta-salida-box span {
+  font-size: 12px;
+  color: var(--text-main);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.carpeta-salida-box span.carpeta-vacia {
+  color: var(--text-light);
+  font-style: italic;
+}
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    STEPPER BAR (footer fijo)
@@ -1546,8 +1832,8 @@ html, body {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--sepia-dark);
-  color: var(--sepia-white);
+  background: var(--bubble-bg);
+  color: var(--bubble-text);
   font-size: 11px;
   line-height: 1.5;
   padding: 7px 10px;
@@ -1565,7 +1851,7 @@ html, body {
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: var(--sepia-dark);
+  border-top-color: var(--bubble-bg);
 }
 
 .step:hover .step-tooltip { display: block; }
@@ -1780,8 +2066,8 @@ html, body {
   bottom: 90px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: var(--sepia-dark);
-  color: var(--sepia-white);
+  background: var(--bubble-bg);
+  color: var(--bubble-text);
   padding: 10px 20px;
   border-radius: 8px;
   font-size: 13px;
