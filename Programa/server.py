@@ -74,6 +74,21 @@ class BloqueUpdate(BaseModel):
 class BloquesBulkUpdate(BaseModel):
     bloques: list[dict]   # [{idx, contenido?, clasificacion?}]
 
+class BloqueDividir(BaseModel):
+    idx: int
+    texto_nuevo: str
+    contenido_restante: str
+    clasificacion_nuevo: str | None = None
+
+class BloqueNuevo(BaseModel):
+    contenido: str
+    clasificacion: str | None = None
+    insertar_despues: int | None = None   # idx del bloque tras el cual insertar; None = al final
+
+class UnirBloques(BaseModel):
+    idx_a: int   # bloque que absorbe (queda)
+    idx_b: int   # bloque que se une (desaparece)
+
 class AutoresPayload(BaseModel):
     autores: list[dict]   # [{nombre, orcid}]
 
@@ -347,6 +362,110 @@ def actualizar_bloque(idx: int, datos: BloqueUpdate):
     if datos.clasificacion is not None:
         b["clasificacion"] = datos.clasificacion
     return {"ok": True, "bloque": b}
+
+
+@app.delete("/api/bloques/{idx}")
+def eliminar_bloque(idx: int):
+    """Elimina un bloque por completo (acción irreversible, distinta de
+    'Ignorar', que solo lo excluye del export pero lo conserva en la lista).
+    """
+    if idx < 0 or idx >= len(_estado["bloques"]):
+        raise HTTPException(status_code=404, detail="Bloque no encontrado")
+
+    _estado["bloques"].pop(idx)
+    for nuevo_idx, b in enumerate(_estado["bloques"]):
+        b["id"] = nuevo_idx
+
+    return {"ok": True, "bloques": _estado["bloques"]}
+
+
+@app.post("/api/bloques/dividir")
+def dividir_bloque(datos: BloqueDividir):
+    """Divide un bloque en dos a partir de una selección de texto."""
+    idx = datos.idx
+    if idx < 0 or idx >= len(_estado["bloques"]):
+        raise HTTPException(status_code=404, detail="Bloque no encontrado")
+
+    if not datos.texto_nuevo.strip():
+        raise HTTPException(status_code=400, detail="El texto seleccionado está vacío.")
+
+    original = _estado["bloques"][idx]
+    clasificacion_nuevo = datos.clasificacion_nuevo or original.get("clasificacion", "Cuerpo")
+
+    bloque_nuevo = {
+        "id":            idx + 1,
+        "contenido":     datos.texto_nuevo.strip(),
+        "clasificacion": clasificacion_nuevo,
+        "italic":        original.get("italic", False),
+        "bold":          original.get("bold", False),
+        "size":          original.get("size", 12),
+    }
+
+    original["contenido"] = datos.contenido_restante.strip()
+
+    _estado["bloques"].insert(idx + 1, bloque_nuevo)
+    for nuevo_idx, b in enumerate(_estado["bloques"]):
+        b["id"] = nuevo_idx
+
+    return {"ok": True, "bloques": _estado["bloques"]}
+
+
+
+
+@app.post("/api/bloques/agregar")
+def agregar_bloque(datos: BloqueNuevo):
+    """Crea un bloque nuevo escrito manualmente por el usuario.
+
+    Si se provee insertar_despues (idx de un bloque existente), el nuevo
+    bloque se inserta justo debajo de ese. Si no se provee, se agrega al final.
+    """
+    if not datos.contenido.strip():
+        raise HTTPException(status_code=400, detail="El contenido no puede estar vacio.")
+
+    clasificacion = datos.clasificacion or "Cuerpo"
+
+    bloque_nuevo = {
+        "contenido":     datos.contenido.strip(),
+        "clasificacion": clasificacion,
+        "italic":        False,
+        "bold":          False,
+        "size":          12,
+    }
+
+    n = len(_estado["bloques"])
+    idx_insertar = datos.insertar_despues
+
+    if idx_insertar is not None and 0 <= idx_insertar < n:
+        _estado["bloques"].insert(idx_insertar + 1, bloque_nuevo)
+    else:
+        _estado["bloques"].append(bloque_nuevo)
+
+    for nuevo_idx, b in enumerate(_estado["bloques"]):
+        b["id"] = nuevo_idx
+
+    return {"ok": True, "bloques": _estado["bloques"]}
+
+@app.post("/api/bloques/unir")
+def unir_bloques(datos: UnirBloques):
+    """Une dos bloques: el contenido de idx_b se append al de idx_a, separado
+    por un espacio. idx_b se elimina. Siempre se reindexan los ids."""
+    n = len(_estado["bloques"])
+    a, b = datos.idx_a, datos.idx_b
+    if not (0 <= a < n and 0 <= b < n):
+        raise HTTPException(status_code=404, detail="Bloque no encontrado")
+    if a == b:
+        raise HTTPException(status_code=400, detail="No puedes unir un bloque consigo mismo")
+
+    bloque_a = _estado["bloques"][a]
+    bloque_b = _estado["bloques"][b]
+
+    bloque_a["contenido"] = (bloque_a["contenido"].rstrip() + " " + bloque_b["contenido"].lstrip()).strip()
+
+    _estado["bloques"].pop(b)
+    for nuevo_idx, bl in enumerate(_estado["bloques"]):
+        bl["id"] = nuevo_idx
+
+    return {"ok": True, "bloques": _estado["bloques"]}
 
 
 @app.put("/api/bloques")

@@ -246,6 +246,67 @@ function actualizarSidebar(seccion) {
 
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Modal de confirmación personalizado (reemplaza window.confirm)
+// Uso: const ok = await _modalConfirmar({ titulo, preview, mensaje, btnOk, peligro })
+// ─────────────────────────────────────────────────────────────────────────────
+function _modalConfirmar({ titulo = "Confirmar", preview = "", mensaje = "", btnOk = "Aceptar", peligro = false } = {}) {
+  return new Promise(resolve => {
+    // Reutilizar o crear el overlay
+    let overlay = document.getElementById("modal-confirmar-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "modal-confirmar-overlay";
+      overlay.className = "modal-overlay";
+      overlay.innerHTML = `
+        <div class="modal-confirmar" role="dialog" aria-modal="true">
+          <h3 class="modal-confirmar-titulo" id="modal-confirmar-titulo"></h3>
+          <p  class="modal-confirmar-preview" id="modal-confirmar-preview"></p>
+          <p  class="modal-confirmar-msg"     id="modal-confirmar-msg"></p>
+          <div class="modal-confirmar-btns">
+            <button class="btn btn--ghost" id="modal-confirmar-cancelar">Cancelar</button>
+            <button class="btn"            id="modal-confirmar-ok">Aceptar</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // Rellenar contenido
+    document.getElementById("modal-confirmar-titulo").textContent  = titulo;
+    const prevEl = document.getElementById("modal-confirmar-preview");
+    if (preview) { prevEl.textContent = `"${preview}"`; prevEl.style.display = "block"; }
+    else         {                                        prevEl.style.display = "none"; }
+    document.getElementById("modal-confirmar-msg").textContent = mensaje;
+
+    const btnOkEl = document.getElementById("modal-confirmar-ok");
+    btnOkEl.textContent = btnOk;
+    btnOkEl.className   = peligro ? "btn btn--danger" : "btn btn--primary";
+
+    // Mostrar
+    overlay.style.display = "flex";
+    btnOkEl.focus();
+
+    // Handlers (frescos cada vez para evitar listeners duplicados)
+    const cerrar = (val) => {
+      overlay.style.display = "none";
+      document.removeEventListener("keydown", onKey);
+      resolve(val);
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") cerrar(false);
+      if (e.key === "Enter")  cerrar(true);
+    };
+
+    btnOkEl.onclick = () => cerrar(true);
+    document.getElementById("modal-confirmar-cancelar").onclick = () => cerrar(false);
+    overlay.onclick = (e) => { if (e.target === overlay) cerrar(false); };
+    document.addEventListener("keydown", onKey);
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Objeto principal App  (expuesto globalmente para los onclick del HTML)
 // ─────────────────────────────────────────────────────────────────────────────
 const App = {
@@ -414,11 +475,14 @@ const App = {
     if (!container) return;
 
     const opciones = State.config.opciones || [];
-    const optsHtml = opciones.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
 
     container.innerHTML = `
       <div class="bloques-toolbar">
         <span style="font-weight:600">${bloques.length} bloque${bloques.length !== 1 ? "s" : ""}</span>
+        <button class="btn-agregar-bloque" onclick="App._agregarBloqueAlFinal()" title="Agregar bloque nuevo al final">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M10 4v12M4 10h12"/></svg>
+          Agregar bloque
+        </button>
         <span style="margin-left:auto;font-size:11px;color:var(--text-light)">
           Clic en el texto para editar · Selector para reclasificar
         </span>
@@ -433,6 +497,7 @@ const App = {
       div.className       = "bloque-item";
       div.dataset.clase   = b.clasificacion;
       div.dataset.idx     = idx;
+      div.addEventListener("contextmenu", (e) => App._mostrarMenuContextual(e, idx));
 
       // Construimos el select con la opción correcta pre-seleccionada
       const optsConSelected = opciones
@@ -441,9 +506,11 @@ const App = {
 
       div.innerHTML = `
         <div class="bloque-num">${idx + 1}</div>
-        <textarea class="bloque-texto"
+        <textarea class="bloque-texto" id="bloque-texto-${idx}"
           oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
           onblur="App._onBloqueTextoBlur(${idx}, this.value)"
+          onmouseup="App._onSeleccionTexto(${idx}, this)"
+          onkeyup="App._onSeleccionTexto(${idx}, this)"
         >${esc(b.contenido)}</textarea>
         <select class="bloque-select"
           onchange="App._onBloqueClaseChange(${idx}, this.value, this.closest('.bloque-item'))">
@@ -451,9 +518,19 @@ const App = {
         </select>
         <button class="bloque-del" title="Marcar como Ignorar"
           onclick="App._ignorarBloque(${idx}, this.closest('.bloque-item'))">✕</button>
+        <button class="bloque-eliminar" title="Eliminar bloque por completo (no se puede deshacer)"
+          onclick="App._eliminarBloque(${idx})">🗑</button>
       `;
 
       lista.appendChild(div);
+
+      // Botón "+" entre bloques para insertar debajo de este
+      const btnEntre = document.createElement("button");
+      btnEntre.className = "btn-insertar-entre";
+      btnEntre.title = "Insertar bloque nuevo aquí";
+      btnEntre.innerHTML = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" width="12" height="12"><path d="M10 4v12M4 10h12"/></svg>`;
+      btnEntre.onclick = () => App._mostrarModalAgregar(idx);
+      lista.appendChild(btnEntre);
     });
 
     // Auto-altura inicial de todas las textareas
@@ -483,6 +560,312 @@ const App = {
     if (rowEl) {
       const sel = rowEl.querySelector(".bloque-select");
       if (sel) sel.value = "Ignorar";
+    }
+  },
+
+  async _eliminarBloque(idx) {
+    const b = State.bloques.find(b => b.id === idx);
+    const preview = b ? b.contenido.slice(0, 60).trim() : "";
+    const textoPreview = preview + (preview.length === 60 ? "…" : "");
+
+    const confirmado = await _modalConfirmar({
+      titulo   : "Eliminar bloque",
+      preview  : textoPreview,
+      mensaje  : 'Esta acción no se puede deshacer. Si solo quieres excluirlo del export, usa "Ignorar" (✕) en su lugar.',
+      btnOk    : "Eliminar",
+      peligro  : true,
+    });
+    if (!confirmado) return;
+
+    try {
+      const data = await API.delete(`/api/bloques/${idx}`);
+      State.bloques = data.bloques;
+      App._poblarFiltro();
+      App._renderBloques(State.bloques);
+      showToast("Bloque eliminado");
+    } catch (e) {
+      showToast("Error al eliminar el bloque: " + e.message, 4000);
+    }
+  },
+
+  // ── Agregar bloque nuevo ──────────────────────────────────────────────────
+
+  _agregarBloqueAlFinal() {
+    App._mostrarModalAgregar(null);
+  },
+
+  _mostrarModalAgregar(insertarDespues) {
+    // Reutilizar o crear modal
+    let overlay = $("modal-agregar-bloque");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "modal-agregar-bloque";
+      overlay.className = "modal-overlay";
+
+      const opciones = State.config.opciones || [];
+      const optsHtml = opciones.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+
+      overlay.innerHTML = `
+        <div class="modal-confirmar" role="dialog" aria-modal="true" style="width:520px;max-width:94vw">
+          <h3 class="modal-confirmar-titulo">Agregar bloque nuevo</h3>
+          <p class="modal-confirmar-msg" id="modal-agregar-pos"></p>
+          <textarea id="modal-agregar-texto" rows="6"
+            placeholder="Escribe o pega el texto del bloque aquí…"
+            style="width:100%;margin-top:4px;padding:10px 12px;border:1.5px solid var(--border-2);
+                   border-radius:var(--radius-sm);font-size:13px;font-family:inherit;
+                   background:var(--surface);color:var(--text-main);resize:vertical;
+                   line-height:1.55;min-height:100px;"></textarea>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+            <label style="font-size:12px;color:var(--text-sub);white-space:nowrap">Tipo de bloque:</label>
+            <select id="modal-agregar-clase" style="flex:1;padding:6px 10px;border:1.5px solid var(--border-2);
+              border-radius:var(--radius-sm);background:var(--surface);color:var(--text-main);font-size:13px">
+              ${optsHtml}
+            </select>
+          </div>
+          <div class="modal-confirmar-btns" style="margin-top:14px">
+            <button class="btn--ghost" id="modal-agregar-cancelar">Cancelar</button>
+            <button class="btn--primary" id="modal-agregar-ok">Agregar bloque</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // Actualizar mensaje de posición
+    const posEl = $("modal-agregar-pos");
+    if (posEl) {
+      posEl.textContent = insertarDespues !== null
+        ? `Se insertará después del bloque ${insertarDespues + 1}.`
+        : "Se agregará al final de la lista.";
+    }
+
+    // Limpiar textarea
+    const ta = $("modal-agregar-texto");
+    if (ta) { ta.value = ""; }
+
+    overlay.style.display = "flex";
+    if (ta) ta.focus();
+
+    // Guardar posición en el overlay para usarla al confirmar
+    overlay.dataset.insertarDespues = insertarDespues ?? "";
+
+    const cerrar = () => {
+      overlay.style.display = "none";
+      document.removeEventListener("keydown", onKey);
+    };
+
+    const confirmar = async () => {
+      const contenido     = ($("modal-agregar-texto")?.value || "").trim();
+      const clasificacion = $("modal-agregar-clase")?.value || "Cuerpo";
+      const pos           = overlay.dataset.insertarDespues;
+      const insertar_despues = pos !== "" ? parseInt(pos) : null;
+
+      if (!contenido) {
+        showToast("Escribe algo antes de agregar el bloque.");
+        return;
+      }
+
+      cerrar();
+      try {
+        const data = await API.post("/api/bloques/agregar", {
+          contenido, clasificacion, insertar_despues,
+        });
+        State.bloques = data.bloques;
+        App._poblarFiltro();
+        App._renderBloques(State.bloques);
+        showToast("✓ Bloque agregado");
+
+        // Hacer scroll al bloque recién creado
+        const nuevoPosicion = insertar_despues !== null ? insertar_despues + 1 : State.bloques.length - 1;
+        setTimeout(() => {
+          const nuevo = document.querySelector(`[data-idx="${nuevoPosicion}"]`);
+          if (nuevo) nuevo.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 100);
+      } catch (e) {
+        showToast("Error al agregar el bloque: " + e.message, 4000);
+      }
+    };
+
+    const onKey = (e) => {
+      if (e.key === "Escape") cerrar();
+    };
+
+    $("modal-agregar-ok").onclick     = confirmar;
+    $("modal-agregar-cancelar").onclick = cerrar;
+    overlay.onclick = (e) => { if (e.target === overlay) cerrar(); };
+    document.addEventListener("keydown", onKey);
+  },
+
+  // ── Unir bloques ─────────────────────────────────────────────────────────
+
+  async _unirConSiguiente(idx) {
+    const bloques = State.bloques;
+    const posActual = bloques.findIndex(b => b.id === idx);
+    if (posActual === -1 || posActual >= bloques.length - 1) {
+      showToast("No hay un bloque siguiente para unir.");
+      return;
+    }
+    const siguiente = bloques[posActual + 1];
+    const previewA = bloques[posActual].contenido.slice(0, 40).trim();
+    const previewB = siguiente.contenido.slice(0, 40).trim();
+
+    const confirmado = await _modalConfirmar({
+      titulo  : "Unir bloques",
+      preview : `"${previewA}…" + "${previewB}…"`,
+      mensaje : "El texto del bloque siguiente se añadirá al final de este. El bloque siguiente desaparecerá.",
+      btnOk   : "Unir",
+      peligro : false,
+    });
+    if (!confirmado) return;
+
+    try {
+      const data = await API.post("/api/bloques/unir", { idx_a: idx, idx_b: siguiente.id });
+      State.bloques = data.bloques;
+      App._poblarFiltro();
+      App._renderBloques(State.bloques);
+      showToast("✓ Bloques unidos");
+    } catch (e) {
+      showToast("Error al unir bloques: " + e.message, 4000);
+    }
+  },
+
+  // ── Menú contextual (clic derecho en tarjeta de bloque) ───────────────────
+
+  _mostrarMenuContextual(e, idx) {
+    e.preventDefault();
+
+    // Cerrar cualquier menú previo
+    App._cerrarMenuContextual();
+
+    // Detectar si hay texto seleccionado en el textarea de este bloque
+    const ta = $(`bloque-texto-${idx}`);
+    const haySeleccion = ta &&
+      ta.selectionEnd > ta.selectionStart &&
+      ta.value.slice(ta.selectionStart, ta.selectionEnd).trim().length > 0;
+
+    const bloques = State.bloques;
+    const posActual = bloques.findIndex(b => b.id === idx);
+    const hayBloqueSiguiente = posActual !== -1 && posActual < bloques.length - 1;
+
+    const menu = document.createElement("div");
+    menu.id = "ctx-menu-bloque";
+    menu.className = "ctx-menu";
+    menu.innerHTML = `
+      <button class="ctx-menu-item" data-action="agregar">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 4v12M4 10h12"/></svg>
+        Agregar bloque aquí
+      </button>
+      <button class="ctx-menu-item ${haySeleccion ? "" : "ctx-menu-item--disabled"}" data-action="dividir">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M4 10h12M10 4v3M10 13v3"/></svg>
+        Dividir desde selección
+      </button>
+      <button class="ctx-menu-item ${hayBloqueSiguiente ? "" : "ctx-menu-item--disabled"}" data-action="unir">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M4 7h12M4 13h12M10 4v12"/></svg>
+        Unir con el siguiente
+      </button>
+    `;
+
+    // Posición junto al cursor
+    menu.style.position = "fixed";
+    menu.style.top  = `${Math.min(e.clientY, window.innerHeight - 150)}px`;
+    menu.style.left = `${Math.min(e.clientX, window.innerWidth  - 220)}px`;
+    document.body.appendChild(menu);
+
+    // Handlers
+    menu.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-action]");
+      if (!btn || btn.classList.contains("ctx-menu-item--disabled")) return;
+      App._cerrarMenuContextual();
+      const action = btn.dataset.action;
+      if (action === "agregar")  App._mostrarModalAgregar(idx);
+      if (action === "dividir")  { if (ta) App._dividirBloqueDesdeSeleccion(idx, ta); }
+      if (action === "unir")     App._unirConSiguiente(idx);
+    });
+
+    // Cerrar al hacer clic fuera (usamos click, no mousedown, para no
+    // interferir con el click en las opciones del propio menú)
+    const cerrarSiFuera = (ev) => {
+      if (!menu.contains(ev.target)) {
+        App._cerrarMenuContextual();
+        document.removeEventListener("click", cerrarSiFuera);
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener("click", cerrarSiFuera);
+      document.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          App._cerrarMenuContextual();
+          document.removeEventListener("click", cerrarSiFuera);
+        }
+      }, { once: true });
+    }, 0);
+  },
+
+  _cerrarMenuContextual() {
+    const m = document.getElementById("ctx-menu-bloque");
+    if (m) m.remove();
+  },
+
+  // ── Dividir bloque desde selección de texto ────────────────────────────
+
+  _onSeleccionTexto(idx, textareaEl) {
+    const inicio = textareaEl.selectionStart;
+    const fin    = textareaEl.selectionEnd;
+    const hayTexto = fin > inicio && textareaEl.value.slice(inicio, fin).trim().length > 0;
+
+    let boton = $("btn-flotante-dividir");
+
+    if (!hayTexto) {
+      if (boton) boton.style.display = "none";
+      return;
+    }
+
+    if (!boton) {
+      boton = document.createElement("button");
+      boton.id = "btn-flotante-dividir";
+      boton.className = "btn-flotante-dividir";
+      boton.textContent = "✂ Hacer bloque desde selección";
+      document.body.appendChild(boton);
+    }
+
+    boton.dataset.idx = idx;
+    boton.onclick = () => App._dividirBloqueDesdeSeleccion(idx, textareaEl);
+
+    const rect = textareaEl.getBoundingClientRect();
+    boton.style.display = "block";
+    boton.style.position = "fixed";
+    boton.style.top  = `${rect.top - 36}px`;
+    boton.style.left = `${rect.left + 8}px`;
+  },
+
+  async _dividirBloqueDesdeSeleccion(idx, textareaEl) {
+    const inicio = textareaEl.selectionStart;
+    const fin    = textareaEl.selectionEnd;
+    const completo = textareaEl.value;
+
+    const texto_nuevo        = completo.slice(inicio, fin).trim();
+    const contenido_restante = (completo.slice(0, inicio) + completo.slice(fin)).trim();
+
+    const boton = $("btn-flotante-dividir");
+    if (boton) boton.style.display = "none";
+
+    if (!texto_nuevo) return;
+
+    if (!contenido_restante) {
+      showToast("La selección abarca todo el bloque — no hay nada que dividir.");
+      return;
+    }
+
+    try {
+      const data = await API.post("/api/bloques/dividir", {
+        idx, texto_nuevo, contenido_restante,
+      });
+      State.bloques = data.bloques;
+      App._poblarFiltro();
+      App._renderBloques(State.bloques);
+      showToast("Bloque dividido en dos ✓");
+    } catch (e) {
+      showToast("Error al dividir el bloque: " + e.message, 4000);
     }
   },
 
@@ -1578,6 +1961,18 @@ App._mostrarCarpeta = (ruta) => {
 
 // Inicializar tema antes de que cargue el resto para evitar flash
 Tema.init();
+
+// Ocultar el botón flotante de "dividir bloque" si se hace clic fuera de él
+// y fuera de cualquier textarea de bloque.
+document.addEventListener("mousedown", (e) => {
+  const boton = document.getElementById("btn-flotante-dividir");
+  if (!boton || boton.style.display === "none") return;
+  const dentroDeTextarea = e.target.classList?.contains("bloque-texto");
+  const esElBoton = e.target === boton;
+  if (!dentroDeTextarea && !esElBoton) {
+    boton.style.display = "none";
+  }
+});
 
 // Arrancar cuando esté listo (PyWebView o browser)
 if (window.pywebview) {

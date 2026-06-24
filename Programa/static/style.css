@@ -1003,7 +1003,7 @@ html, body {
 
 .bloque-item {
   display: grid;
-  grid-template-columns: 40px 1fr 180px 32px;
+  grid-template-columns: 40px 1fr 180px 32px 32px;
   align-items: start;
   gap: 0;
   border-bottom: 1px solid var(--border);
@@ -1074,6 +1074,142 @@ html, body {
 }
 
 .bloque-del:hover { color: var(--danger); background: var(--danger-light); }
+
+.bloque-eliminar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--text-light);
+  font-size: 13px;
+  transition: color .1s, background .1s;
+  min-height: 42px;
+}
+
+.bloque-eliminar:hover { color: var(--danger); background: var(--danger-light); }
+
+/* Botón flotante "Hacer bloque desde selección" — aparece cerca del
+   textarea cuando el usuario selecciona texto dentro de un bloque. */
+.btn-flotante-dividir {
+  display: none;
+  z-index: 9999;
+  background: var(--navy);
+  color: var(--text-white);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+  transition: background .12s;
+}
+.btn-flotante-dividir:hover { background: var(--navy-hover); }
+
+/* ── Botón "Agregar bloque" en toolbar ──────────────────────────────────── */
+.btn-agregar-bloque {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .13s, color .13s, border-color .13s;
+  flex-shrink: 0;
+}
+.btn-agregar-bloque:hover {
+  background: var(--navy);
+  color: var(--text-white);
+  border-color: var(--navy);
+}
+
+/* ── Botón "+" entre bloques ──────────────────────────────────────────── */
+.btn-insertar-entre {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--border-2);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+  position: relative;
+}
+.btn-insertar-entre::before {
+  content: "";
+  position: absolute;
+  left: 20px; right: 20px;
+  top: 50%; height: 1px;
+  background: var(--border);
+}
+.btn-insertar-entre:hover {
+  opacity: 1 !important;
+  color: var(--navy);
+}
+.bloques-list:hover .btn-insertar-entre {
+  opacity: .35;
+}
+.btn-insertar-entre svg {
+  position: relative;
+  z-index: 1;
+  background: var(--surface-2);
+  border-radius: 50%;
+  padding: 2px;
+  width: 16px; height: 16px;
+}
+
+
+/* ── Menú contextual de bloque ──────────────────────────────────────────── */
+.ctx-menu {
+  background: var(--sepia-white);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  min-width: 210px;
+  padding: 4px 0;
+  z-index: 300;
+  overflow: hidden;
+}
+
+.ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background .1s;
+}
+.ctx-menu-item:hover {
+  background: var(--navy-light);
+  color: var(--navy);
+}
+.ctx-menu-item--disabled {
+  color: var(--text-light);
+  cursor: default;
+  pointer-events: none;
+}
+.ctx-menu-item svg { flex-shrink: 0; }
 
 /* Color de borde izquierdo según clasificación — tonos sepia/tierra */
 .bloque-item[data-clase="Título principal"]   { border-left: 3px solid #3D2B14; }
@@ -1960,6 +2096,97 @@ html, body {
 }
 
 .modal--sm { width: 380px; max-width: 95vw; }
+
+/* ── Modal de confirmación personalizado (reemplaza window.confirm) ────────── */
+.modal-confirmar {
+  background: var(--sepia-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 400px;
+  max-width: 92vw;
+  box-shadow: var(--shadow-md);
+  padding: 24px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-confirmar-titulo {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modal-confirmar-preview {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-sub);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border-2);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 8px 12px;
+  margin: 0;
+  word-break: break-word;
+}
+
+.modal-confirmar-msg {
+  font-size: 12.5px;
+  color: var(--text-sub);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.modal-confirmar-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.modal-confirmar .btn--ghost {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .13s, border-color .13s;
+}
+.modal-confirmar .btn--ghost:hover {
+  background: var(--surface-2);
+  border-color: var(--sepia-mid);
+  color: var(--text-main);
+}
+
+.modal-confirmar .btn--danger {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .13s;
+}
+.modal-confirmar .btn--danger:hover { background: #7a2e2e; }
+
+.modal-confirmar .btn--primary {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--navy);
+  color: var(--text-white);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .13s;
+}
+.modal-confirmar .btn--primary:hover { background: var(--navy-hover); }
 
 /* Modal vista previa — ocupa casi toda la pantalla */
 .modal-overlay--full { align-items: stretch; padding: 20px; }
