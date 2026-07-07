@@ -760,9 +760,8 @@ def eliminar_figura(idx: int):
 # Endpoints — Tablas
 # ═════════════════════════════════════════════════════════════════════════════
 
-# Vista previa: cuántas filas/columnas se muestran en la tarjeta de cada tabla.
-PREVIEW_MAX_FILAS = 8
-PREVIEW_MAX_COLS  = 8
+# La vista previa envía la tabla COMPLETA; el viewport (~8 filas visibles con
+# scroll interno) se controla por CSS en la tarjeta.
 
 # Carpeta propia para los .xlsx que genera el programa al unir tablas (RF-28).
 _MERGE_DIR = Path(tempfile.gettempdir()) / "pm_editor_tablas"
@@ -845,8 +844,7 @@ def _tablas_para_frontend() -> list[dict]:
     """
     items    = _estado["tablas_manuales"]
     previews = [
-        _leer_filas_xlsx(t.get("ruta", ""), t.get("hoja"),
-                         max_filas=PREVIEW_MAX_FILAS, max_cols=PREVIEW_MAX_COLS)
+        _leer_filas_xlsx(t.get("ruta", ""), t.get("hoja"))   # tabla completa
         for t in items
     ]
     salida = []

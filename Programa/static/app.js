@@ -1478,11 +1478,10 @@ const App = {
     const rows = body.map(f =>
       `<tr>${f.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
 
-    const extras = [];
-    if (preview.truncada_filas) extras.push(`${preview.n_filas} filas`);
-    if (preview.truncada_cols)  extras.push(`${preview.n_cols} columnas`);
-    const nota = extras.length
-      ? `<div class="tabla-preview-nota">Vista parcial · ${extras.join(" × ")} en total</div>`
+    const nf = preview.n_filas || filas.length;
+    const nc = preview.n_cols  || (head ? head.length : 0);
+    const nota = (nf || nc)
+      ? `<div class="tabla-preview-nota">${nf} fila${nf !== 1 ? "s" : ""} × ${nc} columna${nc !== 1 ? "s" : ""}</div>`
       : "";
 
     return `

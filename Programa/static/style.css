@@ -1659,18 +1659,21 @@ html, body {
   overflow-x: auto;
 }
 
-/* Vista previa: mini-tabla renderizada (RF-27) */
+/* Vista previa: tabla COMPLETA con scroll interno (RF-27).
+   El viewport muestra ~8 filas; el resto se ve con scroll vertical, y las
+   columnas de más con scroll horizontal. */
 .tabla-preview {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  max-height: 220px;
+  max-height: 224px;          /* ≈ encabezado + 8 filas */
   overflow: auto;
   background: #fff;
 }
 
 .tabla-mini {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;         /* ancho natural → scroll horizontal si hay muchas columnas */
+  min-width: 100%;            /* pero al menos llena la tarjeta en tablas angostas */
   font-family: 'Source Serif 4', Georgia, serif;
   font-size: 11px;
   color: var(--text-sub);
@@ -1683,7 +1686,8 @@ html, body {
   text-align: left;
   vertical-align: top;
   white-space: nowrap;
-  max-width: 220px;
+  min-width: 72px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
