@@ -1414,7 +1414,7 @@ const App = {
       const ancla   = esc(t.ancla  || "");
       const archivo = esc(t.ruta ? t.ruta.split(/[\\/]/).pop() : "");
       const hoja    = esc(t.hoja || "");
-      const preview = t.contenido || "";
+      const previewHTML = App._miniTablaHTML(t.preview);
       const subtitle = archivo ? (hoja ? `${archivo} › ${hoja}` : archivo) : `Tabla ${i + 1}`;
       return `
         <div class="tabla-row">
@@ -1429,6 +1429,14 @@ const App = {
               <div class="tabla-row-num">Tabla ${i + 1}</div>
               <div class="tabla-row-file">${subtitle}</div>
             </div>
+            <button class="tabla-btn-excel" onclick="App._editarEnExcel(${i})"
+              title="Abrir el archivo en Excel para editarlo">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+                <path d="M12 3H5a1 1 0 00-1 1v12a1 1 0 001 1h10a1 1 0 001-1V7z"/>
+                <path d="M12 3v4h4M7 11l3 3M10 11l-3 3"/>
+              </svg>
+              Editar en Excel
+            </button>
             <button class="tabla-row-del" onclick="App._eliminarTabla(${i})" title="Eliminar">✕</button>
           </div>
           <div class="tabla-row-body">
@@ -1439,10 +1447,41 @@ const App = {
             <input class="tabla-input" type="text" value="${ancla}"
               placeholder='Ej: "...la Dra. Elena Centeno (Tabla 1)."'
               onblur="App._syncTabla(${i}, 'ancla', this.value)" />
-            ${preview ? `<div class="tabla-preview-text">${esc(preview)}</div>` : ""}
+            ${previewHTML}
           </div>
         </div>`;
     }).join("");
+  },
+
+  // Construye el HTML de la mini-tabla de vista previa a partir del objeto
+  // `preview` que devuelve el backend ({ok, filas, n_filas, n_cols, ...}).
+  _miniTablaHTML(preview) {
+    if (!preview || !preview.ok) {
+      const msg = preview && preview.error ? preview.error : "Sin datos";
+      return `<div class="tabla-preview-empty">⚠ ${esc(msg)}</div>`;
+    }
+    const filas = preview.filas || [];
+    if (filas.length === 0) return `<div class="tabla-preview-empty">Tabla vacía</div>`;
+
+    const [head, ...body] = filas;
+    const th   = head.map(c => `<th>${esc(c)}</th>`).join("");
+    const rows = body.map(f =>
+      `<tr>${f.map(c => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+
+    const extras = [];
+    if (preview.truncada_filas) extras.push(`${preview.n_filas} filas`);
+    if (preview.truncada_cols)  extras.push(`${preview.n_cols} columnas`);
+    const nota = extras.length
+      ? `<div class="tabla-preview-nota">Vista parcial · ${extras.join(" × ")} en total</div>`
+      : "";
+
+    return `
+      <div class="tabla-preview">
+        <table class="tabla-mini">
+          <thead><tr>${th}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>${nota}`;
   },
 
   async _syncTabla(idx, campo, valor) {
@@ -1462,6 +1501,42 @@ const App = {
     } catch (e) {
       setStatus("Error: " + e.message, "error");
     }
+  },
+
+  // RF-29 — Abre el .xlsx de la tabla en Excel y arma la detección de cambios.
+  async _editarEnExcel(idx) {
+    try {
+      // Captura el mtime actual para saber si hubo edición al regresar.
+      const antes = await API.get("/api/tablas");
+      const t = (antes.tablas || [])[idx];
+      App._editWatch = { idx, mtime: (t && t.preview) ? t.preview.mtime || 0 : 0 };
+
+      await API.post(`/api/tablas/${idx}/abrir-excel`, {});
+      showToast("Abriendo en Excel… edita, guarda y vuelve a la app");
+      setStatus(`Editando Tabla ${idx + 1} en Excel…`, "idle");
+    } catch (e) {
+      App._editWatch = null;
+      showToast("No se pudo abrir en Excel: " + (e.message || ""), 4000);
+    }
+  },
+
+  // Al volver el foco a la app: relee la tabla editada y avisa si cambió.
+  async _revisarEdicionExcel() {
+    const w = App._editWatch;
+    if (!w) return;
+    App._editWatch = null;
+    try {
+      const data = await API.get("/api/tablas");
+      App._renderTablas(data.tablas || []);
+      const t = (data.tablas || [])[w.idx];
+      const nuevoM = (t && t.preview) ? t.preview.mtime || 0 : 0;
+      if (nuevoM && w.mtime && nuevoM > w.mtime) {
+        showToast(`✓ Tabla ${w.idx + 1} actualizada`);
+        setStatus("Vista previa de la tabla actualizada");
+      } else {
+        setStatus("Sin cambios detectados en la tabla");
+      }
+    } catch (_) {}
   },
 
 
@@ -1973,6 +2048,10 @@ document.addEventListener("mousedown", (e) => {
     boton.style.display = "none";
   }
 });
+
+// RF-29 — Al recuperar el foco (p. ej. al volver de Excel), revisa si la tabla
+// que se estaba editando cambió y refresca su vista previa.
+window.addEventListener("focus", () => { App._revisarEdicionExcel(); });
 
 // Arrancar cuando esté listo (PyWebView o browser)
 if (window.pywebview) {

@@ -1586,6 +1586,27 @@ html, body {
 .tabla-row-num  { font-size: 12px; font-weight: 700; color: var(--sepia-mid); }
 .tabla-row-file { font-size: 11px; color: var(--text-light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* RF-29 — Botón "Editar en Excel" */
+.tabla-btn-excel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  color: var(--sepia-mid);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background .12s, border-color .12s;
+}
+.tabla-btn-excel svg { width: 15px; height: 15px; }
+.tabla-btn-excel:hover { background: var(--sepia-cream); border-color: var(--sepia-mid); }
+
 .tabla-row-del {
   width: 30px; height: 30px;
   border-radius: 6px;
@@ -1596,6 +1617,7 @@ html, body {
   font-size: 12px;
   display: flex; align-items: center; justify-content: center;
   transition: background .12s;
+  flex-shrink: 0;
 }
 .tabla-row-del:hover { background: var(--danger-light); }
 
@@ -1635,6 +1657,62 @@ html, body {
   line-height: 1.5;
   white-space: pre;
   overflow-x: auto;
+}
+
+/* Vista previa: mini-tabla renderizada (RF-27) */
+.tabla-preview {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+}
+
+.tabla-mini {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 11px;
+  color: var(--text-sub);
+}
+
+.tabla-mini th,
+.tabla-mini td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabla-mini thead th {
+  position: sticky;
+  top: 0;
+  background: var(--sepia-cream);
+  font-weight: 700;
+  color: var(--sepia-mid);
+}
+
+.tabla-mini tbody tr:nth-child(even) { background: var(--sepia-cream); }
+
+.tabla-preview-nota {
+  font-size: 10px;
+  color: var(--text-light);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.tabla-preview-empty {
+  font-size: 11px;
+  color: var(--text-light);
+  background: var(--sepia-cream);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
 }
 
 /* Hint de referencias */

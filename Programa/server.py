@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import shutil
 import tempfile
+import subprocess
 import base64
 from pathlib import Path
 from typing import Any
@@ -757,16 +759,90 @@ def eliminar_figura(idx: int):
 # Endpoints — Tablas
 # ═════════════════════════════════════════════════════════════════════════════
 
+# Vista previa: cuántas filas/columnas se muestran en la tarjeta de cada tabla.
+PREVIEW_MAX_FILAS = 8
+PREVIEW_MAX_COLS  = 8
+
+def _leer_filas_xlsx(ruta: str, hoja: str | None,
+                     max_filas: int | None = None,
+                     max_cols:  int | None = None) -> dict:
+    """Lee una hoja de un .xlsx a matriz de strings para vista previa.
+
+    El .xlsx es la fuente de verdad: se relee cada vez, así que refleja lo que
+    el usuario haya editado en Excel. Devuelve un dict con la matriz ya capada
+    y metadatos de cuántas filas/columnas tiene en total.
+    """
+    res = {
+        "ok": False, "filas": [], "n_filas": 0, "n_cols": 0,
+        "truncada_filas": False, "truncada_cols": False, "error": "",
+        "mtime": 0.0,
+    }
+    if not ruta or not os.path.isfile(ruta):
+        res["error"] = "archivo no encontrado"
+        return res
+    try:
+        res["mtime"] = os.path.getmtime(ruta)   # para detectar ediciones en Excel
+    except OSError:
+        pass
+    try:
+        import openpyxl
+    except ImportError:
+        res["error"] = "openpyxl no disponible"
+        return res
+    try:
+        wb = openpyxl.load_workbook(ruta, data_only=True, read_only=True)
+        ws = wb[hoja] if hoja and hoja in wb.sheetnames else wb.active
+        filas: list[list[str]] = []
+        for fila in ws.iter_rows(values_only=True):
+            vals = ["" if c is None else str(c) for c in fila]
+            if any(v.strip() for v in vals):
+                filas.append(vals)
+        wb.close()
+    except Exception as e:
+        res["error"] = str(e)
+        return res
+
+    n_cols = max((len(f) for f in filas), default=0)
+    filas = [f + [""] * (n_cols - len(f)) for f in filas]   # normaliza ancho
+    res["n_filas"], res["n_cols"] = len(filas), n_cols
+
+    if max_filas is not None and len(filas) > max_filas:
+        filas = filas[:max_filas]
+        res["truncada_filas"] = True
+    if max_cols is not None and n_cols > max_cols:
+        filas = [f[:max_cols] for f in filas]
+        res["truncada_cols"] = True
+
+    res["ok"], res["filas"] = True, filas
+    return res
+
+def _tablas_para_frontend() -> list[dict]:
+    """Lista de tablas para la UI: datos limpios + vista previa (matriz capada).
+
+    ``preview`` es un campo derivado (no se persiste en ``_estado``); se recalcula
+    en cada respuesta releyendo el .xlsx.
+    """
+    salida = []
+    for t in _estado["tablas_manuales"]:
+        limpio = {k: v for k, v in t.items()
+                  if not k.startswith("_") and k != "preview"}
+        limpio["preview"] = _leer_filas_xlsx(
+            t.get("ruta", ""), t.get("hoja"),
+            max_filas=PREVIEW_MAX_FILAS, max_cols=PREVIEW_MAX_COLS)
+        salida.append(limpio)
+    return salida
+
 @app.get("/api/tablas")
 def get_tablas():
-    tablas_limpias = [{k:v for k,v in t.items() if not k.startswith("_")}
-                      for t in _estado["tablas_manuales"]]
-    return {"tablas": tablas_limpias}
+    return {"tablas": _tablas_para_frontend()}
 
 @app.put("/api/tablas")
 def set_tablas(payload: TablasPayload):
-    _estado["tablas_manuales"] = payload.tablas
-    return {"ok": True, "total": len(payload.tablas)}
+    # ``preview`` es derivado: no debe persistirse si el frontend lo reenvía.
+    _estado["tablas_manuales"] = [
+        {k: v for k, v in t.items() if k != "preview"} for t in payload.tablas
+    ]
+    return {"ok": True, "total": len(_estado["tablas_manuales"])}
 
 class RutasExcelTablasPayload(BaseModel):
     rutas: list[str]
@@ -802,9 +878,7 @@ def agregar_tablas_por_rutas(payload: RutasExcelTablasPayload):
             wb.close()
         except Exception as e:
             raise HTTPException(status_code=422, detail=f"Error leyendo {Path(ruta).name}: {e}")
-    tablas_limpias = [{k:v for k,v in t.items() if not k.startswith("_")}
-                      for t in _estado["tablas_manuales"]]
-    return {"ok": True, "agregadas": agregadas, "tablas": tablas_limpias}
+    return {"ok": True, "agregadas": agregadas, "tablas": _tablas_para_frontend()}
 
 @app.post("/api/tablas/agregar-upload")
 async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
@@ -839,9 +913,7 @@ async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
         except Exception as e:
             os.unlink(ruta_tmp)
             raise HTTPException(status_code=422, detail=str(e))
-    tablas_limpias = [{k:v for k,v in t.items() if not k.startswith("_")}
-                      for t in _estado["tablas_manuales"]]
-    return {"ok": True, "agregadas": agregadas, "tablas": tablas_limpias}
+    return {"ok": True, "agregadas": agregadas, "tablas": _tablas_para_frontend()}
 
 class ActualizarTablaPayload(BaseModel):
     idx:    int
@@ -862,9 +934,38 @@ def eliminar_tabla(idx: int):
     if idx < 0 or idx >= len(_estado["tablas_manuales"]):
         raise HTTPException(status_code=404, detail="Tabla no encontrada")
     _estado["tablas_manuales"].pop(idx)
-    tablas_limpias = [{k:v for k,v in t.items() if not k.startswith("_")}
-                      for t in _estado["tablas_manuales"]]
-    return {"ok": True, "tablas": tablas_limpias}
+    return {"ok": True, "tablas": _tablas_para_frontend()}
+
+def _abrir_en_sistema(ruta: str) -> None:
+    """Abre un archivo con la aplicación predeterminada del sistema operativo.
+
+    El .xlsx sigue siendo la fuente de verdad: el usuario lo edita en Excel y el
+    programa lo relee (ver _leer_filas_xlsx). En escritorio (pywebview) el backend
+    corre en la máquina del usuario, así que esto abre Excel localmente.
+    """
+    if sys.platform.startswith("win"):
+        os.startfile(ruta)                       # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", ruta])
+    else:
+        subprocess.Popen(["xdg-open", ruta])
+
+@app.post("/api/tablas/{idx}/abrir-excel")
+def abrir_tabla_excel(idx: int):
+    """Abre el .xlsx de la tabla en Excel para editarlo (RF-29)."""
+    if idx < 0 or idx >= len(_estado["tablas_manuales"]):
+        raise HTTPException(status_code=404, detail="Tabla no encontrada")
+    ruta = _estado["tablas_manuales"][idx].get("ruta", "")
+    if not ruta or not os.path.isfile(ruta):
+        raise HTTPException(
+            status_code=404,
+            detail="El archivo .xlsx de esta tabla ya no existe en disco.",
+        )
+    try:
+        _abrir_en_sistema(ruta)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo abrir el archivo: {e}")
+    return {"ok": True, "ruta": ruta}
 
 
 # ═════════════════════════════════════════════════════════════════════════════
