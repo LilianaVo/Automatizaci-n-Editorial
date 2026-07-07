@@ -204,6 +204,7 @@ async def cargar_pdf(file: UploadFile = File(...)):
         "resumen": resultado.get("resumen", ""),
         "tamanio": f"{len(contenido) / 1024:.1f} KB",
     }
+    _reubicar_tablas_del_pdf()   # .xlsx de tablas a ruta estable (no temporal)
 
     os.unlink(ruta_tmp)
 
@@ -228,6 +229,7 @@ def limpiar_pdf():
     """Borra solo los bloques y la info del PDF. Conserva autores, afiliaciones y referencias."""
     if _estado["fig_dir"] and os.path.isdir(_estado["fig_dir"]):
         shutil.rmtree(_estado["fig_dir"], ignore_errors=True)
+    shutil.rmtree(_RECURSOS_TABLAS, ignore_errors=True)   # .xlsx generados
     _estado["bloques"]          = []
     _estado["figuras_manuales"] = []
     _estado["tablas_manuales"]  = []
@@ -284,6 +286,7 @@ def cargar_pdf_por_ruta(payload: RutaPDFPayload):
         "resumen": resultado.get("resumen", ""),
         "tamanio": f"{tam / 1024:.1f} KB",
     }
+    _reubicar_tablas_del_pdf()   # .xlsx de tablas a ruta estable (no temporal)
 
     return {
         "ok":        True,
@@ -763,8 +766,22 @@ def eliminar_figura(idx: int):
 # La vista previa envía la tabla COMPLETA; el viewport (~8 filas visibles con
 # scroll interno) se controla por CSS en la tarjeta.
 
-# Carpeta propia para los .xlsx que genera el programa al unir tablas (RF-28).
-_MERGE_DIR = Path(tempfile.gettempdir()) / "pm_editor_tablas"
+# ── Carpeta estable de recursos para los .xlsx de tablas ─────────────────────
+def _app_data_base() -> Path:
+    """Directorio de datos de la app según el SO (persistente, no temporal)."""
+    if sys.platform.startswith("win"):
+        base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
+    return base / "EditorSemantico"
+
+# Los .xlsx de tablas (extraídas del PDF, subidas o unidas) se guardan aquí en
+# vez de en la carpeta temporal del sistema, para que "Editar en Excel" y las
+# ediciones del usuario sobrevivan y no los borre el SO. Contiene solo archivos
+# generados por el programa, así que puede limpiarse al cargar un nuevo PDF.
+_RECURSOS_TABLAS = _app_data_base() / "recursos" / "tablas"
 
 def _leer_filas_xlsx(ruta: str, hoja: str | None,
                      max_filas: int | None = None,
@@ -857,6 +874,68 @@ def _tablas_para_frontend() -> list[dict]:
         salida.append(limpio)
     return salida
 
+def _mover_tabla_a_recursos(t: dict) -> str | None:
+    """Mueve el .xlsx de una tabla a _RECURSOS_TABLAS y actualiza t['ruta'].
+
+    Devuelve la carpeta de origen (para poder limpiarla si era temporal), o None
+    si no había nada que mover. Si el move falla, conserva la ruta original.
+    """
+    ruta = t.get("ruta", "")
+    if not ruta or not os.path.isfile(ruta):
+        return None
+    _RECURSOS_TABLAS.mkdir(parents=True, exist_ok=True)
+    origen_dir = os.path.dirname(os.path.abspath(ruta))
+    if origen_dir == os.path.abspath(_RECURSOS_TABLAS):
+        return None                                   # ya está en recursos
+    dest = _RECURSOS_TABLAS / os.path.basename(ruta)
+    if dest.exists():
+        dest = _RECURSOS_TABLAS / f"{dest.stem}_{uuid.uuid4().hex[:6]}{dest.suffix}"
+    try:
+        shutil.move(ruta, str(dest))
+        t["ruta"] = str(dest)
+        return origen_dir
+    except Exception:
+        return None
+
+def _limpiar_recursos_huerfanos() -> None:
+    """Borra de la carpeta de recursos los .xlsx que ya no referencia ninguna
+    tabla del estado (p. ej. sobras de un PDF anterior). Nunca borra archivos
+    fuera de la carpeta de recursos, así que los .xlsx propios del usuario están
+    a salvo."""
+    if not _RECURSOS_TABLAS.is_dir():
+        return
+    en_uso = {
+        os.path.abspath(t["ruta"])
+        for t in _estado["tablas_manuales"] if t.get("ruta")
+    }
+    for f in _RECURSOS_TABLAS.iterdir():
+        if f.is_file() and os.path.abspath(str(f)) not in en_uso:
+            try:
+                f.unlink()
+            except OSError:
+                pass
+
+def _reubicar_tablas_del_pdf() -> None:
+    """Tras cargar un PDF: mueve las tablas extraídas automáticamente
+    (origen ``auto_pdf``) desde el temporal del sistema a la carpeta estable de
+    recursos, y limpia archivos huérfanos de sesiones previas. Solo mueve
+    archivos generados por el PDF; nunca toca los .xlsx propios del usuario.
+
+    Es idempotente: mover primero y limpiar huérfanos después evita borrar una
+    tabla que ya viva en recursos.
+    """
+    _RECURSOS_TABLAS.mkdir(parents=True, exist_ok=True)
+    temp_dirs: set[str] = set()
+    for t in _estado["tablas_manuales"]:
+        if t.get("origen") != "auto_pdf":
+            continue
+        origen = _mover_tabla_a_recursos(t)
+        if origen and os.path.basename(origen).startswith("pm_tab_"):
+            temp_dirs.add(origen)
+    _limpiar_recursos_huerfanos()
+    for d in temp_dirs:                               # limpia los temp ya vaciados
+        shutil.rmtree(d, ignore_errors=True)
+
 @app.get("/api/tablas")
 def get_tablas():
     return {"tablas": _tablas_para_frontend()}
@@ -914,12 +993,15 @@ async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
     except ImportError:
         raise HTTPException(status_code=500, detail="Instala openpyxl")
     agregadas = 0
+    _RECURSOS_TABLAS.mkdir(parents=True, exist_ok=True)
     for file in files:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            tmp.write(await file.read())
-            ruta_tmp = tmp.name
+        # Se guarda en la carpeta estable de recursos (no en un temporal del SO)
+        # para que el .xlsx sobreviva y sea editable en Excel.
+        ruta_dest = str(_RECURSOS_TABLAS / f"subida_{uuid.uuid4().hex[:8]}.xlsx")
+        with open(ruta_dest, "wb") as fdst:
+            fdst.write(await file.read())
         try:
-            wb = openpyxl.load_workbook(ruta_tmp, data_only=True)
+            wb = openpyxl.load_workbook(ruta_dest, data_only=True)
             for hoja in wb.sheetnames:
                 ws = wb[hoja]
                 filas = list(ws.iter_rows(values_only=True))
@@ -928,16 +1010,17 @@ async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
                     for fila in filas[:8]
                 )
                 _estado["tablas_manuales"].append({
-                    "ruta":     ruta_tmp,
+                    "ruta":     ruta_dest,
                     "hoja":     hoja,
                     "titulo":   "",
                     "ancla":    "",
+                    "origen":   "subida",
                     "contenido": preview,
                 })
                 agregadas += 1
             wb.close()
         except Exception as e:
-            os.unlink(ruta_tmp)
+            os.unlink(ruta_dest)
             raise HTTPException(status_code=422, detail=str(e))
     return {"ok": True, "agregadas": agregadas, "tablas": _tablas_para_frontend()}
 
@@ -1007,8 +1090,8 @@ def _escribir_xlsx(filas: list[list[str]], titulo_hoja: str = "Tabla") -> str:
     """Escribe una matriz de filas a un .xlsx nuevo (editable en Excel) y
     devuelve su ruta. Usado al unir tablas (RF-28)."""
     import openpyxl
-    _MERGE_DIR.mkdir(parents=True, exist_ok=True)
-    ruta = str(_MERGE_DIR / f"tabla_unida_{uuid.uuid4().hex[:8]}.xlsx")
+    _RECURSOS_TABLAS.mkdir(parents=True, exist_ok=True)
+    ruta = str(_RECURSOS_TABLAS / f"tabla_unida_{uuid.uuid4().hex[:8]}.xlsx")
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = (titulo_hoja or "Tabla")[:31]
@@ -1246,6 +1329,7 @@ def resetear_estado():
     """Limpia toda la sesión."""
     if _estado["fig_dir"] and os.path.isdir(_estado["fig_dir"]):
         shutil.rmtree(_estado["fig_dir"], ignore_errors=True)
+    shutil.rmtree(_RECURSOS_TABLAS, ignore_errors=True)   # .xlsx generados
     _estado.update({
         "bloques": [], "referencias_externas": [], "figuras_manuales": [],
         "tablas_manuales": [], "autores_orcid": [], "afiliaciones_txt": "",
