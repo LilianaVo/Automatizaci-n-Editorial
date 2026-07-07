@@ -973,11 +973,13 @@ def agregar_tablas_por_rutas(payload: RutasExcelTablasPayload):
                     for fila in filas[:8]
                 )
                 _estado["tablas_manuales"].append({
-                    "ruta":     ruta,
-                    "hoja":     hoja,
-                    "titulo":   "",
-                    "ancla":    "",
-                    "contenido": preview,
+                    "ruta":        ruta,
+                    "hoja":        hoja,
+                    "rotulo":      "",
+                    "descripcion": "",
+                    "ancla":       "",
+                    "origen":      "importada",
+                    "contenido":   preview,
                 })
                 agregadas += 1
             wb.close()
@@ -1010,12 +1012,13 @@ async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
                     for fila in filas[:8]
                 )
                 _estado["tablas_manuales"].append({
-                    "ruta":     ruta_dest,
-                    "hoja":     hoja,
-                    "titulo":   "",
-                    "ancla":    "",
-                    "origen":   "subida",
-                    "contenido": preview,
+                    "ruta":        ruta_dest,
+                    "hoja":        hoja,
+                    "rotulo":      "",
+                    "descripcion": "",
+                    "ancla":       "",
+                    "origen":      "subida",
+                    "contenido":   preview,
                 })
                 agregadas += 1
             wb.close()
@@ -1025,17 +1028,21 @@ async def agregar_tablas_upload(files: list[UploadFile] = File(...)):
     return {"ok": True, "agregadas": agregadas, "tablas": _tablas_para_frontend()}
 
 class ActualizarTablaPayload(BaseModel):
-    idx:    int
-    titulo: str | None = None
-    ancla:  str | None = None
+    idx:         int
+    rotulo:      str | None = None   # → [label] (ej. "Tabla 1")
+    descripcion: str | None = None   # → [caption]
+    ancla:       str | None = None
+    titulo:      str | None = None   # compat: alias antiguo de descripción
 
 @app.patch("/api/tablas/{idx}")
 def actualizar_tabla(idx: int, datos: ActualizarTablaPayload):
     if idx < 0 or idx >= len(_estado["tablas_manuales"]):
         raise HTTPException(status_code=404, detail="Tabla no encontrada")
     t = _estado["tablas_manuales"][idx]
-    if datos.titulo is not None: t["titulo"] = datos.titulo
-    if datos.ancla  is not None: t["ancla"]  = datos.ancla
+    if datos.rotulo      is not None: t["rotulo"]      = datos.rotulo
+    if datos.descripcion is not None: t["descripcion"] = datos.descripcion
+    if datos.ancla       is not None: t["ancla"]       = datos.ancla
+    if datos.titulo      is not None: t["descripcion"] = datos.titulo  # compat
     return {"ok": True}
 
 @app.delete("/api/tablas/{idx}")
@@ -1133,11 +1140,12 @@ def unir_tabla_siguiente(idx: int, payload: UnirTablasPayload | None = None):
 
     ruta_nueva = _escribir_xlsx(combinadas, "Tabla_unida")
     nueva = {
-        "ruta":   ruta_nueva,
-        "hoja":   "Tabla_unida",
-        "titulo": a.get("titulo") or b.get("titulo") or "",
-        "ancla":  a.get("ancla")  or b.get("ancla")  or "",
-        "origen": "unida",
+        "ruta":        ruta_nueva,
+        "hoja":        "Tabla_unida",
+        "rotulo":      a.get("rotulo")      or b.get("rotulo")      or "",
+        "descripcion": a.get("descripcion") or b.get("descripcion") or "",
+        "ancla":       a.get("ancla")       or b.get("ancla")       or "",
+        "origen":      "unida",
     }
     tabs[idx:idx + 2] = [nueva]
     return {

@@ -1410,7 +1410,8 @@ const App = {
     }
 
     lista.innerHTML = tabs.map((t, i) => {
-      const titulo  = esc(t.titulo || "");
+      const rotulo      = esc(t.rotulo || "");
+      const descripcion = esc(t.descripcion || t.titulo || "");   // compat
       const ancla   = esc(t.ancla  || "");
       const archivo = esc(t.ruta ? t.ruta.split(/[\\/]/).pop() : "");
       const hoja    = esc(t.hoja || "");
@@ -1449,9 +1450,14 @@ const App = {
             <button class="tabla-row-del" onclick="App._eliminarTabla(${i})" title="Eliminar">✕</button>
           </div>
           <div class="tabla-row-body">
-            <input class="tabla-input" type="text" value="${titulo}"
-              placeholder="Título de la tabla…"
-              onblur="App._syncTabla(${i}, 'titulo', this.value)" />
+            <div class="figura-ancla-label">🏷️ Rótulo (etiqueta):</div>
+            <input class="tabla-input" type="text" value="${rotulo}"
+              placeholder='Ej: "Tabla 1"'
+              onblur="App._syncTabla(${i}, 'rotulo', this.value)" />
+            <div class="figura-ancla-label">📝 Descripción (leyenda):</div>
+            <input class="tabla-input" type="text" value="${descripcion}"
+              placeholder="Ej: Coeficientes de correlación de la sección La Joya…"
+              onblur="App._syncTabla(${i}, 'descripcion', this.value)" />
             <div class="figura-ancla-label">📍 Párrafo donde va la tabla:</div>
             <input class="tabla-input" type="text" value="${ancla}"
               placeholder='Ej: "...la Dra. Elena Centeno (Tabla 1)."'

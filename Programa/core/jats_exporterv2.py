@@ -596,6 +596,64 @@ def _append_table_xml(table_wrap: ET.Element, ruta: str, hoja: str | None) -> No
             td.text = cell
 
 
+# --- Auto-referencias cruzadas a tablas ([xref] ref-type="table") -----------
+
+# Menciona "Tabla N", "Tablas 1 y 2", "Table 3", etc. (ES/EN). Exige al menos un
+# número, así "Tabla de contenidos" no coincide.
+_TABLE_MENTION_RE = re.compile(
+    r"\b(Tablas?|Tables?)\b(\s*\d+(?:\s*(?:,|;|y|e|and|-|–|a|to)\s*\d+)*)",
+    re.IGNORECASE,
+)
+_NUM_RE = re.compile(r"\d+")
+
+
+def _set_p_con_xrefs_tabla(p_el: ET.Element, texto: str, n_tablas: int) -> None:
+    """Rellena un <p> con contenido mixto, envolviendo las menciones a tablas en
+    <xref ref-type="table" rid="tblN">N</xref>.
+
+    Solo enlaza números 1..n_tablas (para no dejar xref apuntando a una tabla
+    inexistente). La palabra "Tabla" y los conectores ("y", ",") quedan como
+    texto normal — solo el número se envuelve. No se aplica al caption/label de
+    la tabla (que se construyen aparte, en la sección de tablas), así que la
+    tabla nunca se auto-referencia.
+    """
+    if n_tablas <= 0 or not _TABLE_MENTION_RE.search(texto or ""):
+        p_el.text = texto
+        return
+
+    last_el: ET.Element | None = None   # último <xref> insertado (para su .tail)
+
+    def add_text(s: str) -> None:
+        nonlocal last_el
+        if not s:
+            return
+        if last_el is None:
+            p_el.text = (p_el.text or "") + s
+        else:
+            last_el.tail = (last_el.tail or "") + s
+
+    pos = 0
+    for m in _TABLE_MENTION_RE.finditer(texto):
+        add_text(texto[pos:m.start()])
+        add_text(m.group(1))               # "Tabla"/"Tablas"/"Table"… como texto
+        nums_part = m.group(2)             # " 1 y 2"
+        sub = 0
+        for nm in _NUM_RE.finditer(nums_part):
+            add_text(nums_part[sub:nm.start()])
+            num = int(nm.group())
+            if 1 <= num <= n_tablas:
+                xr = ET.SubElement(p_el, "xref",
+                                   {"ref-type": "table", "rid": f"tbl{num}"})
+                xr.text = nm.group()
+                last_el = xr
+            else:
+                add_text(nm.group())       # número fuera de rango → texto plano
+            sub = nm.end()
+        add_text(nums_part[sub:])
+        pos = m.end()
+    add_text(texto[pos:])
+
+
 # --- Parser de referencias APA → element-citation JATS ----------------------
 
 # Patrones para parsear referencias en formato APA
@@ -1298,19 +1356,23 @@ def build_jats_xml(
                 p = ET.SubElement(_ensure_sec(), "p")
             else:
                 p = ET.SubElement(body, "p")
-            p.text = ptxt
+            # Auto-referencias cruzadas a tablas: envuelve "Tabla N" en <xref>.
+            _set_p_con_xrefs_tabla(p, ptxt, len(tablas))
 
     # Tablas al final del body
     if tablas:
         sec_tables = ET.SubElement(body, "sec", {"sec-type": "tables"})
         ET.SubElement(sec_tables, "title").text = "Tablas"
         for i, tab in enumerate(tablas, 1):
+            # RF: [label] = rótulo (ej. "Tabla 1"); [caption] = descripción.
+            rotulo      = _clean_text(tab.get("rotulo", "")) or f"Tabla {i}"
+            descripcion = (_clean_text(tab.get("descripcion", ""))
+                           or _clean_text(tab.get("titulo", "")))   # compat
             tw = ET.SubElement(sec_tables, "table-wrap", {"id": f"tbl{i}"})
-            ET.SubElement(tw, "label").text = f"Tabla {i}"
+            ET.SubElement(tw, "label").text = rotulo
             cap = ET.SubElement(tw, "caption")
-            ET.SubElement(cap, "title").text = f"Tabla {i}"
-            ET.SubElement(cap, "p").text = \
-                _clean_text(tab.get("titulo", "")) or f"Tabla {i}"
+            ET.SubElement(cap, "title").text = rotulo
+            ET.SubElement(cap, "p").text = descripcion or rotulo
             _append_table_xml(tw, tab.get("ruta", ""), tab.get("hoja"))
 
     # Figuras al final del body

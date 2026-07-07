@@ -569,11 +569,14 @@ def build_html(
         tablas_ordenadas: list[tuple[int, int, str]] = []
         for idx_t, t_item in enumerate(tablas, 1):
             ancla  = t_item.get("ancla", "").strip()
-            titulo = t_item.get("titulo", "") or f"Tabla {idx_t}"
+            # [label] = rótulo (ej. "Tabla 1"); [caption] = descripción.
+            rotulo = (t_item.get("rotulo", "") or "").strip() or f"Tabla {idx_t}"
+            descripcion = ((t_item.get("descripcion", "") or "").strip()
+                           or (t_item.get("titulo", "") or "").strip())   # compat
             thtml  = _excel_a_html_tabla(t_item["ruta"], t_item.get("hoja"))
             bloque = (
                 f'\n<div class="tabla-wrapper">\n'
-                f'<p class="tabla-titulo"><strong>Tabla {idx_t}.</strong> {esc(titulo)}</p>\n'
+                f'<p class="tabla-titulo"><strong>{esc(rotulo)}.</strong> {esc(descripcion)}</p>\n'
                 f'{thtml}\n</div>\n'
             )
             pos = _buscar_pos_ancla(ancla, html_body)
