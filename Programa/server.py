@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import uuid
 import shutil
 import tempfile
 import subprocess
@@ -763,6 +764,9 @@ def eliminar_figura(idx: int):
 PREVIEW_MAX_FILAS = 8
 PREVIEW_MAX_COLS  = 8
 
+# Carpeta propia para los .xlsx que genera el programa al unir tablas (RF-28).
+_MERGE_DIR = Path(tempfile.gettempdir()) / "pm_editor_tablas"
+
 def _leer_filas_xlsx(ruta: str, hoja: str | None,
                      max_filas: int | None = None,
                      max_cols:  int | None = None) -> dict:
@@ -816,19 +820,42 @@ def _leer_filas_xlsx(ruta: str, hoja: str | None,
     res["ok"], res["filas"] = True, filas
     return res
 
+def _sugiere_unir_siguiente(items: list[dict], previews: list[dict], i: int) -> bool:
+    """True si la tabla i+1 parece la continuación de i por salto de página (RF-28).
+
+    Heurística: ambas extraídas del PDF (``auto_pdf``), en páginas consecutivas y
+    con el mismo número de columnas.
+    """
+    if i + 1 >= len(items):
+        return False
+    a, b = items[i], items[i + 1]
+    if a.get("origen") != "auto_pdf" or b.get("origen") != "auto_pdf":
+        return False
+    pa, pb = a.get("pagina"), b.get("pagina")
+    if not (isinstance(pa, int) and isinstance(pb, int) and pb == pa + 1):
+        return False
+    na, nb = previews[i].get("n_cols", 0), previews[i + 1].get("n_cols", 0)
+    return na > 0 and na == nb
+
 def _tablas_para_frontend() -> list[dict]:
     """Lista de tablas para la UI: datos limpios + vista previa (matriz capada).
 
-    ``preview`` es un campo derivado (no se persiste en ``_estado``); se recalcula
-    en cada respuesta releyendo el .xlsx.
+    ``preview`` y ``sugiere_unir_siguiente`` son campos derivados (no se persisten
+    en ``_estado``); se recalculan en cada respuesta releyendo el .xlsx.
     """
+    items    = _estado["tablas_manuales"]
+    previews = [
+        _leer_filas_xlsx(t.get("ruta", ""), t.get("hoja"),
+                         max_filas=PREVIEW_MAX_FILAS, max_cols=PREVIEW_MAX_COLS)
+        for t in items
+    ]
     salida = []
-    for t in _estado["tablas_manuales"]:
+    for i, t in enumerate(items):
         limpio = {k: v for k, v in t.items()
-                  if not k.startswith("_") and k != "preview"}
-        limpio["preview"] = _leer_filas_xlsx(
-            t.get("ruta", ""), t.get("hoja"),
-            max_filas=PREVIEW_MAX_FILAS, max_cols=PREVIEW_MAX_COLS)
+                  if not k.startswith("_")
+                  and k not in ("preview", "sugiere_unir_siguiente")}
+        limpio["preview"] = previews[i]
+        limpio["sugiere_unir_siguiente"] = _sugiere_unir_siguiente(items, previews, i)
         salida.append(limpio)
     return salida
 
@@ -838,9 +865,10 @@ def get_tablas():
 
 @app.put("/api/tablas")
 def set_tablas(payload: TablasPayload):
-    # ``preview`` es derivado: no debe persistirse si el frontend lo reenvía.
+    # ``preview``/``sugiere_unir_siguiente`` son derivados: no se persisten.
+    _derivados = ("preview", "sugiere_unir_siguiente")
     _estado["tablas_manuales"] = [
-        {k: v for k, v in t.items() if k != "preview"} for t in payload.tablas
+        {k: v for k, v in t.items() if k not in _derivados} for t in payload.tablas
     ]
     return {"ok": True, "total": len(_estado["tablas_manuales"])}
 
@@ -966,6 +994,76 @@ def abrir_tabla_excel(idx: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"No se pudo abrir el archivo: {e}")
     return {"ok": True, "ruta": ruta}
+
+def _misma_fila(fa: list[str], fb: list[str]) -> bool:
+    """Compara dos filas ignorando mayúsculas, espacios y celdas vacías al final."""
+    def norm(f):
+        s = [str(c).strip().lower() for c in f]
+        while s and s[-1] == "":
+            s.pop()
+        return s
+    na = norm(fa)
+    return na != [] and na == norm(fb)
+
+def _escribir_xlsx(filas: list[list[str]], titulo_hoja: str = "Tabla") -> str:
+    """Escribe una matriz de filas a un .xlsx nuevo (editable en Excel) y
+    devuelve su ruta. Usado al unir tablas (RF-28)."""
+    import openpyxl
+    _MERGE_DIR.mkdir(parents=True, exist_ok=True)
+    ruta = str(_MERGE_DIR / f"tabla_unida_{uuid.uuid4().hex[:8]}.xlsx")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = (titulo_hoja or "Tabla")[:31]
+    for fila in filas:
+        ws.append(list(fila))
+    wb.save(ruta)
+    wb.close()
+    return ruta
+
+class UnirTablasPayload(BaseModel):
+    quitar_encabezado_repetido: bool = True
+
+@app.post("/api/tablas/{idx}/unir-siguiente")
+def unir_tabla_siguiente(idx: int, payload: UnirTablasPayload | None = None):
+    """Une la tabla idx con la siguiente (idx+1) en un .xlsx combinado (RF-28)."""
+    tabs = _estado["tablas_manuales"]
+    if idx < 0 or idx + 1 >= len(tabs):
+        raise HTTPException(status_code=404, detail="No hay una tabla siguiente para unir")
+
+    a, b = tabs[idx], tabs[idx + 1]
+    fa = _leer_filas_xlsx(a.get("ruta", ""), a.get("hoja"))   # sin capar: todo
+    fb = _leer_filas_xlsx(b.get("ruta", ""), b.get("hoja"))
+    if not fa["ok"] or not fb["ok"]:
+        raise HTTPException(
+            status_code=422,
+            detail="No se pudo leer alguna tabla: " + (fa["error"] or fb["error"]),
+        )
+
+    filas_a, filas_b = fa["filas"], fb["filas"]
+    quitar = payload.quitar_encabezado_repetido if payload else True
+    encabezado_quitado = False
+    if quitar and filas_a and filas_b and _misma_fila(filas_a[0], filas_b[0]):
+        filas_b = filas_b[1:]
+        encabezado_quitado = True
+
+    combinadas = filas_a + filas_b
+    ncols = max((len(f) for f in combinadas), default=0)
+    combinadas = [f + [""] * (ncols - len(f)) for f in combinadas]
+
+    ruta_nueva = _escribir_xlsx(combinadas, "Tabla_unida")
+    nueva = {
+        "ruta":   ruta_nueva,
+        "hoja":   "Tabla_unida",
+        "titulo": a.get("titulo") or b.get("titulo") or "",
+        "ancla":  a.get("ancla")  or b.get("ancla")  or "",
+        "origen": "unida",
+    }
+    tabs[idx:idx + 2] = [nueva]
+    return {
+        "ok": True,
+        "encabezado_quitado": encabezado_quitado,
+        "tablas": _tablas_para_frontend(),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════

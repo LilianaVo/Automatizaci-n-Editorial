@@ -1416,6 +1416,15 @@ const App = {
       const hoja    = esc(t.hoja || "");
       const previewHTML = App._miniTablaHTML(t.preview);
       const subtitle = archivo ? (hoja ? `${archivo} › ${hoja}` : archivo) : `Tabla ${i + 1}`;
+      const hayEsq  = i < tabs.length - 1;
+      const sugiere = !!t.sugiere_unir_siguiente;
+      const unirHTML = hayEsq ? `
+        <div class="tabla-unir">
+          ${sugiere ? `<div class="tabla-unir-hint">🔗 Parece la continuación de una tabla partida por salto de página.</div>` : ""}
+          <button class="tabla-btn-unir${sugiere ? " sugerido" : ""}" onclick="App._unirSiguiente(${i})">
+            ⬍ Unir con la tabla siguiente
+          </button>
+        </div>` : "";
       return `
         <div class="tabla-row">
           <div class="tabla-row-header">
@@ -1448,6 +1457,7 @@ const App = {
               placeholder='Ej: "...la Dra. Elena Centeno (Tabla 1)."'
               onblur="App._syncTabla(${i}, 'ancla', this.value)" />
             ${previewHTML}
+            ${unirHTML}
           </div>
         </div>`;
     }).join("");
@@ -1517,6 +1527,30 @@ const App = {
     } catch (e) {
       App._editWatch = null;
       showToast("No se pudo abrir en Excel: " + (e.message || ""), 4000);
+    }
+  },
+
+  // RF-28 — Une la tabla idx con la siguiente en un .xlsx combinado.
+  async _unirSiguiente(idx) {
+    const ok = await _modalConfirmar({
+      titulo:  "Unir tablas",
+      mensaje: `Se unirán la Tabla ${idx + 1} y la Tabla ${idx + 2} en una sola. ` +
+               `Si la segunda repite el encabezado, se quitará automáticamente. ` +
+               `El resultado queda en un Excel que podrás seguir editando.`,
+      btnOk:   "Unir",
+    });
+    if (!ok) return;
+    try {
+      setStatus("Uniendo tablas…", "idle");
+      const data = await API.post(`/api/tablas/${idx}/unir-siguiente`, {});
+      App._renderTablas(data.tablas || []);
+      showToast(data.encabezado_quitado
+        ? "✓ Tablas unidas (encabezado repetido eliminado)"
+        : "✓ Tablas unidas");
+      setStatus("Tablas unidas");
+    } catch (e) {
+      showToast("No se pudieron unir: " + (e.message || ""), 4000);
+      setStatus("Error al unir tablas", "error");
     }
   },
 

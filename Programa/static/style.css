@@ -1715,6 +1715,39 @@ html, body {
   text-align: center;
 }
 
+/* RF-28 — Unir tabla partida por salto de página */
+.tabla-unir { margin-top: 4px; }
+
+.tabla-unir-hint {
+  font-size: 11px;
+  color: var(--sepia-mid);
+  background: var(--sepia-cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+
+.tabla-btn-unir {
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  background: #fff;
+  cursor: pointer;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.tabla-btn-unir:hover { background: var(--sepia-cream); border-color: var(--sepia-mid); color: var(--sepia-mid); }
+
+.tabla-btn-unir.sugerido {
+  border-style: solid;
+  border-color: var(--sepia-mid);
+  color: var(--sepia-mid);
+}
+
 /* Hint de referencias */
 .refs-hint {
   font-size: 12px;
