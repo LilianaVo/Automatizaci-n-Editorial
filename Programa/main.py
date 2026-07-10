@@ -95,6 +95,24 @@ class AppAPI:
         )
         return list(rutas) if rutas else []
 
+    def abrir_pmz(self) -> str | None:
+        """Abrir un proyecto del Editor Semántico (.pmz)."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=("Proyecto Editor Semántico (*.pmz)",),
+        )
+        return rutas[0] if rutas else None
+
+    def guardar_pmz(self, nombre_sugerido: str = "proyecto.pmz") -> str | None:
+        """Guardar el proyecto actual como .pmz."""
+        ruta = webview.windows[0].create_file_dialog(
+            webview.SAVE_DIALOG,
+            save_filename=nombre_sugerido or "proyecto.pmz",
+            file_types=("Proyecto Editor Semántico (*.pmz)",),
+        )
+        return ruta if isinstance(ruta, str) else (ruta[0] if ruta else None)
+
     def seleccionar_carpeta(self) -> str | None:
         """Abre diálogo para elegir carpeta de salida predeterminada."""
         resultado = webview.windows[0].create_file_dialog(

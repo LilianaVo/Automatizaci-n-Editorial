@@ -1578,6 +1578,98 @@ const App = {
     } catch (_) {}
   },
 
+  // ── Proyecto (RF-04): menú Archivo, guardar/abrir/autoguardar ───────────────
+  _toggleMenu(ev, id) {
+    ev.stopPropagation();
+    const dd = document.getElementById(id);
+    const abrir = dd && dd.style.display !== "block";
+    App._cerrarMenus();
+    if (dd && abrir) dd.style.display = "block";
+  },
+
+  _cerrarMenus() {
+    document.querySelectorAll(".menu-dropdown").forEach(d => (d.style.display = "none"));
+  },
+
+  async proyectoNuevo() {
+    App._cerrarMenus();
+    const ok = await _modalConfirmar({
+      titulo:  "Nuevo proyecto",
+      mensaje: "Se cerrará el proyecto actual. Guarda antes si no quieres perder cambios. ¿Continuar?",
+      btnOk:   "Nuevo", peligro: true,
+    });
+    if (!ok) return;
+    try { await API.delete("/api/estado"); } catch (_) {}
+    localStorage.removeItem("proyectoRuta");
+    location.reload();
+  },
+
+  async proyectoAbrir() {
+    App._cerrarMenus();
+    const ruta = window.pywebview?.api?.abrir_pmz
+      ? await window.pywebview.api.abrir_pmz()
+      : null;
+    if (!ruta) return;   // cancelado
+    try {
+      setStatus("Abriendo proyecto…", "idle");
+      await API.post("/api/proyecto/abrir", { ruta });
+      localStorage.setItem("proyectoRuta", ruta);
+      showToast("✓ Proyecto abierto");
+      location.reload();   // re-inicializa la interfaz desde el estado cargado
+    } catch (e) {
+      showToast("No se pudo abrir el proyecto: " + (e.message || ""), 4000);
+      setStatus("Error al abrir proyecto", "error");
+    }
+  },
+
+  async proyectoGuardar() {
+    App._cerrarMenus();
+    if (State.proyectoRuta) await App._guardarEn(State.proyectoRuta);
+    else await App.proyectoGuardarComo();
+  },
+
+  async proyectoGuardarComo() {
+    App._cerrarMenus();
+    const base = ((State.pdfInfo && State.pdfInfo.nombre) || "proyecto")
+      .replace(/\.[^.]+$/, "");
+    const ruta = window.pywebview?.api?.guardar_pmz
+      ? await window.pywebview.api.guardar_pmz(base + ".pmz")
+      : null;
+    if (!ruta) return;
+    await App._guardarEn(ruta);
+  },
+
+  async _guardarEn(ruta) {
+    try {
+      setStatus("Guardando proyecto…", "idle");
+      const data = await API.post("/api/proyecto/guardar", { ruta });
+      State.proyectoRuta = data.ruta;
+      localStorage.setItem("proyectoRuta", data.ruta);
+      showToast("✓ Proyecto guardado");
+      setStatus("Proyecto guardado");
+    } catch (e) {
+      showToast("No se pudo guardar: " + (e.message || ""), 4000);
+      setStatus("Error al guardar proyecto", "error");
+    }
+  },
+
+  async _ofrecerReabrirUltimo(ruta) {
+    const nombre = ruta.split(/[\\/]/).pop();
+    const ok = await _modalConfirmar({
+      titulo:  "Reabrir proyecto",
+      mensaje: `¿Quieres reabrir el último proyecto guardado «${nombre}»?`,
+      btnOk:   "Reabrir",
+    });
+    if (!ok) return;
+    try {
+      await API.post("/api/proyecto/abrir", { ruta });
+      location.reload();
+    } catch (e) {
+      showToast("No se pudo reabrir: " + (e.message || ""), 4000);
+      localStorage.removeItem("proyectoRuta");   // la ruta ya no es válida
+    }
+  },
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // EXPORTAR
@@ -1919,11 +2011,15 @@ async function init() {
     // 7. Renderizar historial de PDFs recientes
     Historial.renderizar();
 
-    if (estado.tiene_pdf && estado.sesion_restaurada) {
-      setStatus("Sesión restaurada ✓");
-      showToast("✓ Se recuperó tu sesión anterior — puedes continuar donde lo dejaste", 4500);
+    // 8. Proyecto (RF-04): ruta del último proyecto guardado (guardado manual)
+    State.proyectoRuta = localStorage.getItem("proyectoRuta") || null;
+
+    if (estado.tiene_pdf) {
+      setStatus("Listo para continuar");
     } else {
       setStatus("Listo para comenzar");
+      // Sin autoguardado: ofrecer reabrir el último proyecto que guardaste.
+      if (State.proyectoRuta) App._ofrecerReabrirUltimo(State.proyectoRuta);
     }
 
   } catch (e) {
@@ -2091,6 +2187,9 @@ document.addEventListener("mousedown", (e) => {
 // RF-29 — Al recuperar el foco (p. ej. al volver de Excel), revisa si la tabla
 // que se estaba editando cambió y refresca su vista previa.
 window.addEventListener("focus", () => { App._revisarEdicionExcel(); });
+
+// RF-04 — Cerrar los menús (Archivo) al hacer clic fuera.
+document.addEventListener("click", () => App._cerrarMenus());
 
 // Arrancar cuando esté listo (PyWebView o browser)
 if (window.pywebview) {

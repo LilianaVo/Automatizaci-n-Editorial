@@ -29,6 +29,7 @@ from core.jats_exporterv2  import build_jats_xml
 from core.html_exporter    import build_html
 from core.epub_exporter    import build_epub
 from core.xml_validator    import validar_jats
+from core import proyecto
 from core.constans import (
     OPCIONES,
     CLASE_COMPAT,
@@ -236,7 +237,6 @@ def limpiar_pdf():
     _estado["fig_dir"]          = None
     _estado["pdf_info"]         = {}
     _estado["metadatos"]        = {}
-    _guardar_sesion()
     return {"ok": True}
 
 
@@ -782,6 +782,10 @@ def _app_data_base() -> Path:
 # ediciones del usuario sobrevivan y no los borre el SO. Contiene solo archivos
 # generados por el programa, así que puede limpiarse al cargar un nuevo PDF.
 _RECURSOS_TABLAS = _app_data_base() / "recursos" / "tablas"
+
+# RF-04 — guardar/abrir proyecto: carpeta de trabajo donde se extraen los
+# recursos del proyecto abierto.
+_WORK_DIR = _app_data_base() / "trabajo"
 
 def _leer_filas_xlsx(ruta: str, hoja: str | None,
                      max_filas: int | None = None,
@@ -1344,6 +1348,59 @@ def resetear_estado():
         "fig_dir": None, "pdf_info": {}, "metadatos": {},
     })
     return {"ok": True}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Endpoints — Proyecto (guardar / abrir)  [RF-04]
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _fuente_actual() -> dict:
+    info = _estado.get("pdf_info") or {}
+    return {"nombre": info.get("nombre", ""), "tipo": info.get("tipo", "pdf")}
+
+def _aplicar_estado_cargado(est: dict, work_dir: str) -> None:
+    """Vuelca en _estado un proyecto cargado desde un .pmz."""
+    if _estado.get("fig_dir") and os.path.isdir(_estado["fig_dir"]):
+        shutil.rmtree(_estado["fig_dir"], ignore_errors=True)
+    _estado["bloques"]              = est.get("bloques") or []
+    _estado["referencias_externas"] = est.get("referencias_externas") or []
+    _estado["autores_orcid"]        = est.get("autores_orcid") or []
+    _estado["afiliaciones_txt"]     = est.get("afiliaciones_txt") or ""
+    _estado["metadatos"]            = est.get("metadatos") or {}
+    _estado["pdf_info"]             = est.get("pdf_info") or {}
+    _estado["figuras_manuales"]     = est.get("figuras_manuales") or []
+    _estado["tablas_manuales"]      = est.get("tablas_manuales") or []
+    _estado["fig_dir"]              = os.path.join(work_dir, "recursos", "figuras")
+
+class RutaProyectoPayload(BaseModel):
+    ruta: str
+
+@app.post("/api/proyecto/guardar")
+def guardar_proyecto(payload: RutaProyectoPayload):
+    """Guarda el proyecto actual como .pmz en la ruta indicada (Guardar como)."""
+    if not _estado.get("bloques"):
+        raise HTTPException(status_code=400, detail="No hay nada que guardar todavía.")
+    ruta = payload.ruta
+    if not ruta.lower().endswith(".pmz"):
+        ruta += ".pmz"
+    try:
+        proyecto.empaquetar(_estado, ruta, fuente=_fuente_actual())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo guardar el proyecto: {e}")
+    return {"ok": True, "ruta": ruta}
+
+@app.post("/api/proyecto/abrir")
+def abrir_proyecto(payload: RutaProyectoPayload):
+    """Abre un .pmz y lo carga como proyecto activo."""
+    if not os.path.isfile(payload.ruta):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+    shutil.rmtree(_WORK_DIR, ignore_errors=True)
+    try:
+        est = proyecto.cargar(payload.ruta, str(_WORK_DIR))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    _aplicar_estado_cargado(est, str(_WORK_DIR))
+    return {"ok": True, "info": _estado["pdf_info"], "meta": est.get("_meta", {})}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

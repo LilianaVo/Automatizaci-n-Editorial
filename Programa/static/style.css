@@ -162,12 +162,55 @@ html, body {
   padding: 0 24px 0 20px;
   z-index: 100;
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow: visible;   /* permite que el menú desplegable (Archivo) se muestre */
 }
 
 /* Topbar limpio — sin patrón de fondo */
 
 .topbar > * { position: relative; z-index: 1; }
+
+/* RF-04 — Barra de menú (Archivo ▾) */
+.menubar { display: flex; align-items: center; gap: 4px; margin-left: 12px; margin-right: auto; }
+.menu { position: relative; }
+.menu-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.menu-btn:hover { background: var(--sepia-cream); border-color: var(--border); }
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--sepia-white);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+  padding: 5px;
+  z-index: 200;
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+.menu-item:hover { background: var(--sepia-cream); color: var(--sepia-mid); }
+.menu-sep { height: 1px; background: var(--border); margin: 5px 6px; }
 
 .topbar-brand {
   display: flex;

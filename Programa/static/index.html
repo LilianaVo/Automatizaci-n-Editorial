@@ -29,6 +29,19 @@
     </div>
   </div>
 
+  <nav class="menubar">
+    <div class="menu">
+      <button class="menu-btn" onclick="App._toggleMenu(event, 'menu-archivo')">Archivo ▾</button>
+      <div class="menu-dropdown" id="menu-archivo">
+        <button class="menu-item" onclick="App.proyectoNuevo()">Nuevo</button>
+        <button class="menu-item" onclick="App.proyectoAbrir()">Abrir proyecto…</button>
+        <div class="menu-sep"></div>
+        <button class="menu-item" onclick="App.proyectoGuardar()">Guardar</button>
+        <button class="menu-item" onclick="App.proyectoGuardarComo()">Guardar como…</button>
+      </div>
+    </div>
+  </nav>
+
   <div class="topbar-actions">
     <button class="btn-export btn-export--preview" onclick="App.verPreview()" title="Ver cómo quedará el artículo en HTML">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
