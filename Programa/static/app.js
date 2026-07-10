@@ -23,6 +23,26 @@ const State = {
 // ─────────────────────────────────────────────────────────────────────────────
 // Wrapper fetch  (GET / POST JSON / PUT JSON / POST FormData)
 // ─────────────────────────────────────────────────────────────────────────────
+// ¿La petición modifica el proyecto? (para marcar "cambios sin guardar", RF-04)
+// Se excluyen proyecto (guardar/abrir), exportaciones y validación.
+function _esMutacion(path) {
+  return path.startsWith("/api/") &&
+    !path.startsWith("/api/proyecto/") &&
+    !path.startsWith("/api/exportar/") &&
+    !path.startsWith("/api/validar");
+}
+// Fija el estado "hay cambios sin guardar" y lo sincroniza con Python (main.py),
+// que lo usa para decidir si avisar al cerrar la ventana. Solo empuja en cambios.
+function _dirty(v) {
+  v = !!v;
+  if (typeof State === "undefined" || State.sinGuardar === v) return;
+  State.sinGuardar = v;
+  try { window.pywebview?.api?.set_sin_guardar?.(v); } catch (_) {}
+}
+function _marcarSinGuardar(path) {
+  if (_esMutacion(path)) _dirty(true);
+}
+
 const API = {
   async get(path) {
     const r = await fetch(path);
@@ -36,6 +56,7 @@ const API = {
       body    : JSON.stringify(body),
     });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    _marcarSinGuardar(path);
     return r.json();
   },
   async put(path, body) {
@@ -45,6 +66,7 @@ const API = {
       body    : JSON.stringify(body),
     });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    _marcarSinGuardar(path);
     return r.json();
   },
   async patch(path, body) {
@@ -54,16 +76,19 @@ const API = {
       body    : JSON.stringify(body),
     });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    _marcarSinGuardar(path);
     return r.json();
   },
   async delete(path) {
     const r = await fetch(path, { method: "DELETE" });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    _marcarSinGuardar(path);
     return r.json();
   },
   async postForm(path, fd) {
     const r = await fetch(path, { method: "POST", body: fd });
     if (!r.ok) { const t = await r.text(); throw new Error(t); }
+    _marcarSinGuardar(path);
     return r.json();
   },
   async postBlob(path) {
@@ -1326,12 +1351,14 @@ const App = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idx, [campo]: valor }),
       });
+      _dirty(true);
     } catch (_) {}
   },
 
   async _eliminarFigura(idx) {
     try {
       const data = await fetch(`/api/figuras/${idx}`, { method: "DELETE" }).then(r => r.json());
+      _dirty(true);
       App._renderFiguras(data.figuras || []);
     } catch (e) {
       setStatus("Error: " + e.message, "error");
@@ -1506,12 +1533,14 @@ const App = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idx, [campo]: valor }),
       });
+      _dirty(true);
     } catch (_) {}
   },
 
   async _eliminarTabla(idx) {
     try {
       const data = await fetch(`/api/tablas/${idx}`, { method: "DELETE" }).then(r => r.json());
+      _dirty(true);
       App._renderTablas(data.tablas || []);
     } catch (e) {
       setStatus("Error: " + e.message, "error");
@@ -1644,13 +1673,92 @@ const App = {
       setStatus("Guardando proyecto…", "idle");
       const data = await API.post("/api/proyecto/guardar", { ruta });
       State.proyectoRuta = data.ruta;
+      _dirty(false);
       localStorage.setItem("proyectoRuta", data.ruta);
+      App._actualizarTituloProyecto();
       showToast("✓ Proyecto guardado");
       setStatus("Proyecto guardado");
     } catch (e) {
       showToast("No se pudo guardar: " + (e.message || ""), 4000);
       setStatus("Error al guardar proyecto", "error");
     }
+  },
+
+  // ── Título del proyecto en la barra superior (RF-04 · visual) ───────────────
+  _tituloProyecto() {
+    if (!State.proyectoRuta) return "Proyecto sin título";
+    return State.proyectoRuta.split(/[\\/]/).pop().replace(/\.pmz$/i, "");
+  },
+
+  _actualizarTituloProyecto() {
+    const el = $("proyecto-titulo");
+    if (!el) return;
+    const t = App._tituloProyecto();
+    el.textContent = t;
+    el.classList.toggle("proyecto-titulo--sin", !State.proyectoRuta);
+    el.title = "Proyecto actual: " + t;
+  },
+
+  // ── Aviso de cambios sin guardar al cerrar (RF-04) ──────────────────────────
+  // La llama main.py (evento closing de la ventana) vía window.pywebview.
+  _hayCambiosSinGuardar() {
+    return !!(State.tienePDF && State.sinGuardar);
+  },
+
+  // La llama main.py (hilo aparte) al intentar cerrar la ventana.
+  async _alIntentarCerrar() {
+    if (!App._hayCambiosSinGuardar()) { App._cerrarApp(); return; }
+    await App._confirmarCierre();
+  },
+
+  _cerrarApp() {
+    if (window.pywebview?.api?.cerrar_confirmado)
+      window.pywebview.api.cerrar_confirmado();
+  },
+
+  async _confirmarCierre() {
+    const eleccion = await App._modalCierre();
+    if (eleccion === "cancelar") return;
+    if (eleccion === "guardar") {
+      await App.proyectoGuardar();
+      if (State.sinGuardar) return;   // el usuario canceló el diálogo de guardar
+    }
+    App._cerrarApp();
+  },
+
+  _modalCierre() {
+    return new Promise(resolve => {
+      let overlay = document.getElementById("modal-cierre-overlay");
+      if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "modal-cierre-overlay";
+        overlay.className = "modal-overlay";
+        overlay.innerHTML = `
+          <div class="modal-confirmar" role="dialog" aria-modal="true">
+            <h3 class="modal-confirmar-titulo">Cambios sin guardar</h3>
+            <p class="modal-confirmar-msg">Tienes cambios sin guardar en este proyecto. ¿Qué quieres hacer antes de cerrar?</p>
+            <div class="modal-confirmar-btns modal-cierre-btns">
+              <button class="btn btn--ghost"   id="cierre-cancelar">Cancelar</button>
+              <button class="btn btn--danger"  id="cierre-sin">Cerrar sin guardar</button>
+              <button class="btn btn--primary" id="cierre-guardar">Guardar y cerrar</button>
+            </div>
+          </div>`;
+        document.body.appendChild(overlay);
+      }
+      overlay.style.display = "flex";
+      const cerrar = (val) => {
+        overlay.style.display = "none";
+        document.removeEventListener("keydown", onKey);
+        resolve(val);
+      };
+      const onKey = (e) => { if (e.key === "Escape") cerrar("cancelar"); };
+      document.getElementById("cierre-cancelar").onclick = () => cerrar("cancelar");
+      document.getElementById("cierre-sin").onclick      = () => cerrar("sin-guardar");
+      document.getElementById("cierre-guardar").onclick  = () => cerrar("guardar");
+      overlay.onclick = (e) => { if (e.target === overlay) cerrar("cancelar"); };
+      document.addEventListener("keydown", onKey);
+      document.getElementById("cierre-guardar").focus();
+    });
   },
 
   async _ofrecerReabrirUltimo(ruta) {
@@ -2013,6 +2121,8 @@ async function init() {
 
     // 8. Proyecto (RF-04): ruta del último proyecto guardado (guardado manual)
     State.proyectoRuta = localStorage.getItem("proyectoRuta") || null;
+    _dirty(false);                            // recién cargado: sin cambios pendientes
+    App._actualizarTituloProyecto();
 
     if (estado.tiene_pdf) {
       setStatus("Listo para continuar");
@@ -2183,6 +2293,10 @@ document.addEventListener("mousedown", (e) => {
     boton.style.display = "none";
   }
 });
+
+// Exponer App en window para que main.py (evaluate_js) pueda invocarlo:
+// `const App` NO crea la propiedad window.App por sí solo.
+window.App = App;
 
 // RF-29 — Al recuperar el foco (p. ej. al volver de Excel), revisa si la tabla
 // que se estaba editando cambió y refresca su vista previa.

@@ -212,6 +212,27 @@ html, body {
 .menu-item:hover { background: var(--sepia-cream); color: var(--sepia-mid); }
 .menu-sep { height: 1px; background: var(--border); margin: 5px 6px; }
 
+/* RF-04 — Título del proyecto en la barra superior */
+.proyecto-titulo {
+  margin-left: 14px;
+  padding-right: 8px;      /* aire para que la cursiva no se recorte */
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sepia-mid);
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.proyecto-titulo--sin {
+  color: var(--text-light);
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* RF-04 — Modal de cierre con tres botones */
+.modal-cierre-btns { flex-wrap: wrap; }
+
 .topbar-brand {
   display: flex;
   align-items: center;

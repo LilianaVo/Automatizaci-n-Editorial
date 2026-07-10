@@ -19,6 +19,15 @@ HOST = "127.0.0.1"
 PORT = 8765
 URL  = f"http://{HOST}:{PORT}"
 
+# Cuando el usuario confirma cerrar (con o sin guardar), JS pone esto en True
+# para que el manejador del evento 'closing' permita el cierre.
+_permitir_cierre = {"v": False}
+
+# Espejo en Python del estado "hay cambios sin guardar" (lo sincroniza JS vía
+# set_sin_guardar). Permite que el cierre limpio sea instantáneo sin consultar
+# a la interfaz (sin evaluate_js), evitando cualquier bloqueo del hilo GUI.
+_sin_guardar = {"v": False}
+
 
 class AppAPI:
     """
@@ -122,6 +131,15 @@ class AppAPI:
             return resultado[0] if isinstance(resultado, (list, tuple)) else resultado
         return None
 
+    def set_sin_guardar(self, v: bool) -> None:
+        """JS sincroniza aquí el estado 'hay cambios sin guardar'."""
+        _sin_guardar["v"] = bool(v)
+
+    def cerrar_confirmado(self) -> None:
+        """Llamado desde JS cuando el usuario confirma cerrar (con o sin guardar)."""
+        _permitir_cierre["v"] = True
+        webview.windows[0].destroy()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -145,6 +163,37 @@ def _esperar_servidor(timeout: float = 15.0) -> bool:
     return False
 
 
+def _al_cerrar() -> bool:
+    """Manejador del evento 'closing' de la ventana.
+
+    IMPORTANTE: no se puede llamar evaluate_js de forma síncrona aquí, porque
+    este handler corre en el hilo de la GUI y evaluate_js esperaría a ese mismo
+    hilo → deadlock (la app se cuelga como 'Not Responding'). Por eso: si el
+    cierre aún no está confirmado, se lanza la consulta a la interfaz en un hilo
+    aparte (donde evaluate_js sí puede despachar a la GUI, ya libre) y se aborta
+    este cierre. La interfaz decide y llama a cerrar_confirmado()."""
+    if _permitir_cierre["v"]:
+        return True
+    if not _sin_guardar["v"]:
+        return True                       # sin cambios: cerrar directo, sin tocar JS
+
+    def _preguntar() -> None:
+        try:
+            webview.windows[0].evaluate_js(
+                "typeof App !== 'undefined' && App._alIntentarCerrar && App._alIntentarCerrar()"
+            )
+        except Exception:
+            # Si algo falla al consultar la interfaz, no dejar la app atrapada.
+            _permitir_cierre["v"] = True
+            try:
+                webview.windows[0].destroy()
+            except Exception:
+                pass
+
+    threading.Thread(target=_preguntar, daemon=True).start()
+    return False                          # abortar este cierre; decide la interfaz
+
+
 def main() -> None:
     if not _puerto_libre(HOST, PORT):
         print(f"[WARN] Puerto {PORT} ya en uso.")
@@ -156,7 +205,7 @@ def main() -> None:
         print("[ERROR] El servidor no arrancó a tiempo.")
         sys.exit(1)
 
-    webview.create_window(
+    ventana = webview.create_window(
         title       = "Editor Semántico — Paleontología Mexicana",
         url         = URL,
         js_api      = AppAPI(),
@@ -166,6 +215,11 @@ def main() -> None:
         resizable   = True,
         text_select = True,
     )
+
+    try:
+        ventana.events.closing += _al_cerrar
+    except Exception as e:
+        print(f"[WARN] No se pudo enlazar el evento de cierre: {e}")
 
     webview.start(debug=False)
 
