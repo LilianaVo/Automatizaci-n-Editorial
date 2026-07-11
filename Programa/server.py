@@ -52,18 +52,54 @@ BASE_DIR = Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# ── Estado de sesión en memoria (una sesión a la vez — uso de escritorio) ────
-_estado: dict[str, Any] = {
-    "bloques":             [],   # list[dict] con clasificacion y contenido
-    "referencias_externas":[],
-    "figuras_manuales":    [],
-    "tablas_manuales":     [],
-    "autores_orcid":       [],
-    "afiliaciones_txt":    "",
-    "fig_dir":             None, # carpeta temporal de figuras extraídas
-    "pdf_info":            {},   # nombre, páginas, tamaño
-    "metadatos":           {},   # volumen, número, año, páginas, DOI, ISSN, fechas mss.
-}
+# ── RF-03/04 — marcar "cambios sin guardar" en el proyecto activo ────────────
+# Una petición mutante (crear/editar/borrar contenido) deja el proyecto activo
+# con cambios pendientes. Se excluyen las operaciones de proyecto (guardar/abrir
+# /pestañas), exportaciones y validación. Un solo punto en vez de tocar cada
+# endpoint. El espejo real por-proyecto vive en _estado["_sin_guardar"].
+_PREFIJOS_NO_MUTAN = ("/api/proyecto", "/api/exportar", "/api/validar")
+
+def _es_mutacion(path: str) -> bool:
+    return path.startswith("/api/") and not path.startswith(_PREFIJOS_NO_MUTAN)
+
+@app.middleware("http")
+async def _marcar_cambios(request, call_next):
+    resp = await call_next(request)
+    try:
+        if (request.method in ("POST", "PUT", "PATCH", "DELETE")
+                and resp.status_code < 400
+                and _es_mutacion(request.url.path)):
+            _estado["_sin_guardar"] = True
+    except Exception:
+        pass
+    return resp
+
+# ── Estado de sesión en memoria — RF-03: varios proyectos (pestañas) ─────────
+# Cada proyecto es un dict con la MISMA forma que el estado histórico. El global
+# `_estado` SIEMPRE apunta al proyecto activo (_proyectos[_activo]); cambiar de
+# pestaña solo reapunta este global (y los directorios de recursos por-proyecto,
+# ver `_activar`), de modo que los ~180 endpoints que leen/mutan `_estado`
+# in-place siguen funcionando sin cambios.
+def _nuevo_estado() -> dict[str, Any]:
+    return {
+        "bloques":             [],   # list[dict] con clasificacion y contenido
+        "referencias_externas":[],
+        "figuras_manuales":    [],
+        "tablas_manuales":     [],
+        "autores_orcid":       [],
+        "afiliaciones_txt":    "",
+        "fig_dir":             None, # carpeta temporal de figuras extraídas
+        "pdf_info":            {},   # nombre, páginas, tamaño
+        "metadatos":           {},   # volumen, número, año, páginas, DOI, ISSN, fechas mss.
+        # Meta por-proyecto (no se serializa como contenido del .pmz):
+        "_ruta":               None, # ruta del .pmz si el proyecto ya se guardó
+        "_sin_guardar":        False,# hay cambios sin guardar
+    }
+
+_proyectos: dict[str, dict[str, Any]] = {}    # id -> estado
+_orden:     list[str] = []                     # orden de las pestañas (izq→der)
+_activo:    str = ""                            # id del proyecto activo
+_estado:    dict[str, Any] = _nuevo_estado()   # apunta a _proyectos[_activo]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -777,15 +813,41 @@ def _app_data_base() -> Path:
         base = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
     return base / "EditorSemantico"
 
-# Los .xlsx de tablas (extraídas del PDF, subidas o unidas) se guardan aquí en
-# vez de en la carpeta temporal del sistema, para que "Editar en Excel" y las
-# ediciones del usuario sobrevivan y no los borre el SO. Contiene solo archivos
-# generados por el programa, así que puede limpiarse al cargar un nuevo PDF.
-_RECURSOS_TABLAS = _app_data_base() / "recursos" / "tablas"
+# Los .xlsx de tablas (extraídas del PDF, subidas o unidas) se guardan en una
+# carpeta estable por-proyecto en vez de en la temporal del sistema, para que
+# "Editar en Excel" y las ediciones del usuario sobrevivan y no los borre el SO.
+# RF-03 — cada proyecto tiene sus propios directorios (bajo su id) para que las
+# pestañas no se pisen entre sí; `_RECURSOS_TABLAS` y `_WORK_DIR` son globales
+# que `_activar()` reapunta al proyecto activo, igual que `_estado`.
+def _dir_proyecto(pid: str) -> Path:
+    return _app_data_base() / "proyectos" / pid
 
-# RF-04 — guardar/abrir proyecto: carpeta de trabajo donde se extraen los
-# recursos del proyecto abierto.
-_WORK_DIR = _app_data_base() / "trabajo"
+def _dirs_recursos(pid: str) -> tuple[Path, Path]:
+    """(carpeta de .xlsx de tablas, carpeta de trabajo) del proyecto `pid`."""
+    base = _dir_proyecto(pid)
+    return base / "recursos" / "tablas", base / "trabajo"
+
+_RECURSOS_TABLAS, _WORK_DIR = _dirs_recursos("_inicial")   # placeholder; los fija _activar
+
+def _activar(pid: str) -> None:
+    """Hace de `pid` el proyecto activo: reapunta el estado y los recursos."""
+    global _estado, _activo, _RECURSOS_TABLAS, _WORK_DIR
+    _activo = pid
+    _estado = _proyectos[pid]
+    _RECURSOS_TABLAS, _WORK_DIR = _dirs_recursos(pid)
+
+def _crear_proyecto(activar: bool = True) -> str:
+    """Crea una pestaña/proyecto vacío. Devuelve su id."""
+    pid = uuid.uuid4().hex[:8]
+    _proyectos[pid] = _nuevo_estado()
+    _orden.append(pid)
+    if activar:
+        _activar(pid)
+    return pid
+
+# Arrancar con un proyecto vacío (una pestaña) al importar el módulo.
+if not _proyectos:
+    _crear_proyecto(activar=True)
 
 def _leer_filas_xlsx(ruta: str, hoja: str | None,
                      max_filas: int | None = None,
@@ -1351,6 +1413,75 @@ def resetear_estado():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
+# Endpoints — Proyectos / pestañas  [RF-03]
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _titulo_proyecto(est: dict) -> str:
+    ruta = est.get("_ruta")
+    if ruta:
+        nombre = os.path.basename(ruta)
+        return nombre[:-4] if nombre.lower().endswith(".pmz") else nombre
+    return "Proyecto sin título"
+
+def _lista_proyectos() -> list[dict]:
+    out = []
+    for pid in _orden:
+        est = _proyectos[pid]
+        out.append({
+            "id":              pid,
+            "titulo":          _titulo_proyecto(est),
+            "ruta":            est.get("_ruta"),
+            "activo":          pid == _activo,
+            "guardado":        bool(est.get("_ruta")),
+            "sin_guardar":     bool(est.get("_sin_guardar")),
+            "tiene_contenido": bool(est.get("bloques")),
+        })
+    return out
+
+def _respuesta_proyectos() -> dict:
+    return {"proyectos": _lista_proyectos(), "activo": _activo}
+
+class ActivarProyectoPayload(BaseModel):
+    id: str
+
+@app.get("/api/proyectos")
+def listar_proyectos():
+    """Lista de pestañas abiertas y cuál está activa."""
+    return _respuesta_proyectos()
+
+@app.post("/api/proyectos/nuevo")
+def nuevo_proyecto():
+    """Crea una pestaña nueva (proyecto vacío) y la deja activa."""
+    _crear_proyecto(activar=True)
+    return {"ok": True, **_respuesta_proyectos()}
+
+@app.post("/api/proyectos/activar")
+def activar_proyecto(payload: ActivarProyectoPayload):
+    """Cambia la pestaña activa."""
+    if payload.id not in _proyectos:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    _activar(payload.id)
+    return {"ok": True, **_respuesta_proyectos()}
+
+@app.delete("/api/proyectos/{pid}")
+def cerrar_proyecto(pid: str):
+    """Cierra una pestaña. Borra sus recursos en disco. Nunca deja cero pestañas."""
+    if pid not in _proyectos:
+        raise HTTPException(status_code=404, detail="Proyecto no encontrado.")
+    est = _proyectos[pid]
+    if est.get("fig_dir") and os.path.isdir(est["fig_dir"]):
+        shutil.rmtree(est["fig_dir"], ignore_errors=True)
+    shutil.rmtree(_dir_proyecto(pid), ignore_errors=True)
+    del _proyectos[pid]
+    _orden.remove(pid)
+    if not _orden:                       # era la última → arrancar una vacía
+        _crear_proyecto(activar=True)
+    elif _activo == pid:                 # cerramos la activa → activar la vecina
+        _activar(_orden[-1])
+    return {"ok": True, **_respuesta_proyectos()}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
 # Endpoints — Proyecto (guardar / abrir)  [RF-04]
 # ═════════════════════════════════════════════════════════════════════════════
 
@@ -1387,20 +1518,28 @@ def guardar_proyecto(payload: RutaProyectoPayload):
         proyecto.empaquetar(_estado, ruta, fuente=_fuente_actual())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"No se pudo guardar el proyecto: {e}")
-    return {"ok": True, "ruta": ruta}
+    _estado["_ruta"]        = ruta
+    _estado["_sin_guardar"] = False
+    return {"ok": True, "ruta": ruta, **_respuesta_proyectos()}
 
 @app.post("/api/proyecto/abrir")
 def abrir_proyecto(payload: RutaProyectoPayload):
-    """Abre un .pmz y lo carga como proyecto activo."""
+    """Abre un .pmz. Si la pestaña actual ya tiene contenido, lo carga en una
+    pestaña nueva (RF-03); si está vacía, lo carga en ella."""
     if not os.path.isfile(payload.ruta):
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+    if _estado.get("bloques"):
+        _crear_proyecto(activar=True)     # no pisar el proyecto abierto
     shutil.rmtree(_WORK_DIR, ignore_errors=True)
     try:
         est = proyecto.cargar(payload.ruta, str(_WORK_DIR))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     _aplicar_estado_cargado(est, str(_WORK_DIR))
-    return {"ok": True, "info": _estado["pdf_info"], "meta": est.get("_meta", {})}
+    _estado["_ruta"]        = payload.ruta
+    _estado["_sin_guardar"] = False
+    return {"ok": True, "info": _estado["pdf_info"], "meta": est.get("_meta", {}),
+            **_respuesta_proyectos()}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

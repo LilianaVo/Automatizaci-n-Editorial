@@ -16,6 +16,8 @@ const State = {
   metadatos     : {},   // {volumen, numero, anio, pagina_inicio, pagina_fin, doi, issn, fecha_recibido, ...}
   config        : { opciones: [], colores: {} },
   tienePDF      : false,
+  proyectos     : [],   // RF-03: pestañas abiertas [{id, titulo, activo, sin_guardar, tiene_contenido, ruta}]
+  activo        : "",   // id del proyecto activo
   _afilTimer    : null,
 };
 
@@ -27,17 +29,33 @@ const State = {
 // Se excluyen proyecto (guardar/abrir), exportaciones y validación.
 function _esMutacion(path) {
   return path.startsWith("/api/") &&
-    !path.startsWith("/api/proyecto/") &&
+    !path.startsWith("/api/proyecto") &&   // cubre /api/proyecto/… y /api/proyectos… (pestañas)
     !path.startsWith("/api/exportar/") &&
     !path.startsWith("/api/validar");
 }
-// Fija el estado "hay cambios sin guardar" y lo sincroniza con Python (main.py),
-// que lo usa para decidir si avisar al cerrar la ventana. Solo empuja en cambios.
+// ¿Alguna pestaña (con contenido) tiene cambios sin guardar? El active se toma
+// del vivo State.sinGuardar; las demás, de la última lista del backend.
+function _algunaSinGuardar() {
+  const activoSucio = !!(State.tienePDF && State.sinGuardar);
+  const otras = (State.proyectos || []).some(
+    p => p.id !== State.activo && p.tiene_contenido && p.sin_guardar
+  );
+  return activoSucio || otras;
+}
+// Fija el estado "hay cambios sin guardar" del proyecto ACTIVO y sincroniza con
+// Python (main.py) el agregado de TODAS las pestañas, que se usa para decidir si
+// avisar al cerrar la ventana.
 function _dirty(v) {
   v = !!v;
-  if (typeof State === "undefined" || State.sinGuardar === v) return;
+  if (typeof State === "undefined") return;
+  const cambio = State.sinGuardar !== v;
   State.sinGuardar = v;
-  try { window.pywebview?.api?.set_sin_guardar?.(v); } catch (_) {}
+  // Reflejar en la entrada del proyecto activo (para el agregado y los puntos).
+  const p = (State.proyectos || []).find(p => p.id === State.activo);
+  if (p) p.sin_guardar = v;
+  if (!cambio) return;                        // sin cambio real: no re-renderizar ni empujar
+  if (typeof App !== "undefined" && App._renderTabs) App._renderTabs();
+  try { window.pywebview?.api?.set_sin_guardar?.(_algunaSinGuardar()); } catch (_) {}
 }
 function _marcarSinGuardar(path) {
   if (_esMutacion(path)) _dirty(true);
@@ -1620,17 +1638,15 @@ const App = {
     document.querySelectorAll(".menu-dropdown").forEach(d => (d.style.display = "none"));
   },
 
+  // RF-03 — "Nuevo" abre otra PESTAÑA (proyecto vacío), sin cerrar el actual.
   async proyectoNuevo() {
     App._cerrarMenus();
-    const ok = await _modalConfirmar({
-      titulo:  "Nuevo proyecto",
-      mensaje: "Se cerrará el proyecto actual. Guarda antes si no quieres perder cambios. ¿Continuar?",
-      btnOk:   "Nuevo", peligro: true,
-    });
-    if (!ok) return;
-    try { await API.delete("/api/estado"); } catch (_) {}
-    localStorage.removeItem("proyectoRuta");
-    location.reload();
+    try {
+      await API.post("/api/proyectos/nuevo", {});
+      location.reload();   // re-inicializa la interfaz sobre la pestaña nueva
+    } catch (e) {
+      showToast("No se pudo crear el proyecto: " + (e.message || ""), 4000);
+    }
   },
 
   async proyectoAbrir() {
@@ -1641,6 +1657,7 @@ const App = {
     if (!ruta) return;   // cancelado
     try {
       setStatus("Abriendo proyecto…", "idle");
+      // El backend lo carga en una pestaña nueva si la actual ya tiene contenido.
       await API.post("/api/proyecto/abrir", { ruta });
       localStorage.setItem("proyectoRuta", ruta);
       showToast("✓ Proyecto abierto");
@@ -1648,6 +1665,78 @@ const App = {
     } catch (e) {
       showToast("No se pudo abrir el proyecto: " + (e.message || ""), 4000);
       setStatus("Error al abrir proyecto", "error");
+    }
+  },
+
+  // ── RF-03 — Pestañas (varios proyectos a la vez) ────────────────────────────
+  _renderTabs() {
+    const cont = $("tabbar-tabs");
+    if (!cont) return;
+    const ps = State.proyectos || [];
+    cont.innerHTML = ps.map(p => {
+      const activo = p.id === State.activo;
+      // El punto de "sin guardar" del activo se toma del estado vivo.
+      const sucio = activo ? !!(State.tienePDF && State.sinGuardar)
+                           : (p.tiene_contenido && p.sin_guardar);
+      const titulo = _escHtml(p.titulo || "Proyecto sin título");
+      const cls = "tab" + (activo ? " tab--activa" : "") + (sucio ? " tab--sucia" : "");
+      const rid = p.id.replace(/'/g, "\\'");
+      return `
+        <div class="${cls}" title="${titulo}" onclick="App.proyectoActivar('${rid}')">
+          ${sucio ? '<span class="tab-punto" title="Cambios sin guardar"></span>' : ""}
+          <span class="tab-titulo">${titulo}</span>
+          <button class="tab-cerrar" title="Cerrar pestaña"
+                  onclick="App.proyectoCerrar(event, '${rid}')">✕</button>
+        </div>`;
+    }).join("");
+  },
+
+  async _cargarProyectos() {
+    try {
+      const data = await API.get("/api/proyectos");
+      State.proyectos = data.proyectos || [];
+      State.activo    = data.activo || "";
+      App._renderTabs();
+    } catch (e) {
+      console.error("[proyectos]", e);
+    }
+  },
+
+  async proyectoActivar(id) {
+    if (id === State.activo) return;   // ya activa
+    try {
+      setStatus("Cambiando de proyecto…", "idle");
+      await API.post("/api/proyectos/activar", { id });
+      location.reload();               // recarga toda la vista sobre la pestaña elegida
+    } catch (e) {
+      showToast("No se pudo cambiar de proyecto: " + (e.message || ""), 4000);
+    }
+  },
+
+  async proyectoCerrar(ev, id) {
+    ev.stopPropagation();
+    const p = (State.proyectos || []).find(p => p.id === id);
+    const esActiva = id === State.activo;
+    const sucia = esActiva ? !!(State.tienePDF && State.sinGuardar)
+                           : (p && p.tiene_contenido && p.sin_guardar);
+    if (sucia) {
+      const ok = await _modalConfirmar({
+        titulo:  "Cerrar proyecto",
+        mensaje: "Esta pestaña tiene cambios sin guardar. Si la cierras, se perderán. ¿Cerrar de todas formas?",
+        btnOk:   "Cerrar sin guardar", peligro: true,
+      });
+      if (!ok) return;
+    }
+    try {
+      await API.delete(`/api/proyectos/${id}`);
+      if (esActiva) {
+        location.reload();             // cambió el proyecto activo → recargar vista
+      } else {
+        await App._cargarProyectos();  // solo actualizar la barra de pestañas
+        try { window.pywebview?.api?.set_sin_guardar?.(_algunaSinGuardar()); } catch (_) {}
+      }
+    } catch (e) {
+      showToast("No se pudo cerrar la pestaña: " + (e.message || ""), 4000);
     }
   },
 
@@ -1673,9 +1762,11 @@ const App = {
       setStatus("Guardando proyecto…", "idle");
       const data = await API.post("/api/proyecto/guardar", { ruta });
       State.proyectoRuta = data.ruta;
-      _dirty(false);
+      if (data.proyectos) { State.proyectos = data.proyectos; State.activo = data.activo; }
+      _dirty(false);                            // también re-renderiza las pestañas
       localStorage.setItem("proyectoRuta", data.ruta);
       App._actualizarTituloProyecto();
+      App._renderTabs();                        // el título de la pestaña ya cambió
       showToast("✓ Proyecto guardado");
       setStatus("Proyecto guardado");
     } catch (e) {
@@ -1702,7 +1793,7 @@ const App = {
   // ── Aviso de cambios sin guardar al cerrar (RF-04) ──────────────────────────
   // La llama main.py (evento closing de la ventana) vía window.pywebview.
   _hayCambiosSinGuardar() {
-    return !!(State.tienePDF && State.sinGuardar);
+    return _algunaSinGuardar();
   },
 
   // La llama main.py (hilo aparte) al intentar cerrar la ventana.
@@ -2119,17 +2210,22 @@ async function init() {
     // 7. Renderizar historial de PDFs recientes
     Historial.renderizar();
 
-    // 8. Proyecto (RF-04): ruta del último proyecto guardado (guardado manual)
-    State.proyectoRuta = localStorage.getItem("proyectoRuta") || null;
-    _dirty(false);                            // recién cargado: sin cambios pendientes
+    // 8. Proyectos/pestañas (RF-03) + estado del proyecto activo (RF-04).
+    await App._cargarProyectos();
+    const activo = (State.proyectos || []).find(p => p.id === State.activo);
+    // La ruta del proyecto activo la dicta el backend (autoritativo por pestaña).
+    State.proyectoRuta = (activo && activo.ruta) || null;
+    _dirty(activo ? !!activo.sin_guardar : false);
     App._actualizarTituloProyecto();
 
     if (estado.tiene_pdf) {
       setStatus("Listo para continuar");
     } else {
       setStatus("Listo para comenzar");
-      // Sin autoguardado: ofrecer reabrir el último proyecto que guardaste.
-      if (State.proyectoRuta) App._ofrecerReabrirUltimo(State.proyectoRuta);
+      // Sin autoguardado: si esta pestaña está vacía, ofrecer reabrir el último
+      // proyecto que guardaste (útil al reiniciar la app).
+      const ultimo = localStorage.getItem("proyectoRuta");
+      if (ultimo && !State.proyectoRuta) App._ofrecerReabrirUltimo(ultimo);
     }
 
   } catch (e) {

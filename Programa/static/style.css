@@ -48,6 +48,7 @@
 
   /* Espaciados */
   --topbar-h:    80px;
+  --tabbar-h:    38px;   /* RF-03 — barra de pestañas bajo el topbar */
   --sidebar-w:   210px;
   --stepper-h:   80px;
   --radius:      10px;
@@ -233,6 +234,87 @@ html, body {
 /* RF-04 — Modal de cierre con tres botones */
 .modal-cierre-btns { flex-wrap: wrap; }
 
+/* RF-03 — Barra de pestañas (varios proyectos a la vez) */
+.tabbar {
+  position: fixed;
+  top: var(--topbar-h);
+  left: 0; right: 0;
+  height: var(--tabbar-h);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 14px;
+  background: var(--sepia-cream);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.tabbar-tabs { display: flex; align-items: center; gap: 3px; }
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+  height: 28px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .12s, color .12s;
+}
+.tab:hover { background: var(--sepia-pale); color: var(--sepia-mid); }
+.tab--activa {
+  background: var(--sepia-white);
+  color: var(--sepia-dark);
+  font-weight: 600;
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-sm);
+}
+.tab-titulo {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-punto {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--sepia-mid);
+  flex: 0 0 auto;
+}
+.tab-cerrar {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: .55;
+}
+.tab-cerrar:hover { opacity: 1; background: var(--sepia-light); color: var(--sepia-white); }
+.tabbar-nueva {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: 2px;
+  width: 26px; height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--sepia-white);
+  color: var(--sepia-mid);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tabbar-nueva:hover { background: var(--sepia-pale); }
+
 .topbar-brand {
   display: flex;
   align-items: center;
@@ -379,7 +461,7 @@ html, body {
 ══════════════════════════════════════════════════════════════════════════ */
 .app-layout {
   position: fixed;
-  top: var(--topbar-h);
+  top: calc(var(--topbar-h) + var(--tabbar-h));   /* despeja topbar + pestañas */
   bottom: var(--stepper-h);
   left: 0;
   right: 0;
