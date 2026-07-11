@@ -25,6 +25,12 @@ from pydantic import BaseModel
 
 # ── core ──────────────────────────────────────────────────────────────────────
 from core.pdf_processor    import procesar_pdf
+try:
+    # RF-02 — cargar Word. Import defensivo: si falta python-docx, la app sigue
+    # arrancando (PDF funciona) y solo la carga de DOCX avisa con un mensaje.
+    from core.docx_processor import procesar_docx
+except Exception:
+    procesar_docx = None
 from core.jats_exporterv2  import build_jats_xml
 from core.html_exporter    import build_html
 from core.epub_exporter    import build_epub
@@ -332,6 +338,98 @@ def cargar_pdf_por_ruta(payload: RutaPDFPayload):
         "tablas":    _estado["tablas_manuales"],
         "metadatos": _estado["metadatos"],
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Endpoints — DOCX (RF-02: cargar Word)
+# ═════════════════════════════════════════════════════════════════════════════
+
+def _volcar_resultado_carga(resultado: dict, nombre: str, tamanio_str: str,
+                            tipo: str) -> dict:
+    """Vuelca en _estado el resultado de procesar un PDF o DOCX y devuelve la
+    respuesta para el frontend. Comparte la forma con la carga de PDF para que
+    el resto del programa lo consuma igual."""
+    if _estado["fig_dir"] and os.path.isdir(_estado["fig_dir"]):
+        shutil.rmtree(_estado["fig_dir"], ignore_errors=True)
+
+    bloques_ui = []
+    for i, b in enumerate(resultado.get("bloques", [])):
+        cls = CLASE_COMPAT.get(b.get("clasificacion", "Cuerpo"), b.get("clasificacion", "Cuerpo"))
+        bloques_ui.append({
+            "id":            i,
+            "contenido":     b.get("contenido", ""),
+            "clasificacion": cls,
+            "italic":        b.get("italic", False),
+            "bold":          b.get("bold", False),
+            "size":          b.get("size", 12),
+        })
+
+    _estado["bloques"]              = bloques_ui
+    _estado["figuras_manuales"]     = resultado.get("figuras", [])
+    _estado["tablas_manuales"]      = resultado.get("tablas", [])
+    _estado["referencias_externas"] = []
+    _estado["fig_dir"]              = resultado.get("fig_dir")
+    _estado["metadatos"]            = resultado.get("metadatos_detectados", {})
+    _estado["pdf_info"]             = {
+        "nombre":  nombre,
+        "tipo":    tipo,
+        "paginas": resultado.get("body_size", "?"),
+        "resumen": resultado.get("resumen", ""),
+        "tamanio": tamanio_str,
+    }
+    _reubicar_tablas_del_pdf()   # .xlsx de tablas a ruta estable (no temporal)
+
+    return {
+        "ok":        True,
+        "info":      _estado["pdf_info"],
+        "bloques":   bloques_ui,
+        "figuras":   _estado["figuras_manuales"],
+        "tablas":    _estado["tablas_manuales"],
+        "metadatos": _estado["metadatos"],
+        "resumen":   resultado.get("resumen", ""),
+    }
+
+
+@app.post("/api/docx/cargar")
+async def cargar_docx(file: UploadFile = File(...)):
+    """Recibe un .docx, lo procesa con core.docx_processor y devuelve los bloques
+    clasificados (guiados por los estilos de Word), figuras y tablas."""
+    if procesar_docx is None:
+        raise HTTPException(status_code=503,
+            detail="Falta la dependencia python-docx. Instálala con: pip install python-docx")
+    sufijo = Path(file.filename or "").suffix or ".docx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=sufijo) as tmp:
+        contenido = await file.read()
+        tmp.write(contenido)
+        ruta_tmp = tmp.name
+    try:
+        resultado = procesar_docx(ruta_tmp)
+    except Exception as e:
+        os.unlink(ruta_tmp)
+        raise HTTPException(status_code=422, detail=f"Error procesando DOCX: {e}")
+    resp = _volcar_resultado_carga(
+        resultado, file.filename or "documento.docx",
+        f"{len(contenido) / 1024:.1f} KB", "docx")
+    os.unlink(ruta_tmp)
+    return resp
+
+
+@app.post("/api/docx/cargar-ruta")
+def cargar_docx_por_ruta(payload: RutaPDFPayload):
+    """Versión para PyWebView: recibe la ruta absoluta del .docx en disco."""
+    if procesar_docx is None:
+        raise HTTPException(status_code=503,
+            detail="Falta la dependencia python-docx. Instálala con: pip install python-docx")
+    ruta = payload.ruta
+    if not os.path.isfile(ruta):
+        raise HTTPException(status_code=404, detail=f"Archivo no encontrado: {ruta}")
+    try:
+        resultado = procesar_docx(ruta)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error procesando DOCX: {e}")
+    return _volcar_resultado_carga(
+        resultado, Path(ruta).name,
+        f"{os.path.getsize(ruta) / 1024:.1f} KB", "docx")
 
 
 # ── Exportar preview (para desarrollo en browser sin PyWebView) ───────────────
@@ -981,11 +1079,15 @@ def _limpiar_recursos_huerfanos() -> None:
             except OSError:
                 pass
 
+_ORIGENES_AUTO = ("auto_pdf", "auto_docx")
+_PREFIJOS_TEMP_TABLA = ("pm_tab_", "pm_docx_tab_")
+
 def _reubicar_tablas_del_pdf() -> None:
-    """Tras cargar un PDF: mueve las tablas extraídas automáticamente
-    (origen ``auto_pdf``) desde el temporal del sistema a la carpeta estable de
-    recursos, y limpia archivos huérfanos de sesiones previas. Solo mueve
-    archivos generados por el PDF; nunca toca los .xlsx propios del usuario.
+    """Tras cargar un PDF o DOCX: mueve las tablas extraídas automáticamente
+    (origen ``auto_pdf``/``auto_docx``) desde el temporal del sistema a la
+    carpeta estable de recursos, y limpia archivos huérfanos de sesiones
+    previas. Solo mueve archivos generados por el programa; nunca toca los .xlsx
+    propios del usuario.
 
     Es idempotente: mover primero y limpiar huérfanos después evita borrar una
     tabla que ya viva en recursos.
@@ -993,10 +1095,10 @@ def _reubicar_tablas_del_pdf() -> None:
     _RECURSOS_TABLAS.mkdir(parents=True, exist_ok=True)
     temp_dirs: set[str] = set()
     for t in _estado["tablas_manuales"]:
-        if t.get("origen") != "auto_pdf":
+        if t.get("origen") not in _ORIGENES_AUTO:
             continue
         origen = _mover_tabla_a_recursos(t)
-        if origen and os.path.basename(origen).startswith("pm_tab_"):
+        if origen and os.path.basename(origen).startswith(_PREFIJOS_TEMP_TABLA):
             temp_dirs.add(origen)
     _limpiar_recursos_huerfanos()
     for d in temp_dirs:                               # limpia los temp ya vaciados

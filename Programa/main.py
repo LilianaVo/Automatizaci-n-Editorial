@@ -44,6 +44,19 @@ class AppAPI:
         )
         return rutas[0] if rutas else None
 
+    def abrir_documento(self) -> str | None:
+        """RF-02 — Selector de artículo: PDF o Word (.docx) en un solo diálogo."""
+        rutas = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            allow_multiple=False,
+            file_types=(
+                "Artículo (*.pdf;*.docx)",
+                "Archivos PDF (*.pdf)",
+                "Documento Word (*.docx)",
+            ),
+        )
+        return rutas[0] if rutas else None
+
     def guardar_html(self) -> str | None:
         ruta = webview.windows[0].create_file_dialog(
             webview.SAVE_DIALOG,

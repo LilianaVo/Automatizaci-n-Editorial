@@ -383,13 +383,17 @@ const App = {
   async seleccionarPDF() {
     try {
       if (window.pywebview) {
-        const ruta = await window.pywebview.api.abrir_pdf();
+        // RF-02 — un solo selector para PDF y Word; si la app aún no expone
+        // abrir_documento, cae en abrir_pdf.
+        const api = window.pywebview.api;
+        const ruta = api.abrir_documento ? await api.abrir_documento()
+                                         : await api.abrir_pdf();
         if (ruta) await App._cargarPorRuta(ruta);
       } else {
         // Fallback desarrollo: input[type=file]
         const input = document.createElement("input");
         input.type   = "file";
-        input.accept = ".pdf";
+        input.accept = ".pdf,.docx";
         input.onchange = async () => {
           if (input.files[0]) await App._cargarPorUpload(input.files[0]);
         };
@@ -401,10 +405,12 @@ const App = {
   },
 
   async _cargarPorRuta(ruta) {
-    setStatus("Procesando PDF...", "idle");
+    const docx = /\.docx$/i.test(ruta);
+    setStatus(`Procesando ${docx ? "Word" : "PDF"}...`, "idle");
     showLoading(true);
     try {
-      const data = await API.post("/api/pdf/cargar-ruta", { ruta });
+      const endpoint = docx ? "/api/docx/cargar-ruta" : "/api/pdf/cargar-ruta";
+      const data = await API.post(endpoint, { ruta });
       // Guardar en historial antes de aplicar resultado
       const nombre = ruta.split(/[\\/]/).pop();
       Historial.agregar(ruta, nombre);
@@ -412,22 +418,24 @@ const App = {
     } catch (e) {
       showLoading(false);
       setStatus("Error: " + e.message, "error");
-      showToast("No se pudo procesar el PDF", 4000);
+      showToast(`No se pudo procesar el ${docx ? "Word" : "PDF"}`, 4000);
     }
   },
 
   async _cargarPorUpload(file) {
-    setStatus("Procesando PDF...", "idle");
+    const docx = /\.docx$/i.test(file.name || "");
+    setStatus(`Procesando ${docx ? "Word" : "PDF"}...`, "idle");
     showLoading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const data = await API.postForm("/api/pdf/cargar", fd);
+      const endpoint = docx ? "/api/docx/cargar" : "/api/pdf/cargar";
+      const data = await API.postForm(endpoint, fd);
       App._aplicarResultadoPDF(data);
     } catch (e) {
       showLoading(false);
       setStatus("Error: " + e.message, "error");
-      showToast("No se pudo procesar el PDF", 4000);
+      showToast(`No se pudo procesar el ${docx ? "Word" : "PDF"}`, 4000);
     }
   },
 
@@ -487,10 +495,12 @@ const App = {
     e.preventDefault();
     $("dropzone")?.classList.remove("dropzone--over");
     const file = e.dataTransfer?.files?.[0];
-    if (file?.type === "application/pdf") {
+    const esDocx = /\.docx$/i.test(file?.name || "") ||
+      file?.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    if (file?.type === "application/pdf" || esDocx) {
       await App._cargarPorUpload(file);
     } else {
-      showToast("Solo se aceptan archivos PDF");
+      showToast("Solo se aceptan archivos PDF o Word (.docx)");
     }
   },
 
