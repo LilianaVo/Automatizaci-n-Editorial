@@ -334,15 +334,54 @@
                 onblur="App.syncMetadato('issn', this.value)" />
             </div>
           </div>
+        <!-- RF-05: categoría / doctopic del documento -->
+        <div class="doc-info-card">
+          <h3 class="doc-info-title">Categoría del documento</h3>
           <div class="doc-info-row">
             <div class="doc-info-item" style="flex:1 1 100%">
-              <span class="doc-info-label">DOI:</span>
-              <input class="meta-input" type="text" id="meta-doi" placeholder="10.22201/igl..."
-                onblur="App.syncMetadato('doi', this.value)" />
+              <span class="doc-info-label">Tipo de artículo (doctopic):</span>
+              <select class="meta-input" id="meta-doctopic"
+                onchange="App.syncMetadato('doctopic', this.value)">
+              </select>
             </div>
           </div>
+          <p class="footer-hint" style="margin-top:10px">
+            Define el atributo article-type del XML y la categoría que aparece bajo
+            &lt;article-categories&gt;. Si no seleccionas nada, se usa "Artículo de
+            investigación" por defecto.
+          </p>
         </div>
-
+        <!-- RF-14: licencia y financiamiento del artículo -->
+        <div class="doc-info-card">
+          <h3 class="doc-info-title">Licencia y financiamiento (de este artículo)</h3>
+          <div class="doc-info-row">
+            <div class="doc-info-item" style="flex:1 1 100%">
+              <span class="doc-info-label">Licencia de este artículo:</span>
+              <select class="meta-input" id="meta-licencia-clave"
+                onchange="App.syncMetaLicenciaClave(this.value)"></select>
+            </div>
+          </div>
+          <div class="doc-info-row" id="fila-meta-licencia-texto" hidden>
+            <div class="doc-info-item" style="flex:1 1 100%">
+              <span class="doc-info-label">Especifica la licencia:</span>
+              <input class="meta-input" type="text" id="meta-licencia-texto"
+                placeholder="Ej. Licencia institucional propia, Todos los derechos reservados..."
+                onblur="App.syncMetadato('licencia_texto', this.value)" />
+            </div>
+          </div>
+          <div class="doc-info-row">
+            <div class="doc-info-item" style="flex:1 1 100%">
+              <span class="doc-info-label">Financiamiento (uno por línea, si existe):</span>
+              <textarea class="meta-input" id="meta-financiamiento" rows="2"
+                onblur="App.syncMetadato('financiamiento', this.value)"></textarea>
+            </div>
+          </div>
+          <p class="footer-hint" style="margin-top:10px">
+            Si dejas la licencia en "Usar la de la revista", se aplica la licencia por
+            defecto configurada en Configuración. El financiamiento es opcional; deja el
+            campo vacío si el artículo no reporta ninguno.
+          </p>
+        </div>
         <div class="doc-info-card">
           <h3 class="doc-info-title">Fechas de manuscrito</h3>
           <div class="doc-info-row">
@@ -609,11 +648,95 @@
           </div>
         </div>
 
-        <div class="config-version">v2.0.0 — Editor Semántico · Paleontología Mexicana · UNAM</div>
-      </div>
-    </section>
+<!-- ── RF-42: Datos de la revista ──────────────────────────────── -->
+<div class="config-group" style="margin-top: 24px;">
+  <div class="config-group-header">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="width:15px;height:15px">
+      <path d="M3 9l7-6 7 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/>
+    </svg>
+    Datos de la revista
+  </div>
 
-  </main>
+  <div class="config-row" style="flex-direction:column; align-items:flex-start; gap:12px;">
+    <div class="config-row-info">
+      <span class="config-row-label">Nombre, ISSN y licencia por defecto</span>
+      <span class="config-row-desc">Se usan en el XML de todos los artículos exportados con esta instalación.</span>
+    </div>
+
+    <div class="doc-info-row" style="width:100%">
+      <div class="doc-info-item" style="flex:1 1 100%">
+        <span class="doc-info-label">Nombre de la revista:</span>
+        <input class="meta-input" type="text" id="cfg-nombre-revista" placeholder="Paleontología Mexicana"
+          onblur="App.syncConfigRevista('nombre_revista', this.value)" />
+      </div>
+    </div>
+    <div class="doc-info-row" style="width:100%">
+      <div class="doc-info-item">
+        <span class="doc-info-label">Abreviatura:</span>
+        <input class="meta-input" type="text" id="cfg-abreviatura" placeholder="Paleontol. Mex."
+          onblur="App.syncConfigRevista('abreviatura', this.value)" />
+      </div>
+      <div class="doc-info-item">
+        <span class="doc-info-label">ISSN por defecto:</span>
+        <input class="meta-input" type="text" id="cfg-issn-default" placeholder="0000-0000"
+          onblur="App.syncConfigRevista('issn_default', this.value)" />
+      </div>
+    </div>
+    <div class="doc-info-row" style="width:100%">
+      <div class="doc-info-item" style="flex:1 1 100%">
+        <span class="doc-info-label">Editorial:</span>
+        <input class="meta-input" type="text" id="cfg-editorial" placeholder="Universidad Nacional Autónoma de México"
+          onblur="App.syncConfigRevista('editorial', this.value)" />
+      </div>
+    </div>
+      <div class="doc-info-row" style="width:100%">
+        <div class="doc-info-item" style="flex:1 1 100%">
+          <span class="doc-info-label">Licencia:</span>
+          <select class="meta-input" id="cfg-licencia-clave"
+            onchange="App.syncConfigLicenciaClave(this.value)"></select>
+        </div>
+      </div>
+      <div class="doc-info-row" style="width:100%" id="fila-licencia-texto" hidden>
+        <div class="doc-info-item" style="flex:1 1 100%">
+          <span class="doc-info-label">Especifica la licencia:</span>
+          <input class="meta-input" type="text" id="cfg-licencia-texto"
+            placeholder="Ej. Licencia institucional propia, Todos los derechos reservados..."
+            onblur="App.syncConfigRevista('licencia_texto', this.value)" />
+        </div>
+      </div>
+      <p class="footer-hint" style="margin-top:2px">
+        Elige una licencia Creative Commons del catálogo, o selecciona "Otra /
+        especificar" para escribir un texto propio (el XML solo incluye el enlace
+        real cuando eliges una de las licencias CC del catálogo).
+      </p>
+  </div>
+</div>
+
+
+<!-- ── RF-44: Números del documento ─────────────────────────────── -->
+  <div class="config-group" style="margin-top: 24px;">
+    <div class="config-group-header">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="width:15px;height:15px">
+        <rect x="3" y="3" width="14" height="14" rx="1"/><path d="M6.5 7h7M6.5 10h7M6.5 13h4"/>
+      </svg>
+      Números del documento
+    </div>
+    <div class="config-row-desc" style="margin-bottom:10px;">Resumen del artículo cargado actualmente.</div>
+    <div class="doc-numeros-grid" id="doc-numeros-grid">
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-bloques">0</span><span class="doc-numero-label">Bloques</span></div>
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-autores">0</span><span class="doc-numero-label">Autores</span></div>
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-referencias">0</span><span class="doc-numero-label">Referencias</span></div>
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-figuras">0</span><span class="doc-numero-label">Figuras</span></div>
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-tablas">0</span><span class="doc-numero-label">Tablas</span></div>
+      <div class="doc-numero-item"><span class="doc-numero-valor" id="num-afiliaciones">—</span><span class="doc-numero-label">Afiliaciones</span></div>
+    </div>
+  </div>
+
+  <div class="config-version">v2.0.0 — Editor Semántico · Paleontología Mexicana · UNAM</div>
+</div>
+</section>
+
+</main>
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════════════

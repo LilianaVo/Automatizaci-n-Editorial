@@ -16,6 +16,10 @@ import unicodedata
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
+from core.constans import (
+    DOCTOPIC_POR_CLAVE, DOCTOPIC_DEFAULT,
+    LICENCIA_POR_CLAVE, LICENCIA_DEFAULT, LICENCIA_CLAVE_OTRA,
+)
 
 # Namespaces usados por JATS para enlaces e interoperabilidad.
 XLINK_NS = "http://www.w3.org/1999/xlink"
@@ -956,8 +960,17 @@ def build_jats_xml(
     afiliaciones_txt: str,
     figuras: list[dict],
     tablas: list[dict],
+    metadatos: dict | None = None,   # ← RF-05: doctopic elegido por el usuario
+    config_revista: dict | None = None,  # ← RF-42: nombre/licencia por defecto de la revista
 ) -> str:
     """Genera un documento XML con perfil base compatible con SciELO SPS."""
+    meta = metadatos or {}
+    cfg = config_revista or {}
+
+    def _meta(campo: str) -> str:
+        """Devuelve metadatos[campo] limpio, o '' si no vino o está vacío."""
+        return _clean_text(str(meta.get(campo) or ""))
+
     # Copia defensiva de bloques limpios
     bks = []
     for b in bloques or []:
@@ -1126,11 +1139,38 @@ def build_jats_xml(
             _pub_period = fn.strip()
             break
 
+    # RF-05: categoría / doctopic del artículo, elegida por el usuario en Metadatos
+    doctopic_clave = _meta("doctopic") or DOCTOPIC_DEFAULT
+    _, doctopic_label, article_type, subject_label = DOCTOPIC_POR_CLAVE.get(
+        doctopic_clave, DOCTOPIC_POR_CLAVE[DOCTOPIC_DEFAULT]
+    )
+
+    # RF-14/RF-42: licencia — si el artículo especificó una (Metadatos), esa
+    # gana, si no, se usa la licencia por defecto de la revista (Configuración);
+    # si tampoco hay ninguna, cae en LICENCIA_DEFAULT. En ambos niveles, la
+    # clave "otra" activa el texto libre correspondiente.
+    licencia_clave = _meta("licencia_clave") or cfg.get("licencia_clave") or LICENCIA_DEFAULT
+    if licencia_clave == LICENCIA_CLAVE_OTRA:
+        licencia_texto = (
+            _meta("licencia_texto") or cfg.get("licencia_texto") or "Todos los derechos reservados."
+        )
+        licencia_href = ""
+    else:
+        _, licencia_label, licencia_href, licencia_texto = LICENCIA_POR_CLAVE.get(
+            licencia_clave, LICENCIA_POR_CLAVE[LICENCIA_DEFAULT]
+        )
+
+    # RF-14: financiamiento del artículo (opcional, uno por línea)
+    financiamiento_raw = str(meta.get("financiamiento") or "")
+    financiamiento_lineas = [
+        _clean_text(linea) for linea in financiamiento_raw.split("\n") if _clean_text(linea)
+    ]
+
     # Construir el árbol XML en el orden correcto del DTD
     root = ET.Element(
         "article",
         {
-            "article-type": "research-article",
+            "article-type": article_type,
             "dtd-version": SCIELO_DTD_VERSION,
             "specific-use": SCIELO_SPS_VERSION,
             f"{{{XML_NS}}}lang": "es",
@@ -1140,19 +1180,24 @@ def build_jats_xml(
     front = ET.SubElement(root, "front")
 
     # journal-meta
+    nombre_revista = _clean_text(cfg.get("nombre_revista") or "") or "Paleontología Mexicana"
+    abrev_revista  = _clean_text(cfg.get("abreviatura") or "") or "Paleontol. Mex."
+    editor_revista = _clean_text(cfg.get("editorial") or "") or \
+        "Universidad Nacional Autónoma de México"
+    
     journal_meta = ET.SubElement(front, "journal-meta")
     jid = ET.SubElement(journal_meta, "journal-id", {"journal-id-type": "publisher-id"})
-    jid.text = "Paleontologia Mexicana"
+    jid.text = nombre_revista
     jtg = ET.SubElement(journal_meta, "journal-title-group")
     jt = ET.SubElement(jtg, "journal-title")
-    jt.text = "Paleontología Mexicana"
+    jt.text = nombre_revista
     jab = ET.SubElement(jtg, "abbrev-journal-title", {"abbrev-type": "publisher"})
-    jab.text = "Paleontol. Mex."
-    issn_val = _extract_issn(bks)
+    jab.text = abrev_revista
+    issn_val = _extract_issn(bks) or _clean_text(cfg.get("issn_default") or "")
     issn_node = ET.SubElement(journal_meta, "issn", {"pub-type": "epub"})
     issn_node.text = issn_val or "0000-0000"
     pub = ET.SubElement(journal_meta, "publisher")
-    ET.SubElement(pub, "publisher-name").text = "Universidad Nacional Autónoma de México"
+    ET.SubElement(pub, "publisher-name").text = editor_revista
 
     # article-meta — se construye con SubElement en el orden exacto del DTD
     am = ET.SubElement(front, "article-meta")
@@ -1161,10 +1206,10 @@ def build_jats_xml(
     if doi:
         ET.SubElement(am, "article-id", {"pub-id-type": "doi"}).text = doi
 
-    # 2. article-categories
+    # 2. article-categories — RF-05: categoría/doctopic elegida por el usuario
     ac = ET.SubElement(am, "article-categories")
     sg = ET.SubElement(ac, "subj-group", {"subj-group-type": "heading"})
-    ET.SubElement(sg, "subject").text = "Research Article"
+    ET.SubElement(sg, "subject").text = subject_label
 
     # 3. title-group
     tg = ET.SubElement(am, "title-group")
@@ -1244,22 +1289,21 @@ def build_jats_xml(
                 ET.SubElement(de, "month").text = month
             ET.SubElement(de, "year").text = yr
 
-    # 11. permissions
+   # 11. permissions
     perms = ET.SubElement(am, "permissions")
     ET.SubElement(perms, "copyright-statement").text = \
-        f"© {pub_year or '2026'} Paleontología Mexicana"
+        f"© {pub_year or '2026'} {nombre_revista}"
     ET.SubElement(perms, "copyright-year").text = pub_year or "2026"
-    ET.SubElement(perms, "copyright-holder").text = "Paleontología Mexicana"
+    ET.SubElement(perms, "copyright-holder").text = nombre_revista
     ET.SubElement(perms, f"{{{ALI_NS}}}free_to_read")
-    lic = ET.SubElement(perms, "license", {
+    lic_attrs = {
         "license-type": "open-access",
-        f"{{{XLINK_NS}}}href": "https://creativecommons.org/licenses/by/4.0/",
         f"{{{XML_NS}}}lang": "es",
-    })
-    ET.SubElement(lic, "license-p").text = (
-        "Distribuido bajo una licencia Creative Commons Attribution 4.0 "
-        "International (CC BY 4.0)."
-    )
+    }
+    if licencia_href:
+        lic_attrs[f"{{{XLINK_NS}}}href"] = licencia_href
+    lic = ET.SubElement(perms, "license", lic_attrs)
+    ET.SubElement(lic, "license-p").text = licencia_texto
 
     # 12. abstract (español)
     if abstracts["es"]:
@@ -1316,6 +1360,13 @@ def build_jats_xml(
     _append_kwd_group("en", kwds["en"])
     if kwds["general"]:
         _append_kwd_group("es", kwds["general"])
+
+    # 14b. funding-group — RF-14: solo si el usuario capturó financiamiento
+    if financiamiento_lineas:
+        fg = ET.SubElement(am, "funding-group")
+        for linea_fin in financiamiento_lineas:
+            ag = ET.SubElement(fg, "award-group")
+            ET.SubElement(ag, "funding-source").text = linea_fin
 
     # 15. custom-meta-group (solo publication-period y how-to-cite)
     _cmg_items: list[tuple[str, str]] = []

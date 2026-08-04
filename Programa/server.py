@@ -41,6 +41,10 @@ from core.constans import (
     CLASE_COMPAT,
     COLORES_UI,
     COLOR_POR_CLASE,
+    DOCTOPICS,
+    DOCTOPIC_DEFAULT,
+    LICENCIAS,
+    LICENCIA_DEFAULT,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -107,6 +111,16 @@ _orden:     list[str] = []                     # orden de las pestañas (izq→d
 _activo:    str = ""                            # id del proyecto activo
 _estado:    dict[str, Any] = _nuevo_estado()   # apunta a _proyectos[_activo]
 
+# RF-42: configuración de la revista — global, NO por-proyecto. Nombre,
+# abreviatura, editorial, ISSN y licencia se aplican a todos los artículos
+_config_revista: dict[str, Any] = {
+    "nombre_revista":   "",
+    "abreviatura":      "",
+    "editorial":        "",
+    "issn_default":     "",
+    "licencia_clave":   LICENCIA_DEFAULT,
+    "licencia_texto":   "",
+}
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Modelos Pydantic
@@ -171,6 +185,21 @@ class MetadatosPayload(BaseModel):
     fecha_recibido_iso:  str | None = None
     fecha_corregido_iso: str | None = None
     fecha_aceptado_iso:  str | None = None
+    doctopic:            str | None = None   
+    licencia_clave:      str | None = None   
+    licencia_texto:      str | None = None   
+    financiamiento:      str | None = None   
+
+class ConfigRevistaPayload(BaseModel):
+    """RF-42: configuración editable de la revista (global, no por-proyecto).
+    Todos los campos son opcionales: solo se actualizan los que vengan presentes.
+    """
+    nombre_revista:    str | None = None
+    abreviatura:       str | None = None
+    editorial:         str | None = None
+    issn_default:      str | None = None
+    licencia_clave:    str | None = None   # clave del <select> (ver LICENCIAS)
+    licencia_texto:    str | None = None   # solo se usa si licencia_clave == "otra"
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -190,8 +219,22 @@ def get_config():
         "opciones":      OPCIONES,
         "colores":       {c: col for c, col, _ in COLORES_UI},
         "clase_compat":  CLASE_COMPAT,
+        "doctopics":     [{"clave": c, "label": l} for c, l, _, _ in DOCTOPICS],
+        "licencias":     [{"clave": c, "label": l} for c, l, _, _ in LICENCIAS],
     }
 
+# ── RF-42: configuración de la revista (global) ─────────────────────────────
+
+@app.get("/api/config-revista")
+def get_config_revista():
+    return {"config_revista": _config_revista}
+
+
+@app.put("/api/config-revista")
+def set_config_revista(payload: ConfigRevistaPayload):
+    actualizados = payload.model_dump(exclude_unset=True)
+    _config_revista.update(actualizados)
+    return {"ok": True, "config_revista": _config_revista}
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoints — PDF
@@ -478,6 +521,8 @@ def exportar_xml_preview():
         afiliaciones_txt=_estado["afiliaciones_txt"],
         figuras=_estado["figuras_manuales"],
         tablas=_estado["tablas_manuales"],
+        metadatos=_estado["metadatos"],
+        config_revista=_config_revista,
     )
     return FastAPIResponse(content=xml_str, media_type="application/xml",
         headers={"Content-Disposition": "attachment; filename=articulo.xml"})
@@ -1395,6 +1440,8 @@ def exportar_xml(payload: ExportPayload):
             afiliaciones_txt     = _estado["afiliaciones_txt"],
             figuras              = _estado["figuras_manuales"],
             tablas               = _estado["tablas_manuales"],
+            metadatos            = _estado["metadatos"],
+            config_revista       = _config_revista,
         )
         with open(payload.ruta_destino, "w", encoding="utf-8") as f:
             f.write(xml_str)
@@ -1473,6 +1520,8 @@ def validar_xml_endpoint():
             afiliaciones_txt     = _estado["afiliaciones_txt"],
             figuras              = _estado["figuras_manuales"],
             tablas               = _estado["tablas_manuales"],
+            metadatos            = _estado["metadatos"],
+            config_revista       = _config_revista,
         )
         resultado = validar_jats(xml_str)
         return resultado.to_dict()
