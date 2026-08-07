@@ -209,6 +209,79 @@ def _guess_country(aff_text: str) -> str:
     return parts[-1] if parts else ""
 
 
+# Palabras que delatan una "subdivisión" (departamento, facultad, etc.) vs.
+# las que delatan la "institución madre" (universidad, museo, instituto...).
+# Un mismo segmento puede coincidir con ambas listas (ej. "Instituto de
+# Biología"); por eso se prueba primero si es institución madre y, si no,
+# se prueba si es subdivisión — mismo criterio usado en pdf_processor.py /
+# utils.py para clasificar bloques de tipo "Filiación".
+_PALABRAS_SUBDIVISION_RE = re.compile(
+    r"\b(department|departamento|lab|laboratorio|school|escuela|"
+    r"faculty|facultad|division|división|unidad|coordinación|"
+    r"posgrado|programa)\b",
+    re.IGNORECASE,
+)
+_PALABRAS_INSTITUCION_RE = re.compile(
+    r"\b(university|universidad|instituto|institute|center|centre|centro|"
+    r"museum|museo|college|national|nacional|natural)\b",
+    re.IGNORECASE,
+)
+
+
+def _split_institution_orgdiv(aff_text: str) -> tuple[str, str]:
+    """Separa el texto de una afiliación en (orgdiv, institucion_principal).
+
+    Override manual (RF-11): si el usuario escribe explícitamente
+        'Subdivisión; Institución, Ciudad, País'
+    usando punto y coma para separar la subdivisión, ese corte manual tiene
+    prioridad total y se usa tal cual — sin pasar por la heurística.
+
+    Heurística automática (respaldo cuando no hay ';'): asume el orden
+    típico de Paleontología Mexicana
+        'Subdivisión/Departamento, Institución principal, ..., País'
+    Busca el primer segmento que coincida con una palabra clave de
+    "institución madre" (universidad, instituto, museo...); todo lo
+    anterior a ese segmento se considera subdivisión (orgdiv), siempre que
+    a su vez coincida con una palabra clave de subdivisión (departamento,
+    facultad, laboratorio...) — así "Departamento de Paleontología,
+    Instituto de Geología, UNAM" se separa correctamente sin necesitar ';'.
+
+    Devuelve ('', texto_completo) cuando no se puede separar con confianza,
+    de modo que el llamador conserve el texto íntegro en <institution> como
+    respaldo (comportamiento previo a esta función).
+    """
+    texto = aff_text or ""
+
+    # ── Override manual: ';' explícito gana siempre ──────────────────────
+    if ";" in texto:
+        orgdiv_manual, _, resto = texto.partition(";")
+        orgdiv_manual = orgdiv_manual.strip(" .;")
+        resto = resto.strip(" .;")
+        if orgdiv_manual and resto:
+            return orgdiv_manual, resto
+
+    # ── Heurística automática por comas ───────────────────────────────────
+    partes = [p.strip(" .;") for p in texto.split(",") if p.strip(" .;")]
+    if len(partes) < 2:
+        return "", aff_text
+
+    idx_institucion = next(
+        (i for i, p in enumerate(partes) if _PALABRAS_INSTITUCION_RE.search(p)),
+        None,
+    )
+    if idx_institucion is None or idx_institucion == 0:
+        return "", aff_text
+
+    posible_orgdiv = ", ".join(partes[:idx_institucion])
+    if not _PALABRAS_SUBDIVISION_RE.search(posible_orgdiv):
+        # El segmento previo no parece una subdivisión real (podría ser
+        # ciudad, calle, etc.) — mejor no separar que separar mal.
+        return "", aff_text
+
+    institucion = ", ".join(partes[idx_institucion:])
+    return posible_orgdiv, institucion
+
+
 def _country_code(country_name: str) -> str:
     """Mapea algunos países frecuentes a código ISO alfa-2 para SciELO."""
     mapping = {
@@ -454,20 +527,40 @@ def _is_body_heading(texto: str) -> bool:
 
 
 # --- Parseo de autores/afiliaciones -----------------------------------------
+def _parse_autor_afiliaciones(raw: str) -> list[str]:
+    """Convierte '1,2' o '1, 2' o 'a b' en ['1', '2'] / ['a', 'b'].
+    Acepta coma o espacio como separador; ignora vacíos.
+    """
+    if not raw:
+        return []
+    partes = re.split(r"[,\s]+", raw.strip())
+    return [p.strip() for p in partes if p.strip()]
+
+
 def _authors_from_manual(autores_orcid: list[dict]) -> list[dict]:
-    """Construye autores desde la pestaña manual (nombre + ORCID opcional)."""
+    """Construye autores desde la pestaña manual (nombre + ORCID + afiliaciones).
+
+    'afiliaciones' es el texto que el usuario escribió en el input
+    correspondiente (ej. '1' o '1,2'), con las mismas labels que usó en el
+    textarea de Afiliaciones. Se guarda ya separado en una lista de labels
+    bajo la clave 'aff_labels'.
+    """
     out = []
     for a in autores_orcid or []:
         nombre = _clean_text(a.get("nombre", ""))
         orcid = _clean_orcid(a.get("orcid", ""))
         if not nombre:
             continue
-        out.append({"nombre": nombre, "orcid": orcid})
+        aff_labels = _parse_autor_afiliaciones(a.get("afiliaciones", ""))
+        out.append({"nombre": nombre, "orcid": orcid, "aff_labels": aff_labels})
     return out
 
 
 def _authors_from_pdf(bloques: list[dict]) -> list[dict]:
-    """Fallback: toma autores detectados en el PDF cuando no hay carga manual."""
+    """Fallback: toma autores detectados en el PDF cuando no hay carga manual.
+    No hay forma confiable de inferir aff_labels desde el bloque de autores
+    crudo, así que queda vacío (xref de afiliación no se generará).
+    """
     out = []
     for b in bloques:
         if b.get("clasificacion") != "Autores":
@@ -476,7 +569,7 @@ def _authors_from_pdf(bloques: list[dict]) -> list[dict]:
         for raw in [p.strip() for p in txt.split(";") if p.strip()]:
             nom = re.sub(r"[\d,\*\u00b9\u00b2\u00b3\u2070-\u209f]+$", "", raw).strip()
             if nom:
-                out.append({"nombre": nom, "orcid": ""})
+                out.append({"nombre": nom, "orcid": "", "aff_labels": []})
     return out
 
 
@@ -952,6 +1045,13 @@ def _pretty_xml(root: ET.Element) -> str:
 
 
 
+def _meta_or(meta: dict, campo: str, fallback: str) -> str:
+    """Devuelve meta[campo] si el usuario dejó un valor no vacío; si no,
+    conserva `fallback` (lo detectado automáticamente por regex)."""
+    valor = (meta.get(campo) or "").strip()
+    return valor if valor else fallback
+
+
 def build_jats_xml(
     *,
     bloques: list[dict],
@@ -1016,6 +1116,20 @@ def build_jats_xml(
     pub_year, fpage, lpage, pub_volume, pub_issue = _extract_year_and_pages(
         front_notes_seed, doi
     )
+
+    # ── Prioridad de metadatos manuales sobre la extracción automática ───────
+    # `metadatos` viene del panel editorial (server.py -> _estado["metadatos"]).
+    # Solo se sobreescribe cuando el usuario dejó un valor no vacío; un campo
+    # vacío o ausente conserva lo que ya se detectó arriba por regex.
+    meta = metadatos or {}
+    doi         = _meta_or(meta, "doi", doi)
+    pub_year    = _meta_or(meta, "anio", pub_year)
+    fpage       = _meta_or(meta, "pagina_inicio", fpage)
+    lpage       = _meta_or(meta, "pagina_fin", lpage)
+    pub_volume  = _meta_or(meta, "volumen", pub_volume)
+    pub_issue   = _meta_or(meta, "numero", pub_issue)
+    issn_manual = _meta_or(meta, "issn", "")
+    idioma      = _meta_or(meta, "idioma", "es")
 
     # Recorrer bloques y clasificar
     abstracts: dict[str, list[str]] = {"es": [], "en": [], "plain_es": [], "plain_en": []}
@@ -1123,6 +1237,32 @@ def build_jats_xml(
 
     hist_dates = _parse_manuscript_dates(date_notes)
 
+    # ── Prioridad de fechas manuales (RF-13) sobre lo detectado en el PDF ────
+    # El usuario corrige cada fecha por separado en el panel de metadatos.
+    # Si dejó un valor (en texto libre o ya en ISO 'aaaa-mm-dd'), sustituye
+    # la fecha de ese tipo específico en hist_dates; las que no haya tocado
+    # conservan lo que ya se detectó arriba desde los bloques del PDF.
+    _CAMPO_A_TIPO = {
+        "fecha_recibido":  "received",
+        "fecha_corregido": "rev-recd",
+        "fecha_aceptado":  "accepted",
+    }
+    for campo, date_type in _CAMPO_A_TIPO.items():
+        iso_val = (meta.get(f"{campo}_iso") or "").strip()
+        txt_val = (meta.get(campo) or "").strip()
+
+        day = month = yr = ""
+        if iso_val:
+            m_iso = re.match(r"(\d{4})-(\d{2})-(\d{2})", iso_val)
+            if m_iso:
+                yr, month, day = m_iso.group(1), str(int(m_iso.group(2))), str(int(m_iso.group(3)))
+        elif txt_val:
+            day, month, yr = _parse_date_str(txt_val)
+
+        if yr:
+            hist_dates = [d for d in hist_dates if d[0] != date_type]
+            hist_dates.append((date_type, day, month, yr))
+
     # Periodo de publicación
     _pub_period = ""
     _period_re = re.compile(
@@ -1173,7 +1313,7 @@ def build_jats_xml(
             "article-type": article_type,
             "dtd-version": SCIELO_DTD_VERSION,
             "specific-use": SCIELO_SPS_VERSION,
-            f"{{{XML_NS}}}lang": "es",
+            f"{{{XML_NS}}}lang": idioma or "es",
         },
     )
 
@@ -1232,11 +1372,27 @@ def build_jats_xml(
             ET.SubElement(name_el, "surname").text = surname_txt or a["nombre"]
             if given_txt:
                 ET.SubElement(name_el, "given-names").text = given_txt
-            # xref a afiliaciones: solo 1 xref si hay exactamente 1 afiliación,
-            # o una por afiliación si son varias (el usuario decide cuál corresponde)
-            for af in affs:
+
+            # xref a afiliaciones (RF-10/RF-11): cada autor se liga solo a
+            # las afiliaciones cuyo label coincide con lo que escribió en su
+            # campo "Afiliación" (ej. "1" o "1,2"), no a todas las del
+            # artículo. Si no especificó ninguna y hay exactamente una
+            # afiliación en total, se asume que es esa (caso típico de un
+            # solo autor/institución). Si hay varias y no especificó,
+            # no se genera xref — mejor ningún vínculo que uno incorrecto.
+            aff_labels = a.get("aff_labels") or []
+            if aff_labels:
+                affs_por_label = {af["label"]: af for af in affs}
+                for lbl in aff_labels:
+                    af = affs_por_label.get(lbl)
+                    if af:
+                        xr = ET.SubElement(contrib, "xref", {"ref-type": "aff", "rid": af["id"]})
+                        xr.text = af.get("label", "")
+            elif len(affs) == 1:
+                af = affs[0]
                 xr = ET.SubElement(contrib, "xref", {"ref-type": "aff", "rid": af["id"]})
                 xr.text = af.get("label", "")
+
             if emails and idx == 0:
                 ET.SubElement(contrib, "xref", {"ref-type": "corresp", "rid": "cor1"})
 
@@ -1244,8 +1400,18 @@ def build_jats_xml(
     for af in affs:
         aff_el = ET.SubElement(am, "aff", {"id": af["id"]})
         ET.SubElement(aff_el, "label").text = af["label"]
+
+        orgdiv, institucion_principal = _split_institution_orgdiv(af["text"])
+        if orgdiv:
+            ET.SubElement(
+                aff_el, "institution", {"content-type": "orgdiv1"}
+            ).text = orgdiv
+            ET.SubElement(
+                aff_el, "institution", {"content-type": "orgname"}
+            ).text = institucion_principal
         ET.SubElement(aff_el, "institution",
                       {"content-type": "original"}).text = af["text"]
+
         country_txt, country_code = _detect_country(af["text"])
         cel = ET.SubElement(aff_el, "country")
         if country_code:
@@ -1261,6 +1427,10 @@ def build_jats_xml(
             ET.SubElement(corresp, "email").text = em
 
     # 7. pub-date
+    # NOTA (RF-07): por ahora solo se usa el año (pub_year, ya con prioridad
+    # manual vía metadatos['anio']). Falta agregar día/mes de publicación si
+    # la revista lo requiere — eso necesita primero un campo nuevo en el
+    # panel de metadatos (server.py / index.html), no solo aquí.
     pd = ET.SubElement(am, "pub-date", {"pub-type": "epub"})
     ET.SubElement(pd, "year").text = pub_year or "2026"
 
