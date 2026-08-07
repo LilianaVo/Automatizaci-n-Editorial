@@ -165,6 +165,7 @@ class MetadatosPayload(BaseModel):
     pagina_fin:          str | None = None
     doi:                 str | None = None
     issn:                str | None = None
+    idioma:              str | None = None  # RF-07 — código ISO 639-1 ('es', 'en', ...)
     fecha_recibido:      str | None = None
     fecha_corregido:     str | None = None
     fecha_aceptado:      str | None = None
@@ -478,6 +479,7 @@ def exportar_xml_preview():
         afiliaciones_txt=_estado["afiliaciones_txt"],
         figuras=_estado["figuras_manuales"],
         tablas=_estado["tablas_manuales"],
+        metadatos=_estado["metadatos"],
     )
     return FastAPIResponse(content=xml_str, media_type="application/xml",
         headers={"Content-Disposition": "attachment; filename=articulo.xml"})
@@ -738,18 +740,16 @@ async def cargar_afiliaciones_txt_upload(file: UploadFile = File(...)):
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoints — Metadatos editoriales (volumen, número, año, páginas, DOI, ISSN,
-# fechas de manuscrito)
+# idioma, fechas de manuscrito)
 # ═════════════════════════════════════════════════════════════════════════════
 #
-# NOTA IMPORTANTE: estos metadatos (detectados automáticamente y luego
-# confirmados/corregidos por el usuario aquí) todavía NO se pasan a
-# build_jats_xml() ni a build_html(). Esos exportadores (core/jats_exporterv2.py
-# y core/html_exporter.py) tienen su propia extracción interna independiente
-# (ver _extract_doi, _extract_year_and_pages, _parse_manuscript_dates en
-# jats_exporterv2.py), que vuelve a leer directamente de los bloques del PDF.
-# Conectar ambas fuentes es trabajo pendiente (Paso 4): hay que decidir si el
-# dato corregido manualmente por el usuario debe tener prioridad sobre el
-# extraído automáticamente antes de inyectarlo en el XML/HTML.
+# Estos metadatos (detectados automáticamente al cargar el PDF y luego
+# confirmados/corregidos por el usuario aquí) se pasan a build_jats_xml()
+# como el parámetro `metadatos`. Dentro de jats_exporterv2.py, cada valor
+# manual tiene prioridad sobre la extracción interna por regex
+# (_extract_doi, _extract_year_and_pages, _parse_manuscript_dates); el regex
+# solo actúa como respaldo si el campo viene vacío. build_html() todavía no
+# consume estos campos porque el HTML no muestra esta metadata editorial.
 
 @app.get("/api/metadatos")
 def get_metadatos():
@@ -1395,6 +1395,7 @@ def exportar_xml(payload: ExportPayload):
             afiliaciones_txt     = _estado["afiliaciones_txt"],
             figuras              = _estado["figuras_manuales"],
             tablas               = _estado["tablas_manuales"],
+            metadatos            = _estado["metadatos"],
         )
         with open(payload.ruta_destino, "w", encoding="utf-8") as f:
             f.write(xml_str)
@@ -1473,6 +1474,7 @@ def validar_xml_endpoint():
             afiliaciones_txt     = _estado["afiliaciones_txt"],
             figuras              = _estado["figuras_manuales"],
             tablas               = _estado["tablas_manuales"],
+            metadatos            = _estado["metadatos"],
         )
         resultado = validar_jats(xml_str)
         return resultado.to_dict()

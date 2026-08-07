@@ -949,7 +949,7 @@ const App = {
 
   async agregarAutor() {
     App._leerInputsAutores();   // guardar valores actuales antes de redibujar
-    State.autores.push({ nombre: "", orcid: "" });
+    State.autores.push({ nombre: "", orcid: "", afiliaciones: "" });
     App._renderAutores();
     await App._pushAutores();
     // Hacer foco en el último input de nombre
@@ -1029,6 +1029,12 @@ const App = {
           value="${esc(a.orcid || "")}"
           onblur="App._onAutorBlur(${i}, 'orcid', this.value)"
         />
+        <input class="autor-input autor-input--aff" type="text"
+          placeholder="Afiliación(es), ej. 1 o 1,2"
+          title="Número(s) o letra(s) de afiliación tal como aparecen junto al nombre del autor en el PDF"
+          value="${esc(a.afiliaciones || "")}"
+          onblur="App._onAutorBlur(${i}, 'afiliaciones', this.value)"
+        />
         <button class="autor-del" onclick="App._eliminarAutor(${i})" title="Eliminar">✕</button>
       </div>
     `).join("");
@@ -1054,8 +1060,9 @@ const App = {
       const i = parseInt(row.dataset.autorIdx, 10);
       if (isNaN(i) || !State.autores[i]) return;
       const inputs = row.querySelectorAll(".autor-input");
-      if (inputs[0]) State.autores[i].nombre = inputs[0].value.trim();
-      if (inputs[1]) State.autores[i].orcid  = inputs[1].value.trim();
+      if (inputs[0]) State.autores[i].nombre       = inputs[0].value.trim();
+      if (inputs[1]) State.autores[i].orcid        = inputs[1].value.trim();
+      if (inputs[2]) State.autores[i].afiliaciones = inputs[2].value.trim();
     });
   },
 
@@ -1085,6 +1092,7 @@ const App = {
     ["pagina_fin",          "meta-pagina-fin"],
     ["issn",                "meta-issn"],
     ["doi",                 "meta-doi"],
+    ["idioma",               "meta-idioma"],
     ["fecha_recibido",      "meta-fecha-recibido"],
     ["fecha_corregido",     "meta-fecha-corregido"],
     ["fecha_aceptado",      "meta-fecha-aceptado"],
@@ -1095,7 +1103,10 @@ const App = {
     const m = State.metadatos || {};
     App._CAMPOS_METADATOS.forEach(([campo, id]) => {
       const el = $(id);
-      if (el) el.value = m[campo] || "";
+      if (!el) return;
+      // 'idioma' no se detecta automáticamente del PDF; "es" es el default
+      // razonable para Paleontología Mexicana hasta que el usuario lo cambie.
+      el.value = m[campo] || (campo === "idioma" ? "es" : "");
     });
 
     const badge = $("metadatos-estado");

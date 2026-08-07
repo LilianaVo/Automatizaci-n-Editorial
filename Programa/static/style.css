@@ -1373,7 +1373,7 @@ html, body {
 ══════════════════════════════════════════════════════════════════════════ */
 .table-header {
   display: grid;
-  grid-template-columns: 44px 1fr 1fr 40px;
+  grid-template-columns: 44px 1.4fr 1fr 0.8fr 40px;
   background: var(--sepia-cream);
   border: 1px solid var(--border);
   border-radius: var(--radius) var(--radius) 0 0;
@@ -1404,7 +1404,7 @@ html, body {
 
 .autor-row {
   display: grid;
-  grid-template-columns: 44px 1fr 1fr 40px;
+  grid-template-columns: 44px 1.4fr 1fr 0.8fr 40px;
   border-bottom: 1px solid var(--border);
   align-items: center;
 }
@@ -1439,6 +1439,11 @@ html, body {
 
 .autor-input:focus { background: #FDF8F0; }
 .autor-input::placeholder { color: var(--text-light); }
+
+.autor-input--aff {
+  text-align: center;
+  font-size: 12px;
+}
 
 .autor-del {
   display: flex;

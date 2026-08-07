@@ -341,6 +341,17 @@
                 onblur="App.syncMetadato('doi', this.value)" />
             </div>
           </div>
+          <div class="doc-info-row">
+            <div class="doc-info-item">
+              <span class="doc-info-label">Idioma del artículo:</span>
+              <select class="meta-input" id="meta-idioma"
+                onchange="App.syncMetadato('idioma', this.value)">
+                <option value="es">Español (es)</option>
+                <option value="en">Inglés (en)</option>
+                <option value="pt">Portugués (pt)</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="doc-info-card">
@@ -401,6 +412,7 @@
         <div class="th th--num">#</div>
         <div class="th th--main">Apellido, Nombre</div>
         <div class="th th--orcid">ORCID <span class="th-hint">(0000-0001-2345-6789)</span></div>
+        <div class="th th--orcid">Afiliación <span class="th-hint">(núm./letra)</span></div>
         <div class="th th--action"></div>
       </div>
 
@@ -413,7 +425,7 @@
       </div>
 
       <div class="panel-footer">
-        <span class="footer-hint">El ORCID puede ser el link completo (https://orcid.org/0000-...) o solo los números.</span>
+        <span class="footer-hint">El ORCID puede ser el link completo (https://orcid.org/0000-...) o solo los números. En Afiliación, usa el mismo número o letra con el que escribiste esa institución en la pestaña Afiliaciones (ej. "1" o "1,2" si el autor pertenece a varias).</span>
         <button class="btn-sm btn-danger-ghost" onclick="App.limpiarAutores()">Limpiar todo</button>
       </div>
     </section>
@@ -446,7 +458,7 @@
         ></textarea>
       </div>
       <div class="panel-footer">
-        <span class="footer-hint">Acepta prefijos con número o letra (1, 2, a, b…). Los correos con * se vinculan automáticamente.</span>
+        <span class="footer-hint">Acepta prefijos con número o letra (1, 2, a, b…). Los correos con * se vinculan automáticamente. Para indicar la subdivisión (departamento/facultad) por separado de la institución, sepárala con punto y coma: <code>1 Departamento de Paleontología; Instituto de Geología, UNAM, México</code>. Si no usas ";", el sistema intenta detectarla automáticamente.</span>
       </div>
     </section>
 
