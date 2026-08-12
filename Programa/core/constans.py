@@ -54,6 +54,56 @@ COLORES_UI = [
 # Acceso rápido: clase → color hex
 COLOR_POR_CLASE: dict[str, str] = {c: col for c, col, _ in COLORES_UI}
 
+# ─── RF-05: Categorías / doctopic del documento ───────────────────────────────
+# Cada entrada: (clave interna, etiqueta visible, article-type JATS, subject SciELO)
+DOCTOPICS = [
+    ("research-article", "Artículo de investigación", "research-article", "Research Article"),
+    ("review-article",   "Artículo de revisión",       "review-article",   "Review Article"),
+    ("case-report",      "Nota / Reporte de caso",     "case-report",      "Case Report"),
+    ("other",            "Otro",                       "other",            "Other"),
+]
+DOCTOPIC_POR_CLAVE = {d[0]: d for d in DOCTOPICS}
+DOCTOPIC_DEFAULT = "research-article"
+
+# ─── RF-42: Licencias de la revista ────────────────────────────────────────────
+# Catálogo de licencias comunes (con su href real de creativecommons.org) más
+# una opción "otra" que activa un campo de texto libre en la UI, para el caso
+# excepcional de una licencia institucional propia.
+# Cada entrada: (clave interna, etiqueta visible, href, texto legal en español)
+LICENCIAS = [
+    ("cc-by-4.0", "CC BY 4.0 — Atribución",
+     "https://creativecommons.org/licenses/by/4.0/",
+     "Distribuido bajo una licencia Creative Commons Attribution 4.0 International (CC BY 4.0)."),
+    ("cc-by-sa-4.0", "CC BY-SA 4.0 — Atribución compartir igual",
+     "https://creativecommons.org/licenses/by-sa/4.0/",
+     "Distribuido bajo una licencia Creative Commons Attribution-ShareAlike 4.0 "
+     "International (CC BY-SA 4.0)."),
+    ("cc-by-nc-4.0", "CC BY-NC 4.0 — Atribución no comercial",
+     "https://creativecommons.org/licenses/by-nc/4.0/",
+     "Distribuido bajo una licencia Creative Commons Attribution-NonCommercial 4.0 "
+     "International (CC BY-NC 4.0)."),
+    ("cc-by-nc-sa-4.0", "CC BY-NC-SA 4.0 — Atribución no comercial compartir igual",
+     "https://creativecommons.org/licenses/by-nc-sa/4.0/",
+     "Distribuido bajo una licencia Creative Commons Attribution-NonCommercial-ShareAlike "
+     "4.0 International (CC BY-NC-SA 4.0)."),
+    ("cc-by-nd-4.0", "CC BY-ND 4.0 — Atribución sin derivadas",
+     "https://creativecommons.org/licenses/by-nd/4.0/",
+     "Distribuido bajo una licencia Creative Commons Attribution-NoDerivatives 4.0 "
+     "International (CC BY-ND 4.0)."),
+    ("cc-by-nc-nd-4.0", "CC BY-NC-ND 4.0 — Atribución no comercial sin derivadas",
+     "https://creativecommons.org/licenses/by-nc-nd/4.0/",
+     "Distribuido bajo una licencia Creative Commons Atribución-NoComercial-"
+     "SinDerivadas 4.0 Internacional (CC BY-NC-ND 4.0)."),
+    ("todos-los-derechos", "Todos los derechos reservados",
+     "",
+     "Todos los derechos reservados."),
+]
+LICENCIA_POR_CLAVE = {l[0]: l for l in LICENCIAS}
+LICENCIA_DEFAULT = "cc-by-nc-nd-4.0"
+
+# Clave especial que la UI usa para mostrar el campo de texto libre.
+LICENCIA_CLAVE_OTRA = "otra"
+
 # ─── Estilos de textbox por clase (UI) ────────────────────────────────────────
 # Cada entrada: (font_size, weight, slant, fg_color, bg_color)
 # Usados por _aplicar_estilo_textbox() y _crear_bloque_ui() en la UI.
@@ -138,3 +188,11 @@ HTML_CSS = """
   table.pm-tabla tbody tr:nth-child(even) td { background:#b8e6f8; }
 </style>
 """
+
+# RF-42: Licencia por defecto de la revista 
+
+LICENCIA_TEXTO_DEFAULT = (
+    "Distribuido bajo una licencia Creative Commons Atribución-NoComercial-"
+    "SinDerivadas 4.0 Internacional (CC BY-NC-ND 4.0)."
+)
+LICENCIA_HREF_DEFAULT = "https://creativecommons.org/licenses/by-nc-nd/4.0/"

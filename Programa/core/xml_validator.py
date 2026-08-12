@@ -21,6 +21,7 @@ class ErrorValidacion:
     nivel:   str   # "error" | "advertencia"
     linea:   int
     mensaje: str
+    sugerencia: str=""
 
 
 @dataclass
@@ -33,11 +34,11 @@ class ResultadoValidacion:
         return {
             "valido": self.valido,
             "errores": [
-                {"nivel": e.nivel, "linea": e.linea, "mensaje": e.mensaje}
+                {"nivel": e.nivel, "linea": e.linea, "mensaje": e.mensaje, "sugerencia": e.sugerencia}
                 for e in self.errores
             ],
             "advertencias": [
-                {"nivel": e.nivel, "linea": e.linea, "mensaje": e.mensaje}
+                {"nivel": e.nivel, "linea": e.linea, "mensaje": e.mensaje, "sugerencia": e.sugerencia}
                 for e in self.advertencias
             ],
             "resumen": _resumen(self),
@@ -80,6 +81,8 @@ def validar_jats(xml_string: str) -> ResultadoValidacion:
                     nivel="error",
                     linea=e.line,
                     mensaje=f"XML mal formado: {e.message}",
+                    sugerencia="Revisa caracteres especiales sin escapar (&, <, >) dentro de "
+                       "algún bloque de texto, o vuelve a generar el XML desde cero.",
                 ))
             return ResultadoValidacion(valido=False, errores=errores)
 
@@ -137,7 +140,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         if root.tag != "article":
             errores.append(ErrorValidacion(
                 nivel="error", linea=1,
-                mensaje="El elemento raíz debe ser <article>, no <{}>".format(root.tag)
+                mensaje="El elemento raíz debe ser <article>, no <{}>".format(root.tag),
+                sugerencia="El XML probablemente fue editado a mano o el exportador falló a "
+                        "mitad de proceso. Vuelve a generar el XML desde 'Exportar > XML'.",
             ))
             return
 
@@ -149,11 +154,16 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
             errores.append(ErrorValidacion(
                 nivel="error", linea=linea_art,
                 mensaje='<article> requiere atributo article-type (ej: article-type="research-article")',
+                sugerencia="Falta elegir la categoría/doctopic del documento. Ve a la pestaña "
+                        "Metadatos y selecciona el tipo de artículo.",
             ))
         if "xml:lang" not in txt_art:
             errores.append(ErrorValidacion(
                 nivel="error", linea=linea_art,
                 mensaje='<article> requiere atributo xml:lang (ej: xml:lang="es")',
+                sugerencia="Este atributo lo agrega el exportador automáticamente; si falta, "
+                        "es señal de que el XML no se generó con la versión actual del "
+                        "programa. Vuelve a exportarlo.",
             ))
 
     # ── 3. <front> → <journal-meta> → <journal-title> ────────────────────────
@@ -161,12 +171,16 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         errores.append(ErrorValidacion(
             nivel="error", linea=linea_de_tag("journal-meta"),
             mensaje="Falta <journal-title> dentro de <journal-meta>",
+            sugerencia="El nombre de la revista no se generó correctamente. Vuelve a "
+               "exportar el XML; si el problema persiste, revisa manualmente los bloques",
         ))
 
     if not buscar_en_texto(r"<issn"):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("journal-meta"),
             mensaje="No se encontró <issn> — recomendado para SciELO",
+            sugerencia="Captura el ISSN en la pestaña Metadatos; si el PDF no lo trae "
+               "visible, escríbelo manualmente en el campo ISSN.",
         ))
 
     # ── 4. <article-meta> obligatorio ────────────────────────────────────────
@@ -174,6 +188,8 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         errores.append(ErrorValidacion(
             nivel="error", linea=linea_de_tag("front"),
             mensaje="Falta <article-meta> dentro de <front>",
+            sugerencia="Esto suele indicar que no se cargó ningún PDF o que los bloques "
+               "se perdieron. Carga el PDF de nuevo desde la pestaña PDF.",
         ))
         return  # Sin article-meta muchas otras reglas fallan
 
@@ -182,6 +198,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         errores.append(ErrorValidacion(
             nivel="error", linea=linea_de_tag("title-group"),
             mensaje="Falta <article-title> — el título del artículo es obligatorio",
+            sugerencia="Ningún bloque está clasificado como 'Título principal'. Revisa "
+               "la lista de bloques y asigna esa etiqueta al título del "
+               "artículo.",
         ))
 
     # ── 6. Al menos un <contrib> de tipo author ───────────────────────────────
@@ -190,6 +209,8 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("contrib-group"),
             mensaje="No se encontró ningún <contrib contrib-type=\"author\"> — se recomienda al menos uno",
+            sugerencia="No hay autores cargados. Ve a la pestaña Autores y agrega al "
+               "menos uno manualmente o desde Excel.",
         ))
 
     # ── 7. <pub-date> ────────────────────────────────────────────────────────
@@ -197,6 +218,8 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         errores.append(ErrorValidacion(
             nivel="error", linea=linea_de_tag("article-meta"),
             mensaje="Falta <pub-date> — la fecha de publicación es obligatoria",
+            sugerencia="El año de publicación no se detectó ni se capturó manualmente. "
+               "Escríbelo en el campo Año de la pestaña Metadatos.",
         ))
 
     # ── 8. <abstract> ────────────────────────────────────────────────────────
@@ -204,6 +227,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("article-meta"),
             mensaje="No se encontró <abstract> — recomendado por SciELO",
+            sugerencia="Ningún bloque quedó bajo el encabezado 'Resumen'. Verifica que "
+               "exista ese encabezado y que el texto siguiente esté marcado "
+               "como 'Cuerpo del abstract'.",
         ))
 
     # ── 9. <body> ────────────────────────────────────────────────────────────
@@ -211,6 +237,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         errores.append(ErrorValidacion(
             nivel="error", linea=0,
             mensaje="Falta elemento <body> — el cuerpo del artículo es obligatorio",
+            sugerencia="No hay bloques clasificados como 'Cuerpo' o secciones después "
+               "del front-matter. Revisa que el PDF se haya leído y dividido "
+               "en bloques.",
         ))
 
     # ── 10. <back> y <ref-list> ──────────────────────────────────────────────
@@ -218,11 +247,17 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=0,
             mensaje="No se encontró <back> — se recomienda incluir la lista de referencias",
+            sugerencia="No hay referencias cargadas. Verifica que el encabezado "
+               "'Referencias' exista en los bloques o cárgalas manualmente en "
+               "la pestaña Referencias.",
         ))
     elif not buscar_en_texto(r"<ref-list"):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("back"),
             mensaje="<back> existe pero no contiene <ref-list>",
+            sugerencia="El encabezado 'Referencias' se detectó pero no se "
+                   "reconoció ninguna referencia individual debajo. Revisa "
+                   "que estén marcadas como 'Referencia'.",
         ))
 
     # ── 11. DOI ──────────────────────────────────────────────────────────────
@@ -231,6 +266,8 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("article-meta"),
             mensaje="No se encontró DOI (<article-id pub-id-type=\"doi\">) — requerido por SciELO",
+            sugerencia="El DOI no se detectó automáticamente del PDF. Escríbelo "
+               "manualmente en el campo DOI de la pestaña Metadatos.",
         ))
 
     # ── 12. Licencia CC ──────────────────────────────────────────────────────
@@ -238,6 +275,7 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("permissions"),
             mensaje="No se encontró <license> en <permissions> — requerido para acceso abierto en SciELO",
+            sugerencia="No hay una licencia configurada en el exportador.",
         ))
 
     # ── 13. Keywords ─────────────────────────────────────────────────────────
@@ -245,6 +283,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=linea_de_tag("article-meta"),
             mensaje="No se encontró <kwd-group> — las palabras clave son recomendadas",
+            sugerencia="No hay bloques con la clasificación 'Palabras clave' dentro de "
+               "un Resumen/Abstract. Verifica esa etiqueta en los bloques "
+               "correspondientes.",
         ))
 
     # ── 14. Afiliaciones sin país ─────────────────────────────────────────────
@@ -254,6 +295,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=affs[0][0],
             mensaje="Las afiliaciones no tienen <country> — requerido por SciELO SPS",
+            sugerencia="El texto de afiliaciones no incluye un país reconocible. "
+               "Agrega el país al final de cada línea en la pestaña "
+               "Afiliaciones (ej. '..., México').",
         ))
 
     # ── 15. <sec> sin <title> ────────────────────────────────────────────────
@@ -263,6 +307,9 @@ def _verificar_estructura(xml_string: str, root, errores, advertencias):
         advertencias.append(ErrorValidacion(
             nivel="advertencia", linea=secs[0][0] if secs else 0,
             mensaje=f"Hay {len(secs)} sección(es) pero solo {len(titulos_sec)} título(s) — cada <sec> debe tener <title>",
+            sugerencia="Alguna sección quedó sin un bloque de 'Encabezado sección' o "
+               "'Subencabezado' justo antes de su contenido. Revisa el orden "
+               "de los bloques en esa parte del artículo.",
         ))
 
 
@@ -281,5 +328,7 @@ def _validar_sin_lxml(xml_string: str) -> list[ErrorValidacion]:
         errores.append(ErrorValidacion(
             nivel="error", linea=linea,
             mensaje=f"XML mal formado: {e}",
+            sugerencia="Revisa caracteres especiales sin escapar (&, <, >) dentro de algún "
+               "bloque de texto, o vuelve a generar el XML desde cero.",
         ))
     return errores

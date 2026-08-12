@@ -373,6 +373,7 @@ const App = {
     if (seccion === "tablas")      App._cargarTablas();
     if (seccion === "autores")     App._renderAutores();
     if (seccion === "metadatos")   App._renderMetadatos();
+    if (seccion === "config")      App._renderConfigRevista();
   },
 
 
@@ -1096,10 +1097,42 @@ const App = {
     ["fecha_recibido",      "meta-fecha-recibido"],
     ["fecha_corregido",     "meta-fecha-corregido"],
     ["fecha_aceptado",      "meta-fecha-aceptado"],
+    ["doctopic",            "meta-doctopic"],
+    ["licencia_texto",      "meta-licencia-texto"],
+    ["financiamiento",      "meta-financiamiento"],
   ],
+
+  /** Llena el <select> de doctopic con las opciones de /api/config (una sola vez). */
+  _poblarSelectDoctopic() {
+    const sel = $("meta-doctopic");
+    if (!sel || sel.dataset.poblado) return;
+    const opciones = (State.config && State.config.doctopics) || [];
+    sel.innerHTML = '<option value="">— Artículo de investigación (por defecto) —</option>' +
+      opciones.map(d => `<option value="${esc(d.clave)}">${esc(d.label)}</option>`).join("");
+    sel.dataset.poblado = "1";
+  },
+
+  /** RF-14: llena el <select> de licencia del artículo (catálogo + "otra"). */
+  _poblarSelectLicenciaArticulo() {
+    const sel = $("meta-licencia-clave");
+    if (!sel || sel.dataset.poblado) return;
+    const opciones = (State.config && State.config.licencias) || [];
+    sel.innerHTML = '<option value="">— Usar la de la revista —</option>' +
+      opciones.map(l => `<option value="${esc(l.clave)}">${esc(l.label)}</option>`).join("") +
+      `<option value="otra">Otra / especificar</option>`;
+    sel.dataset.poblado = "1";
+  },
+
+  /** RF-14: muestra u oculta el campo de texto libre de la licencia del artículo. */
+  _toggleMetaLicenciaTexto(clave) {
+    const fila = $("fila-meta-licencia-texto");
+    if (fila) fila.hidden = (clave !== "otra");
+  },
 
   /** Pinta los inputs del panel Metadatos desde State.metadatos. */
   _renderMetadatos() {
+    App._poblarSelectDoctopic();
+    App._poblarSelectLicenciaArticulo();
     const m = State.metadatos || {};
     App._CAMPOS_METADATOS.forEach(([campo, id]) => {
       const el = $(id);
@@ -1108,6 +1141,11 @@ const App = {
       // razonable para Paleontología Mexicana hasta que el usuario lo cambie.
       el.value = m[campo] || (campo === "idioma" ? "es" : "");
     });
+
+    const selLic = $("meta-licencia-clave");
+    const claveLic = m.licencia_clave || "";
+    if (selLic) selLic.value = claveLic;
+    App._toggleMetaLicenciaTexto(claveLic);
 
     const badge = $("metadatos-estado");
     if (badge) {
@@ -1138,6 +1176,103 @@ const App = {
     } catch (e) {
       showToast("No se pudo guardar el metadato", 3000);
     }
+  },
+
+  /** RF-14: handler de onchange del <select> de licencia del artículo. */
+  async syncMetaLicenciaClave(valor) {
+    App._toggleMetaLicenciaTexto(valor);
+    await App.syncMetadato("licencia_clave", valor);
+  },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RF-42 — CONFIGURACIÓN DE LA REVISTA (nombre, abreviatura, editorial,
+  // ISSN y licencia por defecto). Aplica a todos los artículos de esta
+  // instalación, no solo al que está cargado.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  _CAMPOS_CONFIG_REVISTA: [
+      ["nombre_revista",   "cfg-nombre-revista"],
+      ["abreviatura",      "cfg-abreviatura"],
+      ["editorial",        "cfg-editorial"],
+      ["issn_default",     "cfg-issn-default"],
+      ["licencia_texto",   "cfg-licencia-texto"],
+    ],
+
+    /** Muestra u oculta el campo de texto libre según la licencia elegida. */
+    _toggleLicenciaTexto(clave) {
+      const fila = $("fila-licencia-texto");
+      if (fila) fila.hidden = (clave !== "otra");
+    },
+
+    async _renderConfigRevista() {
+      // Poblar el <select> de licencia (una sola vez): catálogo + "Otra / especificar"
+      const sel = $("cfg-licencia-clave");
+      if (sel && !sel.dataset.poblado) {
+        const opciones = (State.config && State.config.licencias) || [];
+        sel.innerHTML =
+          opciones.map(l => `<option value="${esc(l.clave)}">${esc(l.label)}</option>`).join("") +
+          `<option value="otra">Otra / especificar</option>`;
+        sel.dataset.poblado = "1";
+      }
+
+      try {
+        const r = await API.get("/api/config-revista");
+        State.configRevista = r.config_revista || {};
+      } catch (e) {
+        State.configRevista = State.configRevista || {};
+      }
+      App._CAMPOS_CONFIG_REVISTA.forEach(([campo, id]) => {
+        const el = $(id);
+        if (el && State.configRevista[campo]) el.value = State.configRevista[campo];
+      });
+
+      const claveActual = State.configRevista.licencia_clave || "cc-by-nc-nd-4.0";
+      if (sel) sel.value = claveActual;
+      App._toggleLicenciaTexto(claveActual);
+
+      App._renderNumerosDocumento();
+    },
+
+    /** Handler de onblur de los campos de Configuración > Datos de la revista. */
+    async syncConfigRevista(campo, valor) {
+      const v = (valor || "").trim();
+      State.configRevista = State.configRevista || {};
+      State.configRevista[campo] = v;
+      try {
+        await API.put("/api/config-revista", { [campo]: v });
+        showToast("Configuración de revista guardada", 1500);
+      } catch (e) {
+        showToast("No se pudo guardar la configuración", 3000);
+      }
+    },
+
+    /** Handler de onchange del <select> de licencia: guarda la clave y
+     * muestra/oculta el campo de texto libre según corresponda. */
+    async syncConfigLicenciaClave(valor) {
+      App._toggleLicenciaTexto(valor);
+      await App.syncConfigRevista("licencia_clave", valor);
+    },
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RF-44 — Números del documento (autores, referencias, figuras, etc.)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async _renderNumerosDocumento() {
+    let e;
+    try {
+      e = await API.get("/api/estado");
+    } catch (err) {
+      return;
+    }
+    const setNum = (id, val) => { const el = $(id); if (el) el.textContent = (val ?? "—"); };
+    setNum("num-bloques",      e.num_bloques);
+    setNum("num-autores",      e.num_autores);
+    setNum("num-referencias",  e.num_referencias);
+    setNum("num-figuras",      e.num_figuras);
+    setNum("num-tablas",       e.num_tablas);
+    setNum("num-afiliaciones", e.tiene_afiliaciones ? "Sí" : "No");
   },
 
 
@@ -2108,11 +2243,15 @@ const App = {
       const linea = item.linea > 0
         ? `<span style="color:#9AA3B5;font-size:10px;margin-left:6px">línea ${item.linea}</span>`
         : "";
+      const sugerencia = item.sugerencia
+        ? `<div style="margin-top:3px;font-size:11px;color:#6B7280;">
+            💡 ${esc(item.sugerencia)}</div>`
+        : "";
       return `
         <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;
           border-bottom:1px solid #E4E9F0;">
           <span style="color:${color};font-weight:700;font-size:13px;flex-shrink:0">${icono}</span>
-          <span style="font-size:12px;color:#1A2236;flex:1">${esc(item.mensaje)}${linea}</span>
+          <span style="font-size:12px;color:#1A2236;flex:1">${esc(item.mensaje)}${linea}${sugerencia}</span>
         </div>`;
     };
 
