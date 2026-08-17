@@ -36,6 +36,7 @@ from core.html_exporter    import build_html
 from core.epub_exporter    import build_epub
 from core.xml_validator    import validar_jats
 from core import proyecto
+from core import sps_bridge
 from core.constans import (
     OPCIONES,
     CLASE_COMPAT,
@@ -474,6 +475,22 @@ def cargar_docx_por_ruta(payload: RutaPDFPayload):
     return _volcar_resultado_carga(
         resultado, Path(ruta).name,
         f"{os.path.getsize(ruta) / 1024:.1f} KB", "docx")
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Endpoints — Etiquetas SPS / Markup  (Fase 2: Vista de Etiquetas, solo lectura)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/etiquetas/markup")
+def etiquetas_markup():
+    """Devuelve el documento actual como marcación de corchetes de SciELO Markup,
+    derivada del estado (bloques + metadatos). Solo lectura por ahora: es la
+    proyección «vista de etiquetas» del mismo contenido de la vista de bloques."""
+    try:
+        markup = sps_bridge.estado_a_markup(_estado)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo generar la marcación: {e}")
+    return {"markup": markup}
 
 
 # ── Exportar preview (para desarrollo en browser sin PyWebView) ───────────────

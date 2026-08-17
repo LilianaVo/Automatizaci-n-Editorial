@@ -374,6 +374,23 @@ const App = {
     if (seccion === "autores")     App._renderAutores();
     if (seccion === "metadatos")   App._renderMetadatos();
     if (seccion === "config")      App._renderConfigRevista();
+    if (seccion === "etiquetas")   App._cargarMarkup();
+  },
+
+  // ── Vista de Etiquetas (SPS/Markup, solo lectura · Fase 2) ─────────────────
+  // Proyección del mismo contenido de la vista de bloques, en la marcación de
+  // corchetes de SciELO Markup. Se recarga cada vez que se entra a la vista.
+  async _cargarMarkup() {
+    const pre = $("etiquetas-markup");
+    if (!pre) return;
+    pre.textContent = "Generando marcación…";
+    try {
+      const data = await API.get("/api/etiquetas/markup");
+      pre.textContent = (data.markup || "").trim() ||
+        "El documento está vacío. Carga un artículo y clasifica bloques para ver su marcación.";
+    } catch (e) {
+      pre.textContent = "No se pudo generar la marcación: " + (e.message || "");
+    }
   },
 
 

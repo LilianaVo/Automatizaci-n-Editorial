@@ -315,6 +315,23 @@ html, body {
 }
 .tabbar-nueva:hover { background: var(--sepia-pale); }
 
+/* Fase 2 — Vista de Etiquetas (SciELO Markup, solo lectura) */
+.markup-view {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 16px 18px;
+  overflow: auto;
+  background: var(--sepia-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: 'Cascadia Code', 'Consolas', 'SFMono-Regular', ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--sepia-dark);
+  white-space: pre;
+  tab-size: 2;
+}
+
 .topbar-brand {
   display: flex;
   align-items: center;
