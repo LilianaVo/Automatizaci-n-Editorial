@@ -37,6 +37,7 @@ from core.epub_exporter    import build_epub
 from core.xml_validator    import validar_jats
 from core import proyecto
 from core import sps_bridge
+from core import sps_documento
 from core.constans import (
     OPCIONES,
     CLASE_COMPAT,
@@ -131,6 +132,8 @@ class BloqueUpdate(BaseModel):
     idx: int
     contenido: str | None = None
     clasificacion: str | None = None
+    sps_tag: str | None = None            # Fase 3: etiqueta SPS explícita del bloque
+    sps_attrs: dict | None = None         # Fase 3: atributos SPS del bloque
 
 class BloquesBulkUpdate(BaseModel):
     bloques: list[dict]   # [{idx, contenido?, clasificacion?}]
@@ -493,6 +496,50 @@ def etiquetas_markup():
     return {"markup": markup}
 
 
+@app.get("/api/etiquetas/catalogo")
+def etiquetas_catalogo():
+    """Catálogo de etiquetas SPS para poblar los selectores de la UI:
+    nombre de corchete, etiqueta amable, grupo, si es inline y sus atributos."""
+    from core import sps_tags as _t
+    salida = []
+    for nombre, d in _t.TAGS.items():
+        salida.append({
+            "nombre":   nombre,
+            "etiqueta": d.get("etiqueta", nombre),
+            "grupo":    d.get("grupo", ""),
+            "inline":   d.get("tipo") == "inline",
+            "jats":     d.get("jats"),
+            "attrs":    {a: {"req": v.get("req", False), "valores": v.get("valores")}
+                         for a, v in (d.get("attrs") or {}).items()},
+        })
+    # Grafo de anidación: hijos válidos de cada etiqueta (estructurales + inline),
+    # para el selector en columnas (Miller) al estilo de la cinta de Markup.
+    hijos = {n: _t.tags_validas_en(n) for n in _t.TAGS}
+    # Ancla (contexto raíz de la 1ª columna) por clasificación = padre de la 1ª
+    # etiqueta de su ruta. Sin ruta → "doc" (permite navegar todo el árbol).
+    anclas = {}
+    for cls in OPCIONES:
+        ruta = sps_bridge.ruta_de_clasificacion(cls)
+        padres = _t.padres_validos(ruta[0]) if ruta else []
+        anclas[cls] = padres[0] if padres else "doc"
+    return {"tags": salida, "grupos": _t.GRUPOS_UI,
+            "rutas": sps_bridge.rutas_por_clasificacion(OPCIONES),
+            "hijos": hijos, "anclas": anclas}
+
+
+@app.get("/api/etiquetas/validar")
+def etiquetas_validar():
+    """Valida el árbol SPS derivado del estado contra la biblioteca de etiquetas
+    (anidación, atributos y vocabularios). Devuelve la lista de incidencias."""
+    try:
+        arbol = sps_bridge.estado_a_arbol(_estado)
+        inc = sps_documento.validar(arbol)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo validar: {e}")
+    return {"ok": len(inc) == 0,
+            "incidencias": [{"tipo": x.tipo, "detalle": x.detalle} for x in inc]}
+
+
 # ── Exportar preview (para desarrollo en browser sin PyWebView) ───────────────
 
 from fastapi.responses import Response as FastAPIResponse
@@ -564,6 +611,10 @@ def actualizar_bloque(idx: int, datos: BloqueUpdate):
         b["contenido"] = datos.contenido
     if datos.clasificacion is not None:
         b["clasificacion"] = datos.clasificacion
+    if datos.sps_tag is not None:
+        b["sps_tag"] = datos.sps_tag or None       # "" limpia el override
+    if datos.sps_attrs is not None:
+        b["sps_attrs"] = datos.sps_attrs
     return {"ok": True, "bloque": b}
 
 

@@ -21,6 +21,16 @@ const State = {
   _afilTimer    : null,
 };
 
+// Selector de etiqueta por bloque:
+//   false (nuevo) → un solo control en columnas (Miller): la columna 0 es la
+//                   clasificación ("sección madre") y de ahí se derivan las
+//                   etiquetas SPS. La fila NO muestra el desplegable clásico.
+//   true (clásico) → restaura el desplegable de clasificación en la fila; el
+//                   breadcrumb abre el selector SPS empezando por el ancla.
+// Cambiar SOLO esta constante revierte al comportamiento anterior si el
+// experimento del selector unificado falla.
+const SELECTOR_CLASICO = false;
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wrapper fetch  (GET / POST JSON / PUT JSON / POST FormData)
@@ -583,10 +593,16 @@ const App = {
           onmouseup="App._onSeleccionTexto(${idx}, this)"
           onkeyup="App._onSeleccionTexto(${idx}, this)"
         >${esc(b.contenido)}</textarea>
-        <select class="bloque-select"
-          onchange="App._onBloqueClaseChange(${idx}, this.value, this.closest('.bloque-item'))">
-          ${optsConSelected}
-        </select>
+        <div class="bloque-meta">
+          ${SELECTOR_CLASICO ? `
+          <select class="bloque-select"
+            onchange="App._onBloqueClaseChange(${idx}, this.value, this.closest('.bloque-item'))">
+            ${optsConSelected}
+          </select>` : ``}
+          <button class="bloque-ruta${b.sps_tag ? ' override' : ''}" id="bloque-ruta-${idx}"
+            title="Etiqueta del bloque · clic para elegir/afinar (clasificación → etiquetas SPS + atributos)"
+            onclick="App._abrirSelector(${idx}, this)">${esc(App._rutaTexto(b))}</button>
+        </div>
         <button class="bloque-del" title="Marcar como Ignorar"
           onclick="App._ignorarBloque(${idx}, this.closest('.bloque-item'))">✕</button>
         <button class="bloque-eliminar" title="Eliminar bloque por completo (no se puede deshacer)"
@@ -622,9 +638,320 @@ const App = {
     const b = State.bloques.find(b => b.id === idx);
     if (b) b.clasificacion = clase;
     if (rowEl) rowEl.dataset.clase = clase;
+    App._refrescarRuta(idx);
     try { await API.patch(`/api/bloques/${idx}`, { idx, clasificacion: clase }); }
     catch (_) {}
+    if (State.seccionActiva === "etiquetas") App._cargarMarkup();
   },
+
+  // Fase 3 — override de la etiqueta SPS de un bloque (vacío = automático).
+  async _onBloqueTagChange(idx, tag) {
+    const b = State.bloques.find(b => b.id === idx);
+    if (b) b.sps_tag = tag || null;
+    App._refrescarRuta(idx);
+    try { await API.patch(`/api/bloques/${idx}`, { idx, sps_tag: tag }); }
+    catch (_) {}
+    if (State.seccionActiva === "etiquetas") App._cargarMarkup();
+  },
+
+  // Fase 3 (rediseño) — texto del breadcrumb del bloque: hace visible el mapeo
+  // clasificación → SPS. Con override manual, muestra esa etiqueta. En el modo
+  // nuevo (columnas unificadas) antepone la clasificación ("sección madre").
+  _rutaTexto(b) {
+    const sps = (b && b.sps_tag)
+      ? b.sps_tag
+      : (((State._spsRutas && State._spsRutas[b && b.clasificacion]) || []).join(" ▸ ") || "(sin etiquetar)");
+    if (SELECTOR_CLASICO) return sps;
+    return `${b ? b.clasificacion : ""}  ·  ${sps}`;
+  },
+
+  // ¿La etiqueta es inline? Los inline marcan trozos de texto, no bloques: se
+  // excluyen de las columnas de selección de bloque (y así se evita la recursión
+  // bold › italic › bold … infinita). Se reservan para el marcado de selección.
+  _esInline(tag) { return !!((State._spsMeta && State._spsMeta[tag]) || {}).inline; },
+  _hijosEstructurales(tag) {
+    return ((State._spsHijos && State._spsHijos[tag]) || []).filter(t => !App._esInline(t));
+  },
+
+  // Refresca el breadcrumb de un bloque (tras cambiar clasificación u override).
+  _refrescarRuta(idx) {
+    const b = State.bloques.find(b => b.id === idx);
+    const el = document.getElementById(`bloque-ruta-${idx}`);
+    if (!b || !el) return;
+    el.textContent = App._rutaTexto(b);
+    el.classList.toggle("override", !!b.sps_tag);
+  },
+
+  // Fase 3 — catálogo de etiquetas SPS + grafo de anidación (una vez, al iniciar).
+  // Alimenta el selector en columnas (Miller) de cada bloque.
+  async _cargarCatalogoSPS() {
+    try {
+      const data = await API.get("/api/etiquetas/catalogo");
+      State._spsCatalogo = data;
+      State._spsRutas  = data.rutas  || {};   // clasificación → ruta SPS automática
+      State._spsHijos  = data.hijos  || {};   // etiqueta → hijos válidos (grafo)
+      State._spsAnclas = data.anclas || {};   // clasificación → etiqueta ancla (col 0)
+      State._spsMeta   = {};                  // etiqueta → {etiqueta, jats, inline, grupo}
+      (data.tags || []).forEach(t => { State._spsMeta[t.nombre] = t; });
+    } catch (_) {
+      State._spsRutas = State._spsHijos = State._spsAnclas = State._spsMeta = {};
+    }
+  },
+
+  // ── Selector de etiqueta en columnas (Miller), estilo cinta de Markup ────────
+  // Un solo control: (col 0 = clasificación en modo nuevo) → columnas SPS con los
+  // hijos ESTRUCTURALES válidos de cada nivel + panel de atributos de la hoja.
+  _abrirSelector(idx, anchorEl) {
+    App._cerrarSelector();
+    const b = State.bloques.find(x => x.id === idx);
+    if (!b) return;
+
+    App._spsPickerCtx = { idx };
+    App._sincronizarCtx(b);   // fija clasif, ancla, rutaAuto, camino
+
+    const pop = document.createElement("div");
+    pop.className = "sps-picker";
+    pop.id = "sps-picker";
+    pop.innerHTML = `
+      <div class="sps-picker-head">
+        <span class="sps-picker-title">Etiqueta del bloque ${idx + 1}</span>
+        <button class="sps-picker-auto" title="Volver a la etiqueta automática de la clasificación">Auto</button>
+        <button class="sps-picker-x" title="Cerrar">✕</button>
+      </div>
+      <div class="sps-picker-cols"></div>
+      <div class="sps-picker-attrs"></div>
+      <div class="sps-picker-foot"></div>`;
+    document.body.appendChild(pop);
+
+    pop.querySelector(".sps-picker-x").onclick = App._cerrarSelector;
+    pop.querySelector(".sps-picker-auto").onclick = () => App._selectorAuto();
+
+    // Guardamos el rect del ancla para reposicionar al crecer las columnas.
+    App._spsPickerCtx.anchor = anchorEl.getBoundingClientRect();
+    App._renderColumnas();
+    App._posicionarSelector();
+
+    setTimeout(() => document.addEventListener("mousedown", App._selectorOutside), 0);
+    document.addEventListener("keydown", App._selectorEsc);
+    App._spsResizeH = () => App._posicionarSelector();
+    window.addEventListener("resize", App._spsResizeH);
+  },
+
+  // Coloca el popover dentro de la ventana: bajo el breadcrumb si cabe, si no
+  // encima; y si tampoco, pegado al margen (la altura la limita el CSS y las
+  // áreas internas hacen scroll). En horizontal lo mantiene sin desbordar.
+  _posicionarSelector() {
+    const pop = document.getElementById("sps-picker");
+    const ctx = App._spsPickerCtx;
+    if (!pop || !ctx || !ctx.anchor) return;
+    const m = 8, vw = window.innerWidth, vh = window.innerHeight;
+    const r = ctx.anchor;
+    const w = pop.offsetWidth, h = pop.offsetHeight;
+
+    // Horizontal: alinear con el ancla, sin salirse por la derecha ni izquierda.
+    let left = Math.min(r.left, vw - w - m);
+    pop.style.left = Math.max(m, left) + "px";
+
+    // Vertical: preferir abajo; si no cabe, arriba; si no, pegado arriba.
+    const abajo = vh - r.bottom - m, arriba = r.top - m;
+    let top;
+    if (h <= abajo)       top = r.bottom + 4;
+    else if (h <= arriba) top = r.top - h - 4;
+    else                  top = m;
+    pop.style.top = Math.max(m, Math.min(top, vh - h - m)) + "px";
+  },
+
+  // Deriva el contexto del selector desde el estado del bloque.
+  _sincronizarCtx(b) {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    ctx.clasif   = b.clasificacion;
+    ctx.ancla    = (State._spsAnclas && State._spsAnclas[b.clasificacion]) || "doc";
+    ctx.rutaAuto = (State._spsRutas && State._spsRutas[b.clasificacion]) || [];
+    ctx.camino   = b.sps_tag ? [b.sps_tag] : ctx.rutaAuto.slice();
+  },
+
+  _renderColumnas() {
+    const ctx = App._spsPickerCtx;
+    const pop = document.getElementById("sps-picker");
+    if (!ctx || !pop) return;
+    const cols = pop.querySelector(".sps-picker-cols");
+    cols.innerHTML = "";
+
+    // Columna 0 = clasificación ("sección madre"), solo en el modo unificado.
+    if (!SELECTOR_CLASICO) cols.appendChild(App._colClasifDOM(ctx.clasif));
+
+    // Columnas SPS: solo hijos ESTRUCTURALES; corta al llegar a inline/hoja,
+    // con tope de profundidad y anticiclos como red de seguridad.
+    const visto = [];
+    let parent = ctx.ancla;
+    for (let nivel = 0; nivel < 10; nivel++) {
+      const hijos = App._hijosEstructurales(parent);
+      if (!hijos.length) break;
+      const sel = ctx.camino[nivel];
+      cols.appendChild(App._colDOM(hijos, sel, nivel));
+      if (sel && !App._esInline(sel) && visto.indexOf(sel) === -1 &&
+          App._hijosEstructurales(sel).length) {
+        visto.push(sel);
+        parent = sel;
+      } else break;
+    }
+    cols.scrollLeft = cols.scrollWidth;
+
+    // Panel de atributos + pie con la etiqueta elegida.
+    const hoja = ctx.camino[ctx.camino.length - 1];
+    App._renderAtributos(hoja);
+    const m = (State._spsMeta && State._spsMeta[hoja]) || {};
+    pop.querySelector(".sps-picker-foot").innerHTML = hoja
+      ? `Etiqueta: <code>[${esc(hoja)}]</code> ${m.jats ? `· JATS <code>${esc(m.jats)}</code>` : ""} ${m.etiqueta ? `· ${esc(m.etiqueta)}` : ""}`
+      : "Sin etiqueta";
+
+    App._posicionarSelector();   // reencaja si crecieron columnas o cambió el alto
+  },
+
+  _colClasifDOM(selCls) {
+    const col = document.createElement("div");
+    col.className = "sps-col sps-col-clasif";
+    (State.config.opciones || []).forEach(cls => {
+      const it = document.createElement("button");
+      it.className = "sps-item" + (cls === selCls ? " sel" : "");
+      it.innerHTML = `<span class="sps-item-lbl">${esc(cls)}</span><span class="sps-item-arw">▸</span>`;
+      it.title = "Clasificación del bloque (sección madre)";
+      it.onclick = () => App._pickClasif(cls);
+      col.appendChild(it);
+    });
+    return col;
+  },
+
+  _colDOM(hijos, sel, nivel) {
+    const col = document.createElement("div");
+    col.className = "sps-col";
+    hijos.forEach(tag => {
+      const m = (State._spsMeta && State._spsMeta[tag]) || {};
+      const tieneHijos = App._hijosEstructurales(tag).length > 0;
+      const it = document.createElement("button");
+      it.className = "sps-item" + (tag === sel ? " sel" : "");
+      it.innerHTML = `<span class="sps-item-lbl">${esc(tag)}</span>` +
+                     (tieneHijos ? `<span class="sps-item-arw">▸</span>` : "");
+      it.title = (m.etiqueta || tag) + (m.jats ? `  ·  JATS: ${m.jats}` : "");
+      it.onclick = () => App._pickTag(nivel, tag);
+      col.appendChild(it);
+    });
+    return col;
+  },
+
+  // Elegir clasificación (columna 0): actualiza el bloque y re-deriva la ruta SPS.
+  _pickClasif(cls) {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    const rowEl = document.querySelector(`.bloque-item[data-idx="${ctx.idx}"]`);
+    App._onBloqueClaseChange(ctx.idx, cls, rowEl);   // color, front/back, markup
+    App._onBloqueTagChange(ctx.idx, "");             // reset del override SPS
+    const b = State.bloques.find(x => x.id === ctx.idx);
+    App._sincronizarCtx(b);
+    App._renderColumnas();
+  },
+
+  _pickTag(nivel, tag) {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    ctx.camino = (ctx.camino || []).slice(0, nivel);
+    ctx.camino[nivel] = tag;
+    App._aplicarSeleccion(ctx.camino);
+    App._renderColumnas();
+  },
+
+  // Aplica el camino elegido al bloque. Si coincide exactamente con la ruta
+  // automática, se guarda como "auto" (sin override); si no, override = hoja.
+  _aplicarSeleccion(camino) {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    const auto = ctx.rutaAuto || [];
+    const esAuto = camino.length === auto.length && camino.every((t, i) => t === auto[i]);
+    const hoja = camino[camino.length - 1] || "";
+    App._onBloqueTagChange(ctx.idx, esAuto ? "" : hoja);
+  },
+
+  _selectorAuto() {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    ctx.camino = (ctx.rutaAuto || []).slice();
+    App._onBloqueTagChange(ctx.idx, "");
+    App._renderColumnas();
+  },
+
+  // ── Panel de atributos de la etiqueta elegida (como "Editar etiqueta" de Markup)
+  _renderAtributos(tag) {
+    const pop = document.getElementById("sps-picker");
+    const ctx = App._spsPickerCtx;
+    if (!pop || !ctx) return;
+    const cont = pop.querySelector(".sps-picker-attrs");
+    if (!tag) { cont.innerHTML = ""; return; }
+    const meta = (State._spsMeta && State._spsMeta[tag]) || {};
+    const attrs = meta.attrs || {};
+    const nombres = Object.keys(attrs);
+    if (!nombres.length) {
+      cont.innerHTML = `<div class="sps-attrs-none">La etiqueta <code>[${esc(tag)}]</code> no tiene atributos editables.</div>`;
+      return;
+    }
+    const b = State.bloques.find(x => x.id === ctx.idx);
+    const actuales = (b && b.sps_attrs) || {};
+    let html = `<div class="sps-attrs-title">Atributos de <code>[${esc(tag)}]</code></div><div class="sps-attrs-grid">`;
+    nombres.forEach(a => {
+      const spec = attrs[a] || {};
+      const val = actuales[a] != null ? String(actuales[a]) : "";
+      const req = spec.req ? `<span class="req" title="requerido">*</span>` : "";
+      let control;
+      if (Array.isArray(spec.valores) && spec.valores.length) {
+        control = `<select data-attr="${esc(a)}" onchange="App._attrChange(${ctx.idx}, this)">` +
+          `<option value=""${val === "" ? " selected" : ""}>—</option>` +
+          spec.valores.map(v => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(v)}</option>`).join("") +
+          `</select>`;
+      } else {
+        control = `<input type="text" data-attr="${esc(a)}" value="${esc(val)}"
+                     placeholder="(texto libre)" onchange="App._attrChange(${ctx.idx}, this)">`;
+      }
+      html += `<label class="sps-attr-lbl">${esc(a)}${req}</label><div class="sps-attr-ctl">${control}</div>`;
+    });
+    html += `</div>`;
+    cont.innerHTML = html;
+  },
+
+  _attrChange(idx, el) {
+    const b = State.bloques.find(x => x.id === idx);
+    if (!b) return;
+    const attrs = Object.assign({}, b.sps_attrs || {});
+    const name = el.dataset.attr;
+    const v = (el.value || "").trim();
+    if (v === "") delete attrs[name]; else attrs[name] = v;
+    App._onBloqueAttrsChange(idx, attrs);
+  },
+
+  async _onBloqueAttrsChange(idx, attrs) {
+    const b = State.bloques.find(x => x.id === idx);
+    if (b) b.sps_attrs = attrs;
+    try { await API.patch(`/api/bloques/${idx}`, { idx, sps_attrs: attrs }); }
+    catch (_) {}
+    if (State.seccionActiva === "etiquetas") App._cargarMarkup();
+  },
+
+  _cerrarSelector() {
+    const p = document.getElementById("sps-picker");
+    if (p) p.remove();
+    document.removeEventListener("mousedown", App._selectorOutside);
+    document.removeEventListener("keydown", App._selectorEsc);
+    if (App._spsResizeH) { window.removeEventListener("resize", App._spsResizeH); App._spsResizeH = null; }
+    App._spsPickerCtx = null;
+  },
+
+  _selectorOutside(e) {
+    const p = document.getElementById("sps-picker");
+    if (p && !p.contains(e.target) && !e.target.classList.contains("bloque-ruta")) {
+      App._cerrarSelector();
+    }
+  },
+
+  _selectorEsc(e) { if (e.key === "Escape") App._cerrarSelector(); },
 
   _ignorarBloque(idx, rowEl) {
     App._onBloqueClaseChange(idx, "Ignorar", rowEl);
@@ -2319,6 +2646,7 @@ async function init() {
   try {
     // 1. Cargar configuración (opciones de clasificación + colores)
     State.config = await API.get("/api/config");
+    await App._cargarCatalogoSPS();   // Fase 3: opciones del selector de etiqueta SPS
 
     // 2. Ver si ya hay un PDF cargado en el servidor (por recarga de ventana)
     const estado = await API.get("/api/estado");

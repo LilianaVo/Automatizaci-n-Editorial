@@ -36,6 +36,41 @@ _FUERA_CUERPO = _ABSTRACT | {
 _RE_LABEL = re.compile(r"^\s*((?:tabla|table|figura|fig\.?|figure)\s+\d+\w?)\s*[\.\:\-]?\s*(.*)$",
                        re.IGNORECASE | re.DOTALL)
 
+# Ruta fija (no dependiente de conjuntos) clasificación → etiquetas SPS emitidas.
+_RUTA_FIJA = {
+    "Título tabla":     ["tabwrap"],
+    "Pie de figura":    ["figgrp"],
+    "Título principal": ["doctitle"],
+    "Palabras clave":   ["kwdgrp", "kwd"],
+    "Referencia":       ["refs", "ref", "source"],
+    "Filiación":        ["normaff", "orgname"],
+    "Fecha manuscrito": ["hist"],
+}
+
+
+def ruta_de_clasificacion(cls: str) -> list[str]:
+    """Ruta de etiquetas SPS que este puente realmente produce para una
+    clasificación de bloque (refleja estado_a_arbol/_construir_cuerpo). Se usa
+    como "migas" en la vista de bloques para hacer visible el mapeo. Lista
+    vacía = esa clasificación aún no se etiqueta (p. ej. «Título secundario»,
+    «Cómo citar», «Email / Metadatos») o se omite («Ignorar», «Imagen»)."""
+    if cls in _IGNORAR:
+        return []
+    if cls in _SECCION:
+        return ["sec", "sectitle"]
+    if cls in _SUBSECCION:
+        return ["subsec", "sectitle"]
+    if cls in _PARRAFO:
+        return ["sec", "p"]
+    if cls in _ABSTRACT:
+        return ["xmlabstr", "p"]
+    return list(_RUTA_FIJA.get(cls, []))
+
+
+def rutas_por_clasificacion(opciones: list[str]) -> dict[str, list[str]]:
+    """Mapa {clasificación: ruta SPS} para todas las opciones dadas."""
+    return {c: ruta_de_clasificacion(c) for c in opciones}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers de construcción
@@ -47,6 +82,14 @@ def _n(tag: str, attrs: dict | None = None, hijos: list | None = None) -> Nodo:
 
 def _txt(tag: str, texto: str, attrs: dict | None = None) -> Nodo:
     return Nodo(tag, dict(attrs or {}), [texto] if texto else [])
+
+
+def _merge(base: dict, b: dict) -> dict:
+    """Combina atributos base con los que el usuario fijó en el bloque
+    (`sps_attrs`); los del usuario tienen prioridad. Fase 3: override de la guía."""
+    out = dict(base)
+    out.update(b.get("sps_attrs") or {})
+    return out
 
 
 def _partir_label_caption(texto: str) -> tuple[str, str]:
@@ -166,11 +209,11 @@ def _construir_cuerpo(bloques: list[dict]) -> Nodo:
             continue
 
         if cls in _SECCION:
-            sec_actual = _n("sec", {}, [_txt("sectitle", texto)])
+            sec_actual = _n("sec", _merge({}, b), [_txt("sectitle", texto)])
             body.hijos.append(sec_actual)
             sub_actual = None
         elif cls in _SUBSECCION:
-            sub_actual = _n("subsec", {}, [_txt("sectitle", texto)])
+            sub_actual = _n("subsec", _merge({}, b), [_txt("sectitle", texto)])
             _asegurar_sec().hijos.append(sub_actual)
         elif cls == "Título tabla":
             contador_tab += 1
@@ -178,19 +221,20 @@ def _construir_cuerpo(bloques: list[dict]) -> Nodo:
             hijos = []
             if lab: hijos.append(_txt("label", lab))
             hijos.append(_txt("caption", cap or texto))
-            _contenedor().hijos.append(_n("tabwrap", {"id": f"t{contador_tab}"}, hijos))
+            _contenedor().hijos.append(
+                _n("tabwrap", _merge({"id": f"t{contador_tab}"}, b), hijos))
         elif cls == "Pie de figura":
             contador_fig += 1
             lab, cap = _partir_label_caption(texto)
             hijos = [_n("graphic", {"href": ""})]
             if lab: hijos.append(_txt("label", lab))
             hijos.append(_txt("caption", cap or texto))
-            _contenedor().hijos.append(_n("figgrp", {"id": f"f{contador_fig}"}, hijos))
-        elif cls in _PARRAFO:
-            _contenedor().hijos.append(_txt("p", texto))
+            _contenedor().hijos.append(
+                _n("figgrp", _merge({"id": f"f{contador_fig}"}, b), hijos))
         else:
-            # clase no mapeada explícitamente → párrafo por defecto (guía)
-            _contenedor().hijos.append(_txt("p", texto))
+            # Párrafo (o etiqueta de bloque que el usuario haya fijado a mano).
+            tag = b.get("sps_tag") or "p"
+            _contenedor().hijos.append(Nodo(tag, dict(b.get("sps_attrs") or {}), [texto]))
         # otros (Filiación, Email, Cómo citar, Fecha manuscrito, Título principal,
         # Palabras clave, Referencia) se tratan fuera del cuerpo o se omiten aquí.
     return body

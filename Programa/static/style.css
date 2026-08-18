@@ -315,6 +315,201 @@ html, body {
 }
 .tabbar-nueva:hover { background: var(--sepia-pale); }
 
+/* Fase 3 — Selector de etiqueta SPS por bloque (además del de clasificación) */
+/* Fase 3 (rediseño) — columna de metadatos del bloque:
+   un solo selector de clasificación + breadcrumb de ruta SPS + override oculto. */
+.bloque-meta {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 5px 0;
+  border-left: 1px solid var(--border);
+  min-height: 42px;
+  min-width: 0;
+}
+.bloque-meta .bloque-select {
+  border-left: none;          /* el borde lo aporta .bloque-meta */
+  padding: 4px 10px;
+}
+.bloque-ruta {
+  margin: 0 10px;
+  padding: 2px 7px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: left;
+  color: var(--sepia-mid);
+  background: var(--sepia-cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color .1s, color .1s;
+}
+.bloque-ruta:hover { border-color: var(--sepia-mid); color: var(--text-main); }
+.bloque-ruta.override {
+  color: var(--navy);
+  font-weight: 600;
+  border-color: var(--navy);
+  background: #F3EFE6;
+}
+.bloque-ruta.override::before { content: "✎ "; }
+
+/* Selector de etiqueta en columnas (Miller), estilo cinta de Markup.
+   Popover flotante anclado bajo el breadcrumb del bloque. */
+.sps-picker {
+  position: fixed;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: var(--sepia-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(60, 45, 25, .22);
+  font-size: 12px;
+  overflow: hidden;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+}
+.sps-picker-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--sepia-cream);
+  border-bottom: 1px solid var(--border);
+}
+.sps-picker-title { font-weight: 600; color: var(--text-main); margin-right: auto; }
+.sps-picker-auto {
+  font-size: 11px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--sepia-white);
+  color: var(--sepia-mid);
+  cursor: pointer;
+}
+.sps-picker-auto:hover { border-color: var(--sepia-mid); color: var(--text-main); }
+.sps-picker-x {
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+.sps-picker-x:hover { color: var(--danger); }
+.sps-picker-cols {
+  flex: 1 1 auto;
+  min-height: 0;                 /* permite encoger dentro del flex y scrollear */
+  display: flex;
+  align-items: stretch;
+  overflow: auto;                /* scroll horizontal y vertical dentro del selector */
+}
+.sps-col {
+  flex: 0 0 auto;
+  min-width: 148px;
+  padding: 4px;
+  border-right: 1px solid var(--border);
+}
+.sps-col:last-child { border-right: none; }
+.sps-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-main);
+  text-align: left;
+}
+.sps-item:hover { background: var(--sepia-cream); }
+.sps-item .sps-item-lbl { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.sps-item .sps-item-arw { color: var(--text-light); font-size: 10px; }
+.sps-item.sel {
+  background: var(--navy);
+  color: var(--text-white);
+}
+.sps-item.sel .sps-item-arw { color: var(--text-white); }
+.sps-item.inline .sps-item-lbl { font-style: italic; color: var(--sepia-mid); }
+.sps-item.sel.inline .sps-item-lbl { color: var(--text-white); }
+.sps-picker-foot {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--sepia-cream);
+  color: var(--text-sub);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sps-picker-foot code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--navy);
+}
+.sps-col-clasif { min-width: 172px; background: #FBF7EF; }
+
+/* Panel de atributos (estilo "Editar etiqueta" de Markup) */
+.sps-picker-attrs {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--sepia-white);
+  max-height: 190px;
+  overflow-y: auto;
+}
+.sps-picker-attrs:empty { display: none; }
+.sps-attrs-none { font-size: 11px; color: var(--text-light); font-style: italic; }
+.sps-attrs-none code,
+.sps-attrs-title code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--navy);
+  font-style: normal;
+}
+.sps-attrs-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+.sps-attrs-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 10px;
+  align-items: center;
+}
+.sps-attr-lbl {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--sepia-mid);
+  white-space: nowrap;
+}
+.sps-attr-lbl .req { color: var(--danger); margin-left: 2px; }
+.sps-attr-ctl select,
+.sps-attr-ctl input {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-main);
+  background: var(--sepia-white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+.sps-attr-ctl select:focus,
+.sps-attr-ctl input:focus { border-color: var(--sepia-mid); }
+
 /* Fase 2 — Vista de Etiquetas (SciELO Markup, solo lectura) */
 .markup-view {
   flex: 1 1 auto;
@@ -1166,7 +1361,7 @@ html, body {
 
 .bloque-item {
   display: grid;
-  grid-template-columns: 40px 1fr 180px 32px 32px;
+  grid-template-columns: 40px 1fr 190px 32px 32px;
   align-items: start;
   gap: 0;
   border-bottom: 1px solid var(--border);
