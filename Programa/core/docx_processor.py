@@ -45,6 +45,11 @@ from core.utils import (
     extraer_doi as _extraer_doi,
     extraer_volumen_pagina as _extraer_volumen_pagina,
     extraer_issn as _extraer_issn,
+    es_encabezado_resumen as _es_encabezado_resumen,
+    es_encabezado_palabras_clave as _es_encabezado_palabras_clave,
+    es_inicio_palabras_clave as _es_inicio_palabras_clave,
+    es_encabezado_referencias as _es_encabezado_referencias,
+    es_encabezado_cuerpo_inicio as _es_encabezado_cuerpo_inicio,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -138,6 +143,41 @@ def _clasificar(texto: str, estilo: str, bold: bool, italic: bool,
     if len(t) < 3:
         return "Ignorar"
     return "Cuerpo"
+
+
+def _clasificar_con_zonas(
+    par_idx: int, texto: str, estilo: str, bold: bool, italic: bool,
+    body_size: int, size: int,
+    idx_resumen: int | None, idx_palabras_clave: int | None,
+    idx_cuerpo_inicio: int | None, idx_referencias: int | None,
+) -> str:
+    """Igual que _clasificar(), pero primero revisa en qué ZONA del artículo
+    cae el párrafo (Resumen / Palabras clave / Referencias), usando las
+    anclas ya detectadas en el pre-escaneo del documento. Solo si el párrafo
+    no cae en ninguna zona especial, se recurre a la clasificación normal
+    por estilo/contenido (_clasificar)."""
+    if par_idx == idx_resumen:
+        return "Encabezado sección"
+
+    if idx_resumen is not None and par_idx > idx_resumen and \
+       (idx_palabras_clave is None or par_idx < idx_palabras_clave) and \
+       (idx_cuerpo_inicio is None or par_idx < idx_cuerpo_inicio):
+        return "Cuerpo del abstract"
+
+    if par_idx == idx_palabras_clave:
+        return "Palabras clave"
+
+    if idx_palabras_clave is not None and par_idx > idx_palabras_clave and \
+       (idx_cuerpo_inicio is None or par_idx < idx_cuerpo_inicio):
+        return "Palabras clave"
+
+    if par_idx == idx_referencias:
+        return "Encabezado sección"
+
+    if idx_referencias is not None and par_idx > idx_referencias:
+        return "Referencia"
+
+    return _clasificar(texto, estilo, bold, italic, body_size, size)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,11 +366,47 @@ def procesar_docx(ruta: str) -> dict[str, Any]:
                 pass
     body_size = Counter(sizes).most_common(1)[0][0] if sizes else 12
 
+    # ── Pre-escaneo: detectar las anclas semánticas del artículo ──────────────
+    # (Resumen, Palabras clave, inicio del cuerpo, Referencias), igual que se
+    # hace para PDF. doc.paragraphs conserva el mismo orden que _iter_cuerpo
+    # recorre los párrafos (ambos son los w:p de nivel superior del body), así
+    # que el índice par_idx usado más abajo es comparable con estos.
+    parrafos_texto = [(p.text or "").strip() for p in doc.paragraphs]
+
+    idx_resumen:        int | None = None
+    idx_palabras_clave: int | None = None
+    idx_cuerpo_inicio:  int | None = None
+    idx_referencias:    int | None = None
+
+    for i, texto_p in enumerate(parrafos_texto):
+        if not texto_p:
+            continue
+
+        if idx_resumen is None and _es_encabezado_resumen(texto_p):
+            idx_resumen = i
+
+        if idx_palabras_clave is None and (
+            _es_encabezado_palabras_clave(texto_p) or _es_inicio_palabras_clave(texto_p)
+        ):
+            idx_palabras_clave = i
+
+        puede_ser_cuerpo = idx_resumen is None or i > idx_resumen
+        if idx_cuerpo_inicio is None and puede_ser_cuerpo:
+            if _es_encabezado_cuerpo_inicio(texto_p) or \
+               (_RE_NIVEL1.match(texto_p) and not _RE_NIVEL2.match(texto_p)):
+                idx_cuerpo_inicio = i
+
+        if idx_cuerpo_inicio is not None and idx_referencias is None and \
+           i > idx_cuerpo_inicio:
+            if _es_encabezado_referencias(texto_p):
+                idx_referencias = i
+
     bloques: list[dict] = []
     figuras: list[dict] = []
     tablas:  list[dict] = []
     contador_img = [0]
     n_tabla = 0
+    par_idx = -1
 
     for elem in _iter_cuerpo(doc):
         if isinstance(elem, Table):
@@ -341,6 +417,7 @@ def procesar_docx(ruta: str) -> dict[str, Any]:
             continue
 
         par: Paragraph = elem
+        par_idx += 1
 
         # Imágenes inline de este párrafo (antes de decidir si hay texto).
         figs = _imagenes_de_parrafo(par, doc, fig_dir, contador_img)
@@ -352,8 +429,11 @@ def procesar_docx(ruta: str) -> dict[str, Any]:
 
         estilo = par.style.name if par.style is not None else ""
         bold, italic, size = _formato_parrafo(par)
-        cls = _clasificar(texto, estilo, bold, italic, body_size,
-                          size if size is not None else body_size)
+        cls = _clasificar_con_zonas(
+            par_idx, texto, estilo, bold, italic, body_size,
+            size if size is not None else body_size,
+            idx_resumen, idx_palabras_clave, idx_cuerpo_inicio, idx_referencias,
+        )
         if cls == "Ignorar":
             continue
 

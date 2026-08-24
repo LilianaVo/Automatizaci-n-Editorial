@@ -37,6 +37,11 @@ from core.utils import (
     extraer_doi as _extraer_doi,
     extraer_volumen_pagina as _extraer_volumen_pagina,
     extraer_issn as _extraer_issn,
+    es_encabezado_resumen as _es_encabezado_resumen,
+    es_encabezado_palabras_clave as _es_encabezado_palabras_clave,
+    es_inicio_palabras_clave as _es_inicio_palabras_clave,
+    es_encabezado_referencias as _es_encabezado_referencias,
+    es_encabezado_cuerpo_inicio as _es_encabezado_cuerpo_inicio,
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -623,23 +628,41 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
         "competing interests", "declaración de conflictos",
     }
 
+    # Anclas semánticas adicionales (enfoque tipo SciELO Markup): en vez de
+    # solo detectar dónde empieza y termina el cuerpo del artículo, ahora
+    # también anclamos el Resumen/Abstract y las Palabras clave, buscando
+    # sus encabezados reales en el texto, no el tamaño de letra.
+    idx_resumen:         int | None = None
+    idx_palabras_clave:  int | None = None
     zona_b_inicio: int | None = None
     zona_b_fin:    int | None = None
 
     for i, r in enumerate(raw):
         if r["imagen"] or r["clasificacion"] == "Ignorar":
             continue
-        t_low = r["texto"].strip().lower()
+        texto_i = r["texto"].strip()
+        t_low = texto_i.lower()
         s = round(r["size"])
 
-        if zona_b_inicio is None:
-            if _pat_nivel1.match(r["texto"].strip()) and \
-               not _pat_nivel2.match(r["texto"].strip()) and \
-               s <= 12:
+        if idx_resumen is None and _es_encabezado_resumen(texto_i):
+            idx_resumen = i
+
+        if idx_palabras_clave is None and (
+            _es_encabezado_palabras_clave(texto_i) or _es_inicio_palabras_clave(texto_i)
+        ):
+            idx_palabras_clave = i
+
+        # El cuerpo del artículo no puede empezar antes del resumen (si lo
+        # hay), así que solo buscamos su ancla a partir de ese punto.
+        puede_ser_cuerpo = idx_resumen is None or i > idx_resumen
+        if zona_b_inicio is None and puede_ser_cuerpo:
+            if _es_encabezado_cuerpo_inicio(texto_i):
+                zona_b_inicio = i
+            elif _pat_nivel1.match(texto_i) and not _pat_nivel2.match(texto_i) and s <= 12:
                 zona_b_inicio = i
 
         if zona_b_inicio is not None and zona_b_fin is None:
-            if t_low in ("referencias", "references"):
+            if _es_encabezado_referencias(texto_i):
                 zona_b_fin = i
 
     # ── PASO 3: clasificar ────────────────────────────────────────────────────
@@ -660,7 +683,26 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
                i >= zona_b_inicio and \
                (zona_b_fin is None or i < zona_b_fin)
 
-        if en_b:
+        # Zona de Resumen/Abstract: todo lo que va después del encabezado
+        # "Resumen"/"Abstract" y antes de "Palabras clave" o del cuerpo.
+        en_resumen = (
+            idx_resumen is not None and i > idx_resumen and
+            (idx_palabras_clave is None or i < idx_palabras_clave) and
+            (zona_b_inicio is None or i < zona_b_inicio)
+        )
+        # Zona de Palabras clave: desde su encabezado/inicio hasta el cuerpo.
+        en_palabras_clave = (
+            idx_palabras_clave is not None and i >= idx_palabras_clave and
+            (zona_b_inicio is None or i < zona_b_inicio)
+        )
+
+        if i == idx_resumen:
+            cls = "Encabezado sección"
+        elif en_resumen:
+            cls = "Cuerpo del abstract"
+        elif en_palabras_clave:
+            cls = "Palabras clave"
+        elif en_b:
             if _pat_nivel1.match(texto) and not _pat_nivel2.match(texto):
                 cls = "Subencabezado"
             elif _pat_nivel2.match(texto):
@@ -677,6 +719,23 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
                 cls = "Pie de figura"
             else:
                 cls = "Cuerpo"
+        elif zona_b_fin is not None and i > zona_b_fin:
+            # Zona de Referencias: todo lo que sigue al encabezado
+            # "Referencias" se marca como tal, salvo que sea claramente
+            # otra cosa (Cómo citar, fechas de manuscrito, u otro encabezado
+            # como Agradecimientos/Conflicto de intereses).
+            # Nota: aquí solo se reconoce el encabezado explícito "Cómo
+            # citar"/"How to cite" (no la regla "parece una cita" de
+            # _es_como_citar, que dentro de la lista de referencias
+            # coincidiría con casi cualquier renglón normal).
+            if re.match(r"^(cómo citar|how to cite)", t_low):
+                cls = "Cómo citar"
+            elif _es_fecha_mss(texto) or _es_doi(texto):
+                cls = "Fecha manuscrito"
+            elif t_low in _SECCIONES_ZONA or _es_encabezado_referencias(texto):
+                cls = "Encabezado sección"
+            else:
+                cls = "Referencia"
         else:
             if i == zona_b_fin:
                 cls = "Encabezado sección"
@@ -847,6 +906,7 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
         "Filiación", "Email / Metadatos", "Cómo citar",
         "Fecha manuscrito", "Encabezado sección",
         "Subencabezado", "Palabras clave", "Referencia",
+        "Cuerpo del abstract",
     }
 
     def _es_continuacion(anterior: str, siguiente: str,

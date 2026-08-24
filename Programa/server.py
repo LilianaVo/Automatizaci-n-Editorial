@@ -31,7 +31,7 @@ try:
     from core.docx_processor import procesar_docx
 except Exception:
     procesar_docx = None
-from core.jats_exporterv2  import build_jats_xml
+from core.jats_exporterv2  import build_jats_xml, detectar_atributos_pendientes, resumen_atributos_pendientes
 from core.html_exporter    import build_html
 from core.epub_exporter    import build_epub
 from core.xml_validator    import validar_jats
@@ -1524,6 +1524,35 @@ def validar_xml_endpoint():
         )
         resultado = validar_jats(xml_str)
         return resultado.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/validar/pendientes")
+def validar_pendientes_endpoint():
+    """
+    Objetivo inmediato #2 (detección semántica): revisa el artículo cargado
+    y regresa qué etiquetas/bloques tienen atributos obligatorios o
+    recomendados que todavía faltan por llenar (DOI, ISSN, ORCID de
+    autores, país de afiliaciones, rótulo/descripción de tablas, pie de
+    figuras, etc.), para que el editor los complete ANTES de exportar.
+    No genera ni guarda ningún archivo — solo revisa el estado actual.
+    """
+    if not _estado["bloques"]:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay bloques cargados. Carga un PDF o Word primero."
+        )
+    try:
+        avisos = detectar_atributos_pendientes(
+            bloques          = _bloques_snapshot(),
+            autores_orcid    = _estado["autores_orcid"],
+            afiliaciones_txt = _estado["afiliaciones_txt"],
+            figuras          = _estado["figuras_manuales"],
+            tablas           = _estado["tablas_manuales"],
+            metadatos        = _estado["metadatos"],
+        )
+        return {"avisos": avisos, "resumen": resumen_atributos_pendientes(avisos)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

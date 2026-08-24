@@ -1052,6 +1052,195 @@ def _meta_or(meta: dict, campo: str, fallback: str) -> str:
     return valor if valor else fallback
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# RF (Objetivo inmediato #2 de la actividad de detección semántica):
+# Señalar qué bloques/etiquetas tienen atributos obligatorios o recomendados
+# que aún no se han llenado, para que el editor los complete ANTES de
+# exportar el XML — en vez de descubrirlo hasta que SciELO rechace el
+# archivo. Reutiliza las mismas funciones de extracción que ya usa
+# build_jats_xml(), así que lo que aquí se reporta como "falta" es
+# exactamente lo que el XML exportado dejaría vacío o con un valor génerico.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def detectar_atributos_pendientes(
+    *,
+    bloques: list[dict],
+    autores_orcid: list[dict],
+    afiliaciones_txt: str,
+    figuras: list[dict],
+    tablas: list[dict],
+    metadatos: dict | None = None,
+) -> list[dict]:
+    """Revisa lo ya cargado (bloques, autores, afiliaciones, tablas, figuras,
+    metadatos) y regresa la lista de atributos obligatorios/recomendados que
+    todavía faltan por llenar.
+
+    Cada aviso es un dict:
+        {"bloque": str, "campo": str, "mensaje": str, "severidad": "alta"|"media"}
+
+    "alta"  → el XML exportado quedaría con un dato requerido vacío.
+    "media" → el XML se genera igual, pero con un valor de respaldo poco
+              informativo (p. ej. "Tabla 1" sin descripción real), o con un
+              dato recomendado por SciELO pero no estrictamente obligatorio
+              (p. ej. el ORCID de un autor).
+    """
+    avisos: list[dict] = []
+    meta = metadatos or {}
+
+    def _meta(campo: str) -> str:
+        return _clean_text(str(meta.get(campo) or ""))
+
+    # ── Metadatos del artículo ────────────────────────────────────────────
+    if not _extract_doi(bloques) and not _meta("doi"):
+        avisos.append({
+            "bloque": "Metadatos del artículo", "campo": "DOI",
+            "mensaje": "No se detectó el DOI. Captúralo manualmente en la pestaña Metadatos.",
+            "severidad": "media",
+        })
+    if not _extract_issn(bloques) and not _meta("issn"):
+        avisos.append({
+            "bloque": "Metadatos del artículo", "campo": "ISSN",
+            "mensaje": "No se detectó el ISSN de la revista.",
+            "severidad": "media",
+        })
+    if not _meta("volumen") or not _meta("numero"):
+        avisos.append({
+            "bloque": "Metadatos del artículo", "campo": "Volumen / Número",
+            "mensaje": "Falta el volumen y/o el número de la revista.",
+            "severidad": "alta",
+        })
+    if not _meta("fecha_recibido") or not _meta("fecha_aceptado"):
+        avisos.append({
+            "bloque": "Metadatos del artículo", "campo": "Fechas de manuscrito",
+            "mensaje": "Faltan las fechas de recepción y/o aceptación del manuscrito.",
+            "severidad": "media",
+        })
+
+    # ── Autores ────────────────────────────────────────────────────────────
+    authors = _authors_from_manual(autores_orcid)
+    afils_preview, _emails_preview = _parse_affiliations_txt(afiliaciones_txt)
+    if not authors:
+        avisos.append({
+            "bloque": "Autores", "campo": "Autores",
+            "mensaje": "No hay autores cargados. Ve a la pestaña Autores y agrega al menos uno.",
+            "severidad": "alta",
+        })
+    else:
+        hay_varias_afiliaciones = len(afils_preview) > 1
+        for a in authors:
+            if not a["orcid"]:
+                avisos.append({
+                    "bloque": f"Autor: {a['nombre']}", "campo": "ORCID",
+                    "mensaje": "Este autor no tiene ORCID capturado (recomendado por SciELO).",
+                    "severidad": "media",
+                })
+            if hay_varias_afiliaciones and not a["aff_labels"]:
+                avisos.append({
+                    "bloque": f"Autor: {a['nombre']}", "campo": "Afiliación",
+                    "mensaje": "Hay varias afiliaciones registradas, pero este autor no está "
+                               "ligado a ninguna en la columna 'Afiliación'.",
+                    "severidad": "alta",
+                })
+
+    # ── Afiliaciones ───────────────────────────────────────────────────────
+    if not afils_preview:
+        avisos.append({
+            "bloque": "Afiliaciones", "campo": "Afiliaciones",
+            "mensaje": "No hay afiliaciones capturadas.",
+            "severidad": "alta",
+        })
+    else:
+        for af in afils_preview:
+            pais, _codigo = _detect_country(af["text"])
+            if not pais:
+                avisos.append({
+                    "bloque": f"Afiliación {af['label']}", "campo": "País",
+                    "mensaje": "No se pudo detectar el país de esta afiliación; revisa "
+                               "que la línea termine con el nombre del país.",
+                    "severidad": "media",
+                })
+
+    # ── Resumen ────────────────────────────────────────────────────────────
+    tiene_abstract = any(
+        b.get("clasificacion") == "Cuerpo del abstract" and _clean_text(b.get("contenido", ""))
+        for b in bloques
+    )
+    if not tiene_abstract:
+        avisos.append({
+            "bloque": "Resumen", "campo": "Resumen / Abstract",
+            "mensaje": "No se encontró texto etiquetado como 'Cuerpo del abstract'. "
+                       "Revisa que el resumen esté marcado correctamente.",
+            "severidad": "alta",
+        })
+
+    # ── Palabras clave ─────────────────────────────────────────────────────
+    kwd_bloques = [
+        b for b in bloques
+        if b.get("clasificacion") == "Palabras clave" and _clean_text(b.get("contenido", ""))
+    ]
+    if not kwd_bloques:
+        avisos.append({
+            "bloque": "Palabras clave", "campo": "Palabras clave",
+            "mensaje": "No hay ningún bloque etiquetado como 'Palabras clave'.",
+            "severidad": "alta",
+        })
+    elif sum(len(_parse_keywords(b["contenido"])) for b in kwd_bloques) == 0:
+        avisos.append({
+            "bloque": "Palabras clave", "campo": "Palabras clave",
+            "mensaje": "El bloque de palabras clave está marcado, pero no se pudo extraer "
+                       "ninguna palabra (revisa el formato, ej. 'Palabras clave: a, b, c').",
+            "severidad": "alta",
+        })
+
+    # ── Referencias ────────────────────────────────────────────────────────
+    tiene_referencias = any(
+        b.get("clasificacion") == "Referencia" and _clean_text(b.get("contenido", ""))
+        for b in bloques
+    )
+    if not tiene_referencias:
+        avisos.append({
+            "bloque": "Referencias", "campo": "Referencias",
+            "mensaje": "No hay ningún bloque etiquetado como 'Referencia'.",
+            "severidad": "alta",
+        })
+
+    # ── Tablas ────────────────────────────────────────────────────────────
+    for i, tab in enumerate(tablas or [], 1):
+        rotulo = _clean_text(tab.get("rotulo", ""))
+        descripcion = _clean_text(tab.get("descripcion", "")) or _clean_text(tab.get("titulo", ""))
+        if not rotulo:
+            avisos.append({
+                "bloque": f"Tabla {i}", "campo": "Rótulo",
+                "mensaje": f"A la tabla {i} le falta el rótulo (ej. 'Tabla {i}').",
+                "severidad": "media",
+            })
+        if not descripcion:
+            avisos.append({
+                "bloque": f"Tabla {i}", "campo": "Descripción",
+                "mensaje": f"A la tabla {i} le falta la descripción/leyenda.",
+                "severidad": "media",
+            })
+
+    # ── Figuras ───────────────────────────────────────────────────────────
+    for i, fig in enumerate(figuras or [], 1):
+        if not _clean_text(fig.get("pie", "")):
+            avisos.append({
+                "bloque": f"Figura {i}", "campo": "Pie de figura",
+                "mensaje": f"A la figura {i} le falta el pie/descripción.",
+                "severidad": "media",
+            })
+
+    return avisos
+
+
+def resumen_atributos_pendientes(avisos: list[dict]) -> dict:
+    """Cuenta rápida por severidad, lista para mostrar en un banner de la UI
+    (p. ej. 'Faltan 3 datos obligatorios y 5 recomendados')."""
+    altas = sum(1 for a in avisos if a.get("severidad") == "alta")
+    medias = sum(1 for a in avisos if a.get("severidad") == "media")
+    return {"total": len(avisos), "altas": altas, "medias": medias}
+
+
 def build_jats_xml(
     *,
     bloques: list[dict],

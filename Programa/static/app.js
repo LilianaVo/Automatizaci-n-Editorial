@@ -2292,6 +2292,87 @@ const App = {
     if (modal) modal.style.display = "flex";
   },
 
+  // Objetivo inmediato #2 (detección semántica): revisa qué etiquetas
+  // tienen atributos obligatorios/recomendados sin llenar (DOI, ISSN,
+  // ORCID, país de afiliación, rótulo/descripción de tablas, pie de
+  // figuras, etc.) y se lo muestra al usuario ANTES de exportar.
+  async revisarPendientes() {
+    if (!State.tienePDF) {
+      showToast("Primero carga un PDF");
+      return;
+    }
+    App._leerInputsAutores();
+    await App._pushAutores();
+
+    setStatus("Revisando campos pendientes...", "idle");
+    showLoading(true);
+    try {
+      const resultado = await API.post("/api/validar/pendientes", {});
+      showLoading(false);
+      App._mostrarAtributosPendientes(resultado);
+    } catch (e) {
+      showLoading(false);
+      setStatus("Error al revisar campos pendientes: " + e.message, "error");
+      showToast("Error al revisar campos pendientes", 4000);
+    }
+  },
+
+  _mostrarAtributosPendientes(r) {
+    const avisos  = r.avisos  || [];
+    const resumen = r.resumen || { total: 0, altas: 0, medias: 0 };
+
+    setStatus(
+      resumen.total === 0
+        ? "Sin campos pendientes ✅"
+        : `Faltan ${resumen.altas} obligatorio(s) y ${resumen.medias} recomendado(s)`,
+      resumen.altas > 0 ? "error" : (resumen.total > 0 ? "idle" : "ok")
+    );
+
+    const filaHTML = (item) => {
+      const esAlta = item.severidad === "alta";
+      const color  = esAlta ? "#EF4444" : "#D97706";
+      const icono  = esAlta ? "✕" : "⚠";
+      return `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;
+          border-bottom:1px solid #E4E9F0;">
+          <span style="color:${color};font-weight:700;font-size:13px;flex-shrink:0">${icono}</span>
+          <span style="font-size:12px;color:#1A2236;flex:1">
+            <strong>${esc(item.bloque)}</strong> — ${esc(item.campo)}
+            <div style="margin-top:3px;color:#6B7280;">${esc(item.mensaje)}</div>
+          </span>
+        </div>`;
+    };
+
+    let cuerpo = `
+      <div style="margin-bottom:16px;padding:12px 16px;border-radius:8px;
+        background:${resumen.total === 0 ? "#DCFCE7" : "#FEF3C7"};
+        color:${resumen.total === 0 ? "#16A34A" : "#92400E"};
+        font-size:13px;font-weight:600;">
+        ${resumen.total === 0
+          ? "Todo lo obligatorio y recomendado está lleno."
+          : `Faltan ${resumen.altas} dato(s) obligatorio(s) y ${resumen.medias} recomendado(s).`}
+      </div>`;
+
+    if (avisos.length > 0) {
+      cuerpo += avisos
+        .slice()
+        .sort((a, b) => (a.severidad === "alta" ? 0 : 1) - (b.severidad === "alta" ? 0 : 1))
+        .map(filaHTML)
+        .join("");
+    } else {
+      cuerpo += `<div style="text-align:center;padding:24px;color:#9AA3B5;font-size:13px;">
+        No se encontraron campos pendientes.</div>`;
+    }
+
+    // Reutiliza el mismo modal de leyenda que usa la validación de XML.
+    const contenido = $("leyenda-contenido");
+    const titulo    = document.querySelector("#modal-leyenda .modal-header h3");
+    if (contenido) contenido.innerHTML = cuerpo;
+    if (titulo)    titulo.textContent  = "Campos pendientes por llenar";
+    const modal = $("modal-leyenda");
+    if (modal) modal.style.display = "flex";
+  },
+
 };   // fin App
 
 

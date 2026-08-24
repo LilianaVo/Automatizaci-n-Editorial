@@ -151,17 +151,65 @@ def es_como_citar(t: str) -> bool:
     return False
 
 
+def _normalizar(t: str) -> str:
+    """Quita acentos, colapsa espacios y pasa a minúsculas. Uso interno para
+    comparar encabezados de sección sin importar tildes/mayúsculas."""
+    norm = unicodedata.normalize("NFKD", t)
+    norm = "".join(ch for ch in norm if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", norm).strip().lower()
+
+
 def es_encabezado_resumen(t: str) -> bool:
     """Coincidencia estricta para encabezados de resumen.
     Evita falsos positivos como 'Abstracto'.
     """
-    norm = unicodedata.normalize("NFKD", t)
-    norm = "".join(ch for ch in norm if not unicodedata.combining(ch))
-    norm = re.sub(r"\s+", " ", norm).strip().lower()
+    norm = _normalizar(t)
     return bool(re.match(
         r"^(resumen|abstract|resumen no tecnico|non-technical abstract)\s*[:\.]?$",
         norm
     ))
+
+
+# ─── Anclas semánticas del artículo (enfoque tipo SciELO Markup) ──────────────
+# Estas funciones detectan los encabezados que marcan el INICIO de cada zona
+# del artículo (Resumen, Palabras clave, Cuerpo, Referencias), para que el
+# clasificador ya no dependa solo del tamaño de letra sino de estas "anclas"
+# de contenido, igual que hace el autómata de SciELO Markup.
+
+def es_encabezado_palabras_clave(t: str) -> bool:
+    """Detecta si el bloque ES (nada más que) el encabezado de la sección
+    'Palabras clave' / 'Keywords', sin las palabras clave mismas."""
+    norm = _normalizar(t)
+    return bool(re.match(r"^(palabras\s+clave|keywords)\s*[:\.]?$", norm))
+
+
+def es_inicio_palabras_clave(t: str) -> bool:
+    """Detecta si el bloque EMPIEZA con 'Palabras clave:' seguido de las
+    palabras en la misma línea (el caso más común en los PDF)."""
+    norm = _normalizar(t)
+    return bool(re.match(r"^(palabras\s+clave|keywords)\s*[:\.]", norm))
+
+
+def es_encabezado_referencias(t: str) -> bool:
+    """Detecta el encabezado de la sección de referencias bibliográficas."""
+    norm = _normalizar(t)
+    return norm in (
+        "referencias", "references", "referencias bibliograficas",
+        "bibliografia", "bibliography", "literatura citada",
+    )
+
+
+def es_encabezado_cuerpo_inicio(t: str) -> bool:
+    """Detecta encabezados típicos donde arranca el cuerpo del artículo
+    (p. ej. 'Introducción'), con o sin numeración delante ('1. Introducción')."""
+    norm = _normalizar(t)
+    norm = re.sub(r"^\d+[\.\)]?\s*", "", norm)
+    return norm in (
+        "introduccion", "introduction",
+        "paleontologia sistematica", "systematic palaeontology",
+        "material y metodos", "materiales y metodos", "metodologia",
+        "material and methods", "materials and methods", "methods",
+    )
 
 
 def es_fecha_mss(t: str) -> bool:
