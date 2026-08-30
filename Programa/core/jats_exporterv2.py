@@ -832,6 +832,56 @@ def _parse_apa_pages(pages_str: str) -> tuple[str, str]:
     return s, ""
 
 
+def _diagnosticar_referencia_apa(ref_text: str) -> dict:
+    """Corre el mismo parseo que usa _build_element_citation, pero solo para
+    diagnóstico (no arma XML, no modifica nada). Se usa en
+    detectar_atributos_pendientes para avisarle al editor ANTES de exportar:
+
+    - tiene_year=False  → la referencia se va a exportar sin <element-citation>
+      (mismo criterio que ya usaba el aviso de "Formato").
+    - tiene_year=True pero sospechosa=True → sí se generará <element-citation>,
+      pero el título/fuente probablemente quedaron mal separados (típicamente
+      por abreviaturas con punto, ej. "U. S. Department..."). Esto NO se
+      puede saber con 100% de certeza sin re-implementar un parser APA
+      completo — es una señal heurística, no una garantía.
+    """
+    txt = _clean_text(ref_text)
+    if not txt:
+        return {"tiene_year": False, "sospechosa": False}
+
+    pub_type = _detect_pub_type(txt)
+
+    m_doi = _APA_DOI_RE.search(txt)
+    if m_doi:
+        txt = txt[:m_doi.start()].strip(" .")
+    else:
+        m_url = _APA_URL_RE.search(txt)
+        if m_url:
+            txt = txt[:m_url.start()].strip(" .")
+
+    m_year = _APA_YEAR_RE.search(txt)
+    if m_year:
+        rest = txt[m_year.end():].strip()
+    else:
+        m_year2 = re.search(r"(?<!\d)\((\d{4})\)", txt)
+        if m_year2:
+            rest = txt[m_year2.end():].strip(" .")
+        else:
+            return {"tiene_year": False, "sospechosa": False}
+
+    sentences = re.split(r"\.\s+", rest.rstrip("."))
+    sentences = [s.strip() for s in sentences if s.strip()]
+    fuente = sentences[1] if len(sentences) >= 2 else ""
+
+    # Señales de que el parseo se hizo pedazos: demasiadas "oraciones"
+    # (las abreviaturas con punto cortan de más) o una fuente/revista
+    # sospechosamente corta (1-2 letras, residuo típico de una abreviatura
+    # partida a la mitad, como "U." → "U").
+    sospechosa = len(sentences) > 3 or (0 < len(fuente) <= 2)
+
+    return {"tiene_year": True, "sospechosa": sospechosa}
+
+
 def _build_element_citation(ref_el: ET.Element, ref_text: str) -> None:
     """Construye <element-citation> dentro de <ref> parseando formato APA.
 
@@ -867,8 +917,12 @@ def _build_element_citation(ref_el: ET.Element, ref_text: str) -> None:
         author_part = txt[:m_year.start()].strip(" .")
         rest = txt[m_year.end():].strip()
     else:
-        # fallback: buscar año entre paréntesis en cualquier posición
-        m_year2 = re.search(r"\((\d{4})\)", txt)
+        # Fallback: buscar año entre paréntesis en cualquier posición, PERO
+        # nunca si el paréntesis está pegado a otro dígito — eso es el patrón
+        # típico de "volumen(número)" (ej. "62(2465)"), no un año. Un año real
+        # siempre viene después de un nombre, un punto o un espacio, jamás
+        # pegado a otro número.
+        m_year2 = re.search(r"(?<!\d)\((\d{4})\)", txt)
         if m_year2:
             year_val = m_year2.group(1)
             author_part = txt[:m_year2.start()].strip(" .")
@@ -1069,6 +1123,7 @@ def detectar_atributos_pendientes(
     afiliaciones_txt: str,
     figuras: list[dict],
     tablas: list[dict],
+    referencias_externas: list[str] | None = None,
     metadatos: dict | None = None,
 ) -> list[dict]:
     """Revisa lo ya cargado (bloques, autores, afiliaciones, tablas, figuras,
@@ -1193,16 +1248,54 @@ def detectar_atributos_pendientes(
         })
 
     # ── Referencias ────────────────────────────────────────────────────────
-    tiene_referencias = any(
-        b.get("clasificacion") == "Referencia" and _clean_text(b.get("contenido", ""))
-        for b in bloques
-    )
-    if not tiene_referencias:
+    refs_bloques = []
+    for b in bloques:
+        if b.get("clasificacion") != "Referencia":
+            continue
+        # El bloque puede traer varias referencias juntas (una por línea)
+        # desde que pdf_processor.py las fusiona en un solo bloque; hay que
+        # partir por línea el contenido CRUDO antes de limpiarlo, porque
+        # _clean_text() colapsa los saltos de línea en espacios.
+        for linea in b.get("contenido", "").split("\n"):
+            linea = _clean_text(linea)
+            if linea:
+                refs_bloques.append(linea)
+    refs_para_validar = referencias_externas if referencias_externas else refs_bloques
+
+    if not refs_para_validar:
         avisos.append({
             "bloque": "Referencias", "campo": "Referencias",
             "mensaje": "No hay ningún bloque etiquetado como 'Referencia'.",
             "severidad": "alta",
         })
+    else:
+        # Usa el mismo parseo APA que el exportador real (_build_element_citation),
+        # vía _diagnosticar_referencia_apa, para que el aviso sea fiel a lo que
+        # de verdad va a pasar en el XML — sin duplicar la lógica de parseo.
+        for i, ref in enumerate(refs_para_validar, 1):
+            ref_limpia = _strip_ref_prefix(ref)
+            if not ref_limpia:
+                continue
+            fragmento = ref_limpia[:70] + ("…" if len(ref_limpia) > 70 else "")
+            diag = _diagnosticar_referencia_apa(ref_limpia)
+            if not diag["tiene_year"]:
+                avisos.append({
+                    "bloque": f"Referencia {i}", "campo": "Formato",
+                    "mensaje": f'No se detectó el año en esta referencia, así que se '
+                               f'exportará sin estructurar en el XML: "{fragmento}". '
+                               f'Verifica el formato: Apellido, A. (Año). Título. '
+                               f'Fuente, vol(núm), páginas.',
+                    "severidad": "alta",
+                })
+            elif diag["sospechosa"]:
+                avisos.append({
+                    "bloque": f"Referencia {i}", "campo": "Formato",
+                    "mensaje": f'Esta referencia sí se estructuró, pero el título o la '
+                               f'fuente podrían haber quedado mal separados — revísala a '
+                               f'mano: "{fragmento}". Suele pasar cuando traen '
+                               f'abreviaturas con punto (ej. "U. S. Department...").',
+                    "severidad": "media",
+                })
 
     # ── Tablas ────────────────────────────────────────────────────────────
     for i, tab in enumerate(tablas or [], 1):
@@ -1372,7 +1465,17 @@ def build_jats_xml(
         # Dentro de referencias
         if in_refs:
             if cls in ("Referencia", "Cuerpo", "Normal"):
-                refs_from_blocks.append(txt)
+                # pdf_processor.py fusiona todas las referencias en un solo
+                # bloque (ver core/zonas.py), separadas por salto de línea
+                # dentro de "contenido"; acá hay que volver a partirlas para
+                # que cada una siga siendo un <ref> propio en el XML. OJO:
+                # se parte el contenido CRUDO del bloque, no "txt" — "txt"
+                # ya pasó por _clean_text(), que colapsa saltos de línea en
+                # espacios y para este punto ya no queda nada que partir.
+                refs_from_blocks.extend(
+                    _clean_text(l) for l in b["contenido"].split("\n")
+                    if _clean_text(l)
+                )
             continue
 
         # Clases de front-matter

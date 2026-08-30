@@ -1,0 +1,1 @@
+Y bueno otra cosa regresando al bloque de afiliaciones lo analiza bien dentro del programa pero a la hora de visualizar el html no muestra el bloque jajaja no se si le di en ignorar o algo asi pero tiene la etiqueta de afiliaciones como tal, deberia de aparecer en teoria

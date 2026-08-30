@@ -126,14 +126,24 @@ def insertar_orcid(texto: str, autores_orcid: list[dict] | None = None) -> str:
 # ─── Referencias ──────────────────────────────────────────────────────────────
 
 def parsear_referencias(texto: str) -> list[str]:
-    """Parsea referencias numeradas desde texto plano.
-    Soporta formatos: '1. Texto', '1) Texto', '[1] Texto'.
+    """Parsea referencias desde texto plano.
+    Soporta formatos numerados: '1. Texto', '1) Texto', '[1] Texto'. Si el
+    texto no trae numeración reconocible (o el patrón numerado no logró
+    partir nada, porque a lo sumo hay un solo "1." al principio de todo),
+    se separa por párrafos (líneas en blanco) y, si tampoco hay párrafos
+    reconocibles, por líneas sueltas — para no devolver el texto entero
+    como si fuera una única referencia.
     """
     patron = re.compile(r'^\s*(?:\[?\d+[\.\)\]]\s*)', re.MULTILINE)
     partes = patron.split(texto)
     refs   = [p.strip() for p in partes if p.strip()]
-    if refs:
+    if len(refs) > 1:
         return refs
+
+    parrafos = [p.strip() for p in re.split(r"\n\s*\n", texto) if p.strip()]
+    if len(parrafos) > 1:
+        return parrafos
+
     return [l.strip() for l in texto.splitlines() if l.strip()]
 
 
@@ -201,15 +211,63 @@ def es_encabezado_referencias(t: str) -> bool:
 
 def es_encabezado_cuerpo_inicio(t: str) -> bool:
     """Detecta encabezados típicos donde arranca el cuerpo del artículo
-    (p. ej. 'Introducción'), con o sin numeración delante ('1. Introducción')."""
-    norm = _normalizar(t)
-    norm = re.sub(r"^\d+[\.\)]?\s*", "", norm)
-    return norm in (
-        "introduccion", "introduction",
-        "paleontologia sistematica", "systematic palaeontology",
-        "material y metodos", "materiales y metodos", "metodologia",
-        "material and methods", "materials and methods", "methods",
+    (p. ej. 'Introducción'), con o sin numeración delante ('1. Introducción').
+
+    Se conserva por compatibilidad; para detectar CUALQUIER encabezado de
+    sección del cuerpo (no solo el de inicio), usar
+    es_encabezado_seccion_cuerpo(), que es superset de esta lista.
+    """
+    return es_encabezado_seccion_cuerpo(t) in (
+        "introduccion", "paleontologia_sistematica", "metodologia",
     )
+
+
+# Mapa encabezado normalizado (sin numeración) → clave de sección interna.
+# La clave de sección no se usa hoy para nada más que trazabilidad (queda
+# guardada en el breakpoint por si más adelante se necesita, p. ej. para
+# mapear a un section-type de SPS/JATS); la clasificación del bloque en sí
+# siempre es "Encabezado sección" / "Cuerpo" sin importar cuál sea.
+_SECCIONES_CUERPO_MAP: dict[str, str] = {
+    "introduccion": "introduccion", "introduction": "introduccion",
+    "paleontologia sistematica": "paleontologia_sistematica",
+    "systematic palaeontology": "paleontologia_sistematica",
+    "material y metodos": "metodologia", "materiales y metodos": "metodologia",
+    "material and methods": "metodologia", "materials and methods": "metodologia",
+    "metodologia": "metodologia", "methods": "metodologia",
+    "resultados": "resultados", "results": "resultados",
+    "discusion": "discusion", "discussion": "discusion",
+    "resultados y discusion": "resultados_discusion",
+    "results and discussion": "resultados_discusion",
+    "conclusiones": "conclusiones", "conclusions": "conclusiones",
+    "agradecimientos": "agradecimientos",
+    "acknowledgements": "agradecimientos", "acknowledgments": "agradecimientos",
+    "conflicto de intereses": "conflicto_intereses",
+    "conflict of interest": "conflicto_intereses",
+    "conflicts of interest": "conflicto_intereses",
+    "competing interests": "conflicto_intereses",
+    "declaracion de conflictos": "conflicto_intereses",
+    "contribuciones de los autores": "contribuciones",
+    "contribucion de autores": "contribuciones",
+    "contribucción de autores": "contribuciones",
+    "authors' contribution": "contribuciones",
+    "authors contribution": "contribuciones",
+}
+
+
+def es_encabezado_seccion_cuerpo(t: str) -> str | None:
+    """Detecta si el bloque ES (nada más que) un encabezado de sección
+    reconocido del cuerpo del artículo — Introducción, Métodos, Resultados,
+    Discusión, Conclusiones, Agradecimientos, Conflicto de intereses,
+    Contribuciones, Paleontología sistemática — tolerando numeración
+    delante ('4. Discusión', '4.1 Metodología').
+
+    A diferencia de es_encabezado_cuerpo_inicio(), esto reconoce CUALQUIERA
+    de estos encabezados en CUALQUIER posición del documento, no solo el
+    primero. Devuelve la clave de sección normalizada, o None si el texto
+    no es ninguno de estos encabezados."""
+    norm = _normalizar(t)
+    norm_sin_num = re.sub(r"^\d+(?:\.\d+)*[\.\)]?\s*", "", norm)
+    return _SECCIONES_CUERPO_MAP.get(norm_sin_num)
 
 
 def es_fecha_mss(t: str) -> bool:
@@ -344,6 +402,62 @@ def extraer_issn(t: str) -> str | None:
     """
     m = re.search(r"ISSN\s*:?\s*(\d{4}-\d{3}[\dXx])", t)
     return m.group(1) if m else None
+
+
+# ─── Portada del artículo (título / autores / filiaciones) ───────────────────
+# Detectores de CONTENIDO para la zona "portada" (todo lo que va antes de
+# cualquier ancla de Resumen/Abstract/Palabras clave). El objetivo es el
+# mismo que con las anclas de zona: que la clasificación dependa de qué dice
+# el texto y no de en qué tamaño de letra lo puso el diseñador de esa
+# revista en particular — un dato que cambia de una plantilla a otra (y a
+# veces hasta dentro del mismo documento, por cómo el extractor de PDF
+# fragmenta los bloques).
+
+_MESES_PAT = (
+    r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|"
+    r"octubre|noviembre|diciembre|january|february|march|april|may|june|"
+    r"july|august|september|october|november|december"
+)
+
+
+def es_linea_masthead(t: str) -> bool:
+    """Cornisa editorial de la revista: nombre + ISSN, línea de
+    volumen/número/año/páginas, o el rango de fechas de publicación entre
+    paréntesis ('(Enero – Junio 2026)'). Suele ir arriba del título."""
+    t = t.strip()
+    if extraer_issn(t):
+        return True
+    if extraer_volumen_pagina(t):
+        return True
+    if re.match(
+        rf"^\(?\s*(?:{_MESES_PAT})\b.{{0,25}}\d{{4}}\)?\s*$",
+        t, re.IGNORECASE,
+    ):
+        return True
+    return False
+
+
+_PALABRAS_INSTITUCION = (
+    r"universi(?:dad|ty)|instituto|institute|department|departamento|"
+    r"facultad|faculty|laborator|museum|museo|center|centre|centro|"
+    r"college|school|escuela|national|nacional|colecci[oó]n|collection"
+)
+
+
+def es_linea_filiacion(t: str) -> bool:
+    """Filiación institucional: empieza con un marcador de nota al pie
+    (un número o 1-3 letras) seguido de un nombre propio, y contiene alguna
+    palabra típica de institución o el patrón de coma de 'Depto.,
+    Universidad, Ciudad, País'. No depende del tamaño de letra."""
+    t = t.strip()
+    m = re.match(r"^[;*,]?\s*([0-9]+|[A-Za-z]{1,3})\s+[A-ZÁÉÍÓÚÑÜ]", t)
+    if not m:
+        return False
+    # No confundir con un encabezado numerado real ("1. Introducción"): una
+    # filiación no lleva punto/paréntesis pegado al marcador.
+    if re.match(r"^[0-9]+[\.\)]\s", t):
+        return False
+    return bool(re.search(_PALABRAS_INSTITUCION, t, re.IGNORECASE)) or "," in t
 
 
 # ─── Limpieza de texto ────────────────────────────────────────────────────────

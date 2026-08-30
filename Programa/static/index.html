@@ -44,9 +44,13 @@
   </nav>
 
   <div class="topbar-actions">
-    <button class="btn-export btn-export--preview" onclick="App.verPreview()" title="Ver cómo quedará el artículo en HTML">
+    <button class="btn-export btn-export--preview" onclick="App.verPreview('html')" title="Ver cómo quedará el artículo en HTML">
       <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
-      Vista previa
+      Vista previa HTML
+    </button>
+    <button class="btn-export btn-export--preview" onclick="App.verPreview('xml')" title="Ver el XML JATS tal como se exportará">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 7l-3 3 3 3M14 7l3 3-3 3M11 4l-2 12"/></svg>
+      Vista previa XML
     </button>
     <span class="topbar-separator"></span>
     <span class="topbar-label">Exportar a:</span>
@@ -517,6 +521,7 @@
         </div>
         <div class="panel-header-actions">
           <span class="counter-badge" id="refs-count">0 referencias</span>
+          <span class="counter-badge counter-badge--warn" id="refs-count-sin-year" style="display:none" title="Referencias sin año detectado — se exportarán sin estructurar en el XML"></span>
           <button class="btn-sm btn-secondary" onclick="App.cargarReferenciassTxt()">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="width:14px;height:14px"><path d="M4 3h8l4 4v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M12 3v4h4"/></svg>
             Cargar .txt
@@ -526,6 +531,18 @@
       </div>
       <div class="refs-hint">
         Formatos aceptados: <code>1. Texto…</code> · <code>1) Texto…</code> · <code>[1] Texto…</code>
+        <div class="refs-hint-apa">
+          Para que el XML se genere bien, cada referencia debe traer el <strong>año entre paréntesis</strong> justo después del autor:
+          <code>Apellido, A. (Año). Título del artículo. Revista, volumen(número), páginas.</code>
+          El DOI es opcional. Si una referencia no trae el año así, "Campos pendientes" te lo va a marcar antes de exportar.
+          <div class="refs-hint-ia">
+            <span>¿Las referencias del PDF vienen desordenadas o cortadas? Cópialas y pídele a un chatbot de IA (ChatGPT, Claude, etc.) que te las reordene en este formato antes de pegarlas aquí.</span>
+            <button class="btn-sm btn-secondary" onclick="App.copiarPromptReferencias()" title="Copia un mensaje listo para pegar en tu chatbot de IA">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><rect x="6" y="6" width="10" height="12" rx="1"/><path d="M9 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-2"/></svg>
+              Copiar prompt sugerido
+            </button>
+          </div>
+        </div>
       </div>
       <div class="refs-list" id="refs-list">
         <div class="empty-state">
@@ -872,19 +889,19 @@
   </div>
 </div>
 
-<!-- Modal vista previa HTML -->
+<!-- Modal vista previa (HTML o XML, según se abra) -->
 <div class="modal-overlay modal-overlay--full" id="modal-preview" style="display:none" onclick="App.cerrarPreview()">
   <div class="modal modal--preview" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h3>
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" style="width:16px;height:16px;vertical-align:-2px;margin-right:6px"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
-        Vista previa HTML
+        <span id="preview-titulo">Vista previa HTML</span>
       </h3>
       <div style="display:flex;align-items:center;gap:8px">
         <span id="preview-nombre" style="font-size:11px;color:var(--text-light);font-weight:400"></span>
-        <button class="btn-sm btn-secondary" onclick="App.exportar('html')">
+        <button class="btn-sm btn-secondary" id="preview-btn-exportar" onclick="App.exportar('html')">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="width:13px;height:13px"><path d="M10 3v10M5 8l5 5 5-5M4 17h12"/></svg>
-          Exportar HTML
+          <span id="preview-btn-exportar-texto">Exportar HTML</span>
         </button>
         <button class="modal-close" onclick="App.cerrarPreview()">✕</button>
       </div>
@@ -895,6 +912,7 @@
         <span>Generando vista previa...</span>
       </div>
       <iframe id="preview-iframe" class="preview-iframe" style="display:none" title="Vista previa del artículo"></iframe>
+      <pre id="preview-xml" class="preview-xml" style="display:none"></pre>
     </div>
   </div>
 </div>

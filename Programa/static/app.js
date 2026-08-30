@@ -1371,19 +1371,56 @@ const App = {
     showToast("Referencias limpiadas");
   },
 
+  async copiarPromptReferencias() {
+    const prompt =
+      "Reformatea las siguientes referencias bibliográficas en formato APA 7, " +
+      "una por línea, con el año de publicación entre paréntesis justo después " +
+      "del autor (ejemplo: Apellido, A. (2020). Título del artículo. Revista, " +
+      "volumen(número), páginas.). No agregues numeración, viñetas ni texto " +
+      "adicional — solo la lista de referencias ya reformateadas, una por renglón.\n\n" +
+      "Referencias a reformatear:\n[pega aquí tus referencias]";
+    try {
+      await navigator.clipboard.writeText(prompt);
+      showToast("Prompt copiado — pégalo en tu chatbot de IA junto con tus referencias");
+    } catch (e) {
+      showToast("No se pudo copiar automáticamente, cópialo manualmente", 4000);
+    }
+  },
+
   async _cargarReferencias() {
     try {
       const data = await API.get("/api/referencias");
-      let refs = data.referencias || [];
-      if (refs.length === 0) {
-        refs = State.bloques
-          .filter(b => b.clasificacion === "Referencia")
-          .map(b => b.contenido);
-      }
-      App._renderRefs(refs);
+      // El backend ya devuelve la lista bien partida (una por línea), sea
+      // que vengan de un .txt cargado o de los bloques "Referencia"
+      // detectados en el PDF/DOCX — no hace falta fallback acá.
+      App._renderRefs(data.referencias || []);
     } catch (e) {
       setStatus("Error cargando referencias: " + e.message, "error");
     }
+  },
+
+  // Guarda la lista completa de referencias editada (debounced desde el
+  // oninput del textarea único) — una vez que el usuario edita cualquier
+  // referencia, la lista pasa a tratarse como "cargada manualmente", igual
+  // que si hubiera subido un .txt.
+  _guardarRefsTimeout: null,
+  _guardarRefsEditadas() {
+    clearTimeout(App._guardarRefsTimeout);
+    App._guardarRefsTimeout = setTimeout(async () => {
+      const ta = $("refs-textarea");
+      if (!ta) return;
+      const refs = ta.value.split("\n").map(l => l.trim()).filter(Boolean);
+      const count = $("refs-count");
+      if (count) count.textContent = `${refs.length} referencia${refs.length !== 1 ? "s" : ""}`;
+      State._numRefs = refs.length;
+      actualizarStepper();
+      try {
+        await API.put("/api/referencias", { referencias: refs });
+        App._actualizarBadgeRefsSinAño(refs);
+      } catch (e) {
+        showToast("No se pudo guardar la edición de referencias", 3500);
+      }
+    }, 600);
   },
 
   _renderRefs(refs) {
@@ -1393,6 +1430,7 @@ const App = {
     const count = $("refs-count");
     if (!lista) return;
     if (count) count.textContent = `${refs.length} referencia${refs.length !== 1 ? "s" : ""}`;
+    App._actualizarBadgeRefsSinAño(refs);
     if (refs.length === 0) {
       lista.innerHTML = `
         <div class="empty-state">
@@ -1406,12 +1444,43 @@ const App = {
         </div>`;
       return;
     }
-    lista.innerHTML = refs.map((r, i) => `
-      <div class="ref-item">
-        <span class="ref-num">${i + 1}.</span>
-        <span>${esc(r)}</span>
-      </div>
-    `).join("");
+    // Un solo textarea editable con todas las referencias, una por línea
+    // (no una caja por cada referencia — eso quedaba feo y no era lo que
+    // se pedía).
+    lista.innerHTML = `
+      <textarea id="refs-textarea"
+        style="width:100%;min-height:280px;resize:vertical;font-family:inherit;
+          font-size:13px;line-height:1.6;padding:14px;border:1px solid #E4E9F0;
+          border-radius:8px;box-sizing:border-box;"
+        oninput="App._guardarRefsEditadas()"
+      >${esc(refs.join("\n"))}</textarea>`;
+  },
+
+  // Consulta en segundo plano (sin bloquear la UI ni mostrar spinner) cuántas
+  // referencias se marcarían con "Formato" en Campos pendientes, y actualiza
+  // el badge de advertencia junto al contador de referencias. Si algo falla
+  // (p. ej. aún no hay PDF cargado), simplemente no muestra el badge.
+  async _actualizarBadgeRefsSinAño(refs) {
+    const badge = $("refs-count-sin-year");
+    if (!badge) return;
+    if (!refs || refs.length === 0 || !State.tienePDF) {
+      badge.style.display = "none";
+      return;
+    }
+    try {
+      const r = await API.post("/api/validar/pendientes", {});
+      const sinAño = (r.avisos || []).filter(
+        a => a.campo === "Formato" && (a.bloque || "").startsWith("Referencia ")
+      ).length;
+      if (sinAño > 0) {
+        badge.textContent = `${sinAño} sin año detectado`;
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+    } catch (e) {
+      badge.style.display = "none";
+    }
   },
 
 
@@ -2168,10 +2237,10 @@ const App = {
   },
 
   // ══════════════════════════════════════════════════════════════════════════
-  // VISTA PREVIA HTML
+  // VISTA PREVIA (HTML o XML, según el botón que la llame)
   // ══════════════════════════════════════════════════════════════════════════
 
-  async verPreview() {
+  async verPreview(formato = "html") {
     if (!State.tienePDF) {
       showToast("Primero carga un PDF");
       return;
@@ -2191,7 +2260,10 @@ const App = {
     modal.style.display   = "flex";
     loading.style.display = "flex";
     iframe.style.display  = "none";
-    if (nombre) nombre.textContent = State.pdfInfo?.nombre || "";
+    if (nombre) {
+      const base = State.pdfInfo?.nombre || "";
+      nombre.textContent = formato === "xml" ? `${base} (XML)` : base;
+    }
 
     // Cuando el iframe termine de cargar, ocultar spinner
     iframe.onload = () => {
@@ -2199,8 +2271,15 @@ const App = {
       iframe.style.display  = "block";
     };
 
-    // Cargar la URL directamente — el servidor genera el HTML al vuelo
-    iframe.src = `http://127.0.0.1:8765/api/exportar/html/vista-previa`;
+    // Cargar la URL directamente — el servidor genera el HTML/XML al vuelo.
+    // ANTES esto estaba hardcodeado a "html/vista-previa" sin importar el
+    // botón que lo llamara, así que la vista previa de XML mostraba el
+    // HTML igual. Ahora usa el "formato" que le pasa el botón.
+    iframe.src = `http://127.0.0.1:8765/api/exportar/${formato}/vista-previa`;
+  },
+
+  async verPreviewXML() {
+    return App.verPreview("xml");
   },
 
   cerrarPreview() {

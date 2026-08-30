@@ -528,6 +528,22 @@ def exportar_xml_preview():
     return FastAPIResponse(content=xml_str, media_type="application/xml",
         headers={"Content-Disposition": "attachment; filename=articulo.xml"})
 
+@app.get("/api/exportar/xml/vista-previa")
+def vista_previa_xml():
+    """Devuelve el XML generado como texto plano, sin descarga — para mostrarlo en el modal."""
+    if not _estado["bloques"]:
+        raise HTTPException(status_code=400, detail="No hay bloques cargados.")
+    xml_str = build_jats_xml(
+        bloques=_bloques_snapshot(),
+        referencias_externas=_estado["referencias_externas"],
+        autores_orcid=_estado["autores_orcid"],
+        afiliaciones_txt=_estado["afiliaciones_txt"],
+        figuras=_estado["figuras_manuales"],
+        tablas=_estado["tablas_manuales"],
+        metadatos=_estado["metadatos"],
+        config_revista=_config_revista,
+    )
+    return FastAPIResponse(content=xml_str, media_type="text/plain; charset=utf-8")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Endpoints — Bloques
@@ -817,7 +833,22 @@ def set_metadatos(payload: MetadatosPayload):
 
 @app.get("/api/referencias")
 def get_referencias():
-    return {"referencias": _estado["referencias_externas"]}
+    if _estado["referencias_externas"]:
+        return {"referencias": _estado["referencias_externas"]}
+    # Sin .txt cargado: derivar de los bloques "Referencia" ya detectados en
+    # el PDF/DOCX. pdf_processor.py fusiona todas las referencias en un solo
+    # bloque (una por línea dentro de "contenido" — ver core/zonas.py), así
+    # que hay que volver a partirlas acá con el mismo parser que ya usa la
+    # carga por .txt, para no devolver la bibliografía entera como si fuera
+    # una sola referencia.
+    from core.utils import parsear_referencias
+    texto = "\n".join(
+        b.get("contenido", "")
+        for b in _estado["bloques"]
+        if b.get("clasificacion") == "Referencia"
+    )
+    refs = parsear_referencias(texto) if texto.strip() else []
+    return {"referencias": refs}
 
 @app.put("/api/referencias")
 def set_referencias(payload: ReferenciasPayload):
@@ -1545,12 +1576,13 @@ def validar_pendientes_endpoint():
         )
     try:
         avisos = detectar_atributos_pendientes(
-            bloques          = _bloques_snapshot(),
-            autores_orcid    = _estado["autores_orcid"],
-            afiliaciones_txt = _estado["afiliaciones_txt"],
-            figuras          = _estado["figuras_manuales"],
-            tablas           = _estado["tablas_manuales"],
-            metadatos        = _estado["metadatos"],
+            bloques              = _bloques_snapshot(),
+            autores_orcid        = _estado["autores_orcid"],
+            afiliaciones_txt     = _estado["afiliaciones_txt"],
+            figuras              = _estado["figuras_manuales"],
+            tablas               = _estado["tablas_manuales"],
+            referencias_externas = _estado["referencias_externas"],
+            metadatos            = _estado["metadatos"],
         )
         return {"avisos": avisos, "resumen": resumen_atributos_pendientes(avisos)}
     except Exception as e:

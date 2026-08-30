@@ -37,12 +37,10 @@ from core.utils import (
     extraer_doi as _extraer_doi,
     extraer_volumen_pagina as _extraer_volumen_pagina,
     extraer_issn as _extraer_issn,
-    es_encabezado_resumen as _es_encabezado_resumen,
-    es_encabezado_palabras_clave as _es_encabezado_palabras_clave,
-    es_inicio_palabras_clave as _es_inicio_palabras_clave,
-    es_encabezado_referencias as _es_encabezado_referencias,
-    es_encabezado_cuerpo_inicio as _es_encabezado_cuerpo_inicio,
+    es_linea_masthead as _es_linea_masthead,
+    es_linea_filiacion as _es_linea_filiacion,
 )
+from core.zonas import detectar_breakpoints, CursorZonas
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers de bajo nivel sobre bloques fitz
@@ -119,6 +117,98 @@ _SECCIONES_EXACTAS_CLAS = {
 _pat_afil_letra = re.compile(
     r"^[a-zA-Z]{1,3}\s+[A-ZÁÉÍÓÚÑÜ][a-zA-ZÁÉÍÓÚÑÜáéíóúñü]"
 )
+
+
+class _EstadoPortada:
+    """Estado local para clasificar la portada (título/autores/filiaciones):
+    hace falta recordar si ya se vio el título, si el 'espacio' para un
+    subtítulo (traducción del título) ya se cerró, y si ya se entró en la
+    zona de filiaciones (para que un fragmento de filiación cortado a la
+    mitad por el extractor de PDF —sin el marcador '1 '/'2 ' al principio—
+    no se pierda como 'Cuerpo')."""
+    __slots__ = ("titulo_visto", "titulo_cerrado", "en_filiacion")
+
+    def __init__(self):
+        self.titulo_visto = False
+        self.titulo_cerrado = False
+        self.en_filiacion = False
+
+
+def _clasificar_portada(
+    texto: str, size: float, bold: bool, italic: bool,
+    body_size: int, estado: _EstadoPortada,
+) -> str:
+    """Clasifica un bloque de la PORTADA del artículo (todo lo que va antes
+    de cualquier ancla de Resumen/Abstract/Palabras clave/Cuerpo): cornisa
+    editorial, título, autores, filiaciones, email.
+
+    A diferencia de clasificar_auto(), acá el contenido manda primero. Los
+    umbrales de tamaño de letra fijos (>=13, ==9...) que antes decidían casi
+    todo estaban calibrados para el layout de una sola revista y se rompen
+    con cualquier otra (o incluso dentro del mismo documento: en la práctica
+    los 4 bloques de una misma línea de autores pueden salir con 4 tamaños
+    de letra distintos, según cómo el extractor de PDF fragmentó el texto).
+
+    El tamaño de letra solo se usa para UNA cosa que sí es una convención
+    editorial real: el título es visiblemente más grande que el cuerpo del
+    texto — y eso se mide en relación a body_size, no contra un número fijo,
+    así que se adapta a la tipografía de cada revista.
+    """
+    t = texto.strip()
+
+    # 1) Cornisa editorial (nombre de la revista, ISSN, volumen/núm/año,
+    #    rango de fechas) — siempre, sin importar tamaño.
+    if _es_linea_masthead(t):
+        return "Encabezado sección"
+
+    # 2) Metadatos de contacto/publicación — por contenido, como en el resto
+    #    del documento.
+    if _es_como_citar(t):
+        return "Cómo citar"
+    if _es_fecha_mss(t) or _es_doi(t):
+        return "Fecha manuscrito"
+    if re.search(r"@[\w\-\.]+\.\w{2,}", t) and len(t) < 120:
+        return "Email / Metadatos"
+
+    # 3) Filiación institucional — por contenido, no por tamaño. Una vez
+    #    dentro de la zona de filiaciones, un fragmento sin marcador propio
+    #    (porque el extractor de PDF lo cortó a la mitad, p. ej. "mayo s/n
+    #    esquina Fuerte de Loreto..." sin el "1 " que abrió esa filiación)
+    #    sigue considerándose parte de la MISMA filiación, no "Cuerpo" —
+    #    hasta que aparezca otra cosa reconocible (email, otra filiación, un
+    #    encabezado, etc.) que indique que ya se salió de esa zona.
+    if _es_linea_filiacion(t):
+        estado.en_filiacion = True
+        return "Filiación"
+    if estado.en_filiacion:
+        return "Filiación"
+
+    # 4) Título: el primer bloque "grande" (relativo al cuerpo) que no
+    #    calzó ninguna regla anterior. Si el siguiente bloque es igual de
+    #    grande, se interpreta como subtítulo (p. ej. la traducción del
+    #    título) — es la única parte de la portada donde el tamaño decide
+    #    algo, porque acá sí es una convención editorial genuina.
+    es_titulo_candidato = size >= body_size + 2 or (size >= body_size + 1 and bold)
+
+    if not estado.titulo_visto:
+        if es_titulo_candidato:
+            estado.titulo_visto = True
+            return "Título principal"
+        # Todavía no apareció el título real (esto es ruido de portada sin
+        # patrón propio, p. ej. el nombre de la revista solo): NO tocar
+        # titulo_cerrado todavía, para no cerrarle el paso al subtítulo
+        # antes de que el título mismo haya aparecido.
+        return "Cuerpo"
+
+    if not estado.titulo_cerrado:
+        estado.titulo_cerrado = True
+        if es_titulo_candidato:
+            return "Título secundario"
+
+    # 5) Lo que sigue (autores, o cualquier residuo de portada sin patrón
+    #    propio) no tiene una clase dedicada en el vocabulario de salida:
+    #    los autores reales se cargan aparte, desde la pestaña ORCID.
+    return "Cuerpo"
 
 
 def clasificar_auto(texto: str, size: float, bold: bool, italic: bool,
@@ -524,6 +614,31 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
                         all_sizes.append(round(span["size"]))
     body_size: int = Counter(all_sizes).most_common(1)[0][0] if all_sizes else 12
 
+    # ── Detectar encabezados/pies de página repetidos (cornisas) ─────────────
+    # En vez de listar a mano cada posible patrón de cornisa (DOI, apellido del
+    # autor + "et al.", título corrido...), se cuenta qué textos aparecen en la
+    # franja superior/inferior de varias páginas distintas. Si un texto se
+    # repite así, es casi con certeza un encabezado/pie recurrente — sin
+    # importar su contenido. Esto generaliza a cualquier artículo, revista o
+    # apellido de autor, sin mantenimiento manual.
+    _conteo_franja: Counter[str] = Counter()
+    for _pnum in range(len(doc)):
+        _page = doc.load_page(_pnum)
+        _page_h = _page.rect.height
+        for _block in _page.get_text("dict")["blocks"]:
+            if _block["type"] != 0:
+                continue
+            _by0, _by1 = _block["bbox"][1], _block["bbox"][3]
+            _en_franja = _by1 < _page_h * 0.12 or _by0 > _page_h * 0.90
+            if not _en_franja:
+                continue
+            _texto_norm = re.sub(r"\d+", "#", _texto_bloque(_block).strip().lower())
+            _texto_norm = re.sub(r"\s+", " ", _texto_norm).strip()
+            if _texto_norm and len(_texto_norm) >= 6:
+                _conteo_franja[_texto_norm] += 1
+
+    _textos_cornisa_repetidos = {t for t, n in _conteo_franja.items() if n >= 2}
+
     # ── Tablas automáticas ────────────────────────────────────────────────────
     tablas_auto, rects_tablas_por_pagina, diag_tablas = extraer_tablas(doc, ruta)
 
@@ -603,8 +718,12 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
             texto = _texto_bloque(block)
             if not texto or len(texto) < 3:
                 continue
-            if pnum > 0 and by1 < page_h * 0.12:
+            if pnum > 0 and (by1 < page_h * 0.12 or by0 > page_h * 0.90):
                 if _pat_cornisa_txt.search(texto.strip()[:100]):
+                    continue
+                texto_norm = re.sub(r"\d+", "#", texto.strip().lower())
+                texto_norm = re.sub(r"\s+", " ", texto_norm).strip()
+                if texto_norm in _textos_cornisa_repetidos:
                     continue
             raw.append({
                 "texto": texto, "size": size,
@@ -613,59 +732,37 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
                 "pnum": pnum,
             })
 
-    # ── PASO 2: detectar zonas (portada / cuerpo / post-refs) ─────────────────
+    # ── PASO 2: detectar anclas (enfoque tipo SciELO Markov / autómata) ───────
+    # Se recorren todos los bloques UNA vez y se registran TODAS las
+    # ocurrencias de cada ancla reconocida (Resumen/Abstract, Palabras
+    # clave/Keywords, encabezados de sección del cuerpo, Referencias) — no
+    # solo la primera. Ver core/zonas.py para el porqué.
     _pat_nivel1 = re.compile(r"^\d+\.\s*\S")
     _pat_nivel2 = re.compile(r"^\d+\.\d+")
-    _SECCIONES_ZONA = {
-        "resumen", "abstract", "resumen no técnico", "non-technical abstract",
-        "palabras clave", "keywords", "referencias", "references",
-        "conclusiones", "conclusions", "agradecimientos", "acknowledgements",
-        "acknowledgments", "discusión", "resultados", "introducción",
-        "metodología", "contribuciones de los autores",
-        "contribucción de autores", "contribución de autores",
-        "authors' contribution", "conflicto de intereses",
-        "conflict of interest", "conflicts of interest",
-        "competing interests", "declaración de conflictos",
-    }
 
-    # Anclas semánticas adicionales (enfoque tipo SciELO Markup): en vez de
-    # solo detectar dónde empieza y termina el cuerpo del artículo, ahora
-    # también anclamos el Resumen/Abstract y las Palabras clave, buscando
-    # sus encabezados reales en el texto, no el tamaño de letra.
-    idx_resumen:         int | None = None
-    idx_palabras_clave:  int | None = None
-    zona_b_inicio: int | None = None
-    zona_b_fin:    int | None = None
+    textos_raw = [
+        ("" if r["imagen"] or r["clasificacion"] == "Ignorar" else r["texto"].strip())
+        for r in raw
+    ]
+    sizes_raw = [r.get("size", 0) for r in raw]
+    breakpoints = detectar_breakpoints(textos_raw, sizes_raw)
+    cursor = CursorZonas(breakpoints)
+    estado_portada = _EstadoPortada()
 
-    for i, r in enumerate(raw):
-        if r["imagen"] or r["clasificacion"] == "Ignorar":
-            continue
-        texto_i = r["texto"].strip()
-        t_low = texto_i.lower()
-        s = round(r["size"])
+    # Clúster de cornisa editorial: el nombre de la revista, cuando va solo
+    # (sin ISSN ni volumen en el mismo bloque, p. ej. "Paleontología
+    # Mexicana" en su propia línea), no tiene un patrón de contenido propio
+    # para reconocerlo aislado. Pero si dentro de los primeros bloques del
+    # documento aparece una línea que SÍ es reconocible como cornisa
+    # (ISSN/volumen/rango de fechas), todo lo que va antes de ese punto es
+    # casi con certeza parte del mismo bloque editorial.
+    _masthead_hasta = -1
+    for _k in range(min(6, len(textos_raw))):
+        if textos_raw[_k] and _es_linea_masthead(textos_raw[_k]):
+            _masthead_hasta = _k
+            break
 
-        if idx_resumen is None and _es_encabezado_resumen(texto_i):
-            idx_resumen = i
-
-        if idx_palabras_clave is None and (
-            _es_encabezado_palabras_clave(texto_i) or _es_inicio_palabras_clave(texto_i)
-        ):
-            idx_palabras_clave = i
-
-        # El cuerpo del artículo no puede empezar antes del resumen (si lo
-        # hay), así que solo buscamos su ancla a partir de ese punto.
-        puede_ser_cuerpo = idx_resumen is None or i > idx_resumen
-        if zona_b_inicio is None and puede_ser_cuerpo:
-            if _es_encabezado_cuerpo_inicio(texto_i):
-                zona_b_inicio = i
-            elif _pat_nivel1.match(texto_i) and not _pat_nivel2.match(texto_i) and s <= 12:
-                zona_b_inicio = i
-
-        if zona_b_inicio is not None and zona_b_fin is None:
-            if _es_encabezado_referencias(texto_i):
-                zona_b_fin = i
-
-    # ── PASO 3: clasificar ────────────────────────────────────────────────────
+    # ── PASO 3: clasificar según la zona vigente en cada bloque ──────────────
     bloques_raw: list[dict] = []
     for i, r in enumerate(raw):
         if r["imagen"]:
@@ -673,76 +770,87 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
                 "contenido": r["texto"],
                 "clasificacion": r["clasificacion"],
                 "size": 0, "bold": False, "italic": False,
+                "imagen": True, "pnum": r.get("pnum", 0),
             })
             continue
 
         texto = r["texto"].strip()
         t_low = texto.lower()
-        s = round(r["size"])
-        en_b = zona_b_inicio is not None and \
-               i >= zona_b_inicio and \
-               (zona_b_fin is None or i < zona_b_fin)
+        zona = cursor.avanzar(i)
+        es_encabezado_actual = zona is not None and zona.idx == i
 
-        # Zona de Resumen/Abstract: todo lo que va después del encabezado
-        # "Resumen"/"Abstract" y antes de "Palabras clave" o del cuerpo.
-        en_resumen = (
-            idx_resumen is not None and i > idx_resumen and
-            (idx_palabras_clave is None or i < idx_palabras_clave) and
-            (zona_b_inicio is None or i < zona_b_inicio)
-        )
-        # Zona de Palabras clave: desde su encabezado/inicio hasta el cuerpo.
-        en_palabras_clave = (
-            idx_palabras_clave is not None and i >= idx_palabras_clave and
-            (zona_b_inicio is None or i < zona_b_inicio)
-        )
+        if zona is None:
+            # "Portada": antes de cualquier ancla reconocida (título,
+            # autores, filiaciones, email) — por contenido, no por tamaño
+            # de letra fijo (ver _clasificar_portada).
+            if i <= _masthead_hasta:
+                cls = "Encabezado sección"
+            else:
+                cls = _clasificar_portada(
+                    texto, r["size"], r["bold"], r["italic"], body_size, estado_portada)
 
-        if i == idx_resumen:
-            cls = "Encabezado sección"
-        elif en_resumen:
-            cls = "Cuerpo del abstract"
-        elif en_palabras_clave:
-            cls = "Palabras clave"
-        elif en_b:
-            if _pat_nivel1.match(texto) and not _pat_nivel2.match(texto):
-                cls = "Subencabezado"
-            elif _pat_nivel2.match(texto):
-                cls = "Subencabezado-bajo"
+        elif zona.tipo == "resumen":
+            if es_encabezado_actual:
+                cls = "Encabezado sección"
             elif _es_como_citar(texto):
                 cls = "Cómo citar"
             elif _es_fecha_mss(texto) or _es_doi(texto):
                 cls = "Fecha manuscrito"
-            elif t_low in _SECCIONES_ZONA:
+            else:
+                cls = "Cuerpo del abstract"
+
+        elif zona.tipo == "palabras_clave":
+            if es_encabezado_actual and not zona.inline:
                 cls = "Encabezado sección"
+            elif not es_encabezado_actual and _es_como_citar(texto):
+                # "Cómo citar" suele venir metido justo después de las
+                # palabras clave, antes del DOI/fechas de manuscrito.
+                cls = "Cómo citar"
+            elif not es_encabezado_actual and (_es_fecha_mss(texto) or _es_doi(texto)):
+                cls = "Fecha manuscrito"
+            else:
+                # Encabezado inline ("Palabras clave: ...") o contenido que
+                # sigue a un encabezado en su propio bloque: en ambos casos
+                # el texto en sí son las palabras clave.
+                cls = "Palabras clave"
+
+        elif zona.tipo == "cuerpo":
+            # Un encabezado numerado ("1. Introducción", "4.1 Metodología")
+            # es Subencabezado/Subencabezado-bajo aunque sea el que abrió la
+            # zona — igual que en la versión anterior. "Encabezado sección"
+            # queda solo para anclas SIN numerar (p. ej. "Referencias" no
+            # aplica acá, pero si un artículo escribe "Conclusiones" sin
+            # número, cae en esta rama).
+            if _pat_nivel1.match(texto) and not _pat_nivel2.match(texto):
+                cls = "Subencabezado"
+            elif _pat_nivel2.match(texto):
+                cls = "Subencabezado-bajo"
+            elif es_encabezado_actual:
+                cls = "Encabezado sección"
+            elif _es_como_citar(texto):
+                cls = "Cómo citar"
+            elif _es_fecha_mss(texto) or _es_doi(texto):
+                cls = "Fecha manuscrito"
             elif re.search(r"\b(?:tabla|table)\s+\d+[\.\:\s]", t_low):
                 cls = "Título tabla"
             elif re.match(r"^(figura|figure)\s+\d+[\.\:\s]", t_low):
                 cls = "Pie de figura"
             else:
                 cls = "Cuerpo"
-        elif zona_b_fin is not None and i > zona_b_fin:
-            # Zona de Referencias: todo lo que sigue al encabezado
-            # "Referencias" se marca como tal, salvo que sea claramente
-            # otra cosa (Cómo citar, fechas de manuscrito, u otro encabezado
-            # como Agradecimientos/Conflicto de intereses).
+
+        else:  # zona.tipo == "referencias"
+            if es_encabezado_actual:
+                cls = "Encabezado sección"
             # Nota: aquí solo se reconoce el encabezado explícito "Cómo
             # citar"/"How to cite" (no la regla "parece una cita" de
             # _es_como_citar, que dentro de la lista de referencias
             # coincidiría con casi cualquier renglón normal).
-            if re.match(r"^(cómo citar|how to cite)", t_low):
+            elif re.match(r"^(cómo citar|how to cite)", t_low):
                 cls = "Cómo citar"
             elif _es_fecha_mss(texto) or _es_doi(texto):
                 cls = "Fecha manuscrito"
-            elif t_low in _SECCIONES_ZONA or _es_encabezado_referencias(texto):
-                cls = "Encabezado sección"
             else:
                 cls = "Referencia"
-        else:
-            if i == zona_b_fin:
-                cls = "Encabezado sección"
-            else:
-                cls = clasificar_auto(
-                    texto, r["size"], r["bold"],
-                    r["italic"], r["font"], body_size)
 
         bloques_raw.append({
             "contenido": texto,
@@ -900,14 +1008,24 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
         if not partido:
             bloques_clean.append(item)
 
-    # ── PASO 5: fusionar bloques Cuerpo/Normal consecutivos ───────────────────
+    # ── PASO 5: fusionar bloques fragmentados por la extracción de PDF ────────
+    # PyMuPDF a veces corta un párrafo lógico (un párrafo del cuerpo, una
+    # referencia, una filiación) en dos o más bloques crudos —por un salto de
+    # columna o de página, o simplemente por cómo el PDF fue generado— sin que
+    # eso tenga nada que ver con dónde termina realmente ese párrafo. Antes
+    # solo se volvían a pegar los bloques de "Cuerpo"; "Referencia" y
+    # "Filiación" quedaban afuera a propósito, así que una referencia o una
+    # filiación cortada por ese tipo de salto se quedaba partida para
+    # siempre en dos bloques editables sueltos. Ahora se fusionan igual,
+    # conservando su clasificación real (antes _vaciar() forzaba "Cuerpo"
+    # en todo lo que fusionaba).
     NO_FUSIONAR = {
-        "Título principal", "Título secundario", "Autores",
-        "Filiación", "Email / Metadatos", "Cómo citar",
+        "Título principal", "Título secundario",
+        "Email / Metadatos", "Cómo citar",
         "Fecha manuscrito", "Encabezado sección",
-        "Subencabezado", "Palabras clave", "Referencia",
-        "Cuerpo del abstract",
+        "Subencabezado", "Palabras clave",
     }
+    FUSIONABLES = {"Cuerpo", "Cuerpo del abstract", "Referencia", "Filiación"}
 
     def _es_continuacion(anterior: str, siguiente: str,
                          pnum_ant: int, pnum_sig: int) -> bool:
@@ -923,50 +1041,74 @@ def procesar_pdf(ruta: str) -> dict[str, Any]:
     fusionados: list[dict] = []
     buf_parrafos: list[tuple[str, int]] = []
     buf_item: dict | None = None
+    buf_clase: str | None = None
 
     def _vaciar() -> None:
-        nonlocal buf_item
+        nonlocal buf_item, buf_clase
         if buf_parrafos and buf_item is not None:
             merged = dict(buf_item)
             merged["contenido"] = "\n\n".join(t for t, _ in buf_parrafos)
-            merged["clasificacion"] = "Cuerpo"
+            merged["clasificacion"] = buf_clase or "Cuerpo"
             fusionados.append(merged)
         buf_parrafos.clear()
         buf_item = None
+        buf_clase = None
 
     for item in bloques_clean:
         cls  = item["clasificacion"]
         pnum = item.get("pnum", 0)
 
-        if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla"):
+        if cls == "Ignorar" and item.get("imagen"):
+            # Ícono decorativo incrustado en medio de una línea de texto
+            # (p. ej. los íconos ORCID junto a cada autor): se conserva en
+            # la lista para que se vea/edite si hace falta, pero NO corta
+            # la fusión del texto que sigue — si lo hiciera, "Autor A" e
+            # "ícono" e "Autor B" quedarían como 3 fragmentos sueltos en vez
+            # de una sola línea de autores.
             fusionados.append(item)
             continue
 
-        if cls in NO_FUSIONAR:
+        if cls in ("Imagen", "Ignorar", "Pie de figura", "Título tabla"):
             _vaciar()
             fusionados.append(item)
-        elif cls == "Subencabezado-bajo":
-            if buf_item is None:
-                buf_item = item
+            continue
+
+        if cls not in FUSIONABLES and cls != "Subencabezado-bajo":
+            _vaciar()
+            fusionados.append(item)
+            continue
+
+        # "Subencabezado-bajo" solo tiene sentido incrustado dentro de un
+        # bloque de Cuerpo (ver marcador "§SUB§" más abajo); si el buffer
+        # vigente es de otra clase fusionable (Referencia/Filiación/Cuerpo
+        # del abstract), primero se cierra ese buffer antes de arrancar uno
+        # de Cuerpo nuevo.
+        clase_efectiva = "Cuerpo" if cls == "Subencabezado-bajo" else cls
+
+        if clase_efectiva != buf_clase:
+            _vaciar()
+            buf_item = item
+            buf_clase = clase_efectiva
+
+        if cls == "Subencabezado-bajo":
             buf_parrafos.append(("§SUB§" + item["contenido"], pnum))
-        else:
-            if buf_item is None:
-                buf_item = item
-            txt_nuevo = item["contenido"]
-            if buf_parrafos:
-                ultimo_txt, ultimo_pnum = buf_parrafos[-1]
-                if ultimo_txt.startswith("§SUB§"):
-                    buf_parrafos.append((txt_nuevo, pnum))
-                elif _es_continuacion(ultimo_txt, txt_nuevo, ultimo_pnum, pnum):
-                    t = ultimo_txt.rstrip()
-                    if t.endswith("-"):
-                        buf_parrafos[-1] = (t[:-1] + txt_nuevo.lstrip(), pnum)
-                    else:
-                        buf_parrafos[-1] = (t + " " + txt_nuevo.lstrip(), pnum)
+            continue
+
+        txt_nuevo = item["contenido"]
+        if buf_parrafos:
+            ultimo_txt, ultimo_pnum = buf_parrafos[-1]
+            if ultimo_txt.startswith("§SUB§"):
+                buf_parrafos.append((txt_nuevo, pnum))
+            elif _es_continuacion(ultimo_txt, txt_nuevo, ultimo_pnum, pnum):
+                t = ultimo_txt.rstrip()
+                if t.endswith("-"):
+                    buf_parrafos[-1] = (t[:-1] + txt_nuevo.lstrip(), pnum)
                 else:
-                    buf_parrafos.append((txt_nuevo, pnum))
+                    buf_parrafos[-1] = (t + " " + txt_nuevo.lstrip(), pnum)
             else:
                 buf_parrafos.append((txt_nuevo, pnum))
+        else:
+            buf_parrafos.append((txt_nuevo, pnum))
 
     _vaciar()
     bloques_utiles = fusionados

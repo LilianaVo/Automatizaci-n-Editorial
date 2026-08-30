@@ -1357,15 +1357,25 @@ html, body {
 }
 .ctx-menu-item svg { flex-shrink: 0; }
 
-/* Color de borde izquierdo según clasificación — tonos sepia/tierra */
-.bloque-item[data-clase="Título principal"]   { border-left: 3px solid #3D2B14; }
-.bloque-item[data-clase="Título secundario"]  { border-left: 3px solid #6B4C2A; }
-.bloque-item[data-clase="Encabezado sección"] { border-left: 3px solid #4A6741; }
-.bloque-item[data-clase="Subencabezado"]      { border-left: 3px solid #4A7C59; }
-.bloque-item[data-clase="Cuerpo"]             { border-left: 3px solid #C4A882; }
-.bloque-item[data-clase="Referencia"]         { border-left: 3px solid #7A6A5A; }
-.bloque-item[data-clase="Cómo citar"]         { border-left: 3px solid #8B6B20; }
-.bloque-item[data-clase="Ignorar"]            { border-left: 3px solid #8B3A3A; opacity: .5; }
+/* Color de borde izquierdo según clasificación — mismos hex que
+   COLOR_POR_CLASE en core/constans.py (así coincide con la leyenda).
+   Antes tenía una paleta sepia distinta y solo cubría 8 de las 16 clases. */
+.bloque-item[data-clase="Título principal"]    { border-left: 3px solid #1a237e; }
+.bloque-item[data-clase="Título secundario"]   { border-left: 3px solid #283593; }
+.bloque-item[data-clase="Encabezado sección"]  { border-left: 3px solid #0277bd; }
+.bloque-item[data-clase="Subencabezado"]       { border-left: 3px solid #00695c; }
+.bloque-item[data-clase="Subencabezado-bajo"]  { border-left: 3px solid #00796b; }
+.bloque-item[data-clase="Cuerpo"]              { border-left: 3px solid #212121; }
+.bloque-item[data-clase="Cuerpo del abstract"] { border-left: 3px solid #455a64; }
+.bloque-item[data-clase="Palabras clave"]      { border-left: 3px solid #6a1b9a; }
+.bloque-item[data-clase="Referencia"]          { border-left: 3px solid #424242; }
+.bloque-item[data-clase="Cómo citar"]          { border-left: 3px solid #e65100; }
+.bloque-item[data-clase="Fecha manuscrito"]    { border-left: 3px solid #bf360c; }
+.bloque-item[data-clase="Título tabla"]        { border-left: 3px solid #1565c0; }
+.bloque-item[data-clase="Pie de figura"]       { border-left: 3px solid #558b2f; }
+.bloque-item[data-clase="Filiación"]           { border-left: 3px solid #2e7d32; }
+.bloque-item[data-clase="Email / Metadatos"]   { border-left: 3px solid #388e3c; }
+.bloque-item[data-clase="Ignorar"]             { border-left: 3px solid #c62828; opacity: .5; }
 
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1922,6 +1932,41 @@ html, body {
   font-size: 11px;
 }
 
+.refs-hint-apa {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.refs-hint-apa code {
+  display: block;
+  margin: 4px 0;
+  white-space: normal;
+  font-size: 11px;
+}
+
+.refs-hint-ia {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  flex-wrap: wrap;
+}
+
+.refs-hint-ia span {
+  flex: 1;
+  min-width: 220px;
+  color: var(--text-sub);
+}
+
+.refs-hint-ia .btn-sm {
+  white-space: nowrap;
+}
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    BADGES y COUNTERS
@@ -1947,6 +1992,12 @@ html, body {
   padding: 4px 12px;
   border-radius: 100px;
   border: 1px solid var(--border);
+}
+
+.counter-badge--warn {
+  color: var(--danger);
+  background: var(--danger-light);
+  border-color: var(--danger);
 }
 
 /* Filtro */
@@ -2535,6 +2586,22 @@ html, body {
   height: 100%;
   border: none;
   background: white;
+}
+
+.preview-xml {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 20px 24px;
+  overflow: auto;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  box-sizing: border-box;
 }
 
 /* Botón Vista previa — estilo distinto al de exportar */

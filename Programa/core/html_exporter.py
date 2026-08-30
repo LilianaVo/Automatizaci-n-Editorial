@@ -34,6 +34,15 @@ from core.utils import (
 
 # ─── Helpers internos ────────────────────────────────────────────────────────
 
+def _email_duplicado_en_afiliaciones(bloque_texto: str, afiliaciones_txt: str) -> bool:
+    """True si el correo que trae bloque_texto (el detectado en el PDF) ya
+    aparece, literal, dentro del texto de afiliaciones cargado a mano."""
+    m = re.search(r"[\w.\-]+@[\w\-.]+\.\w{2,}", bloque_texto or "")
+    if not m:
+        return False
+    return m.group(0).lower() in (afiliaciones_txt or "").lower()
+
+
 def _afil_a_html(txt: str) -> str:
     """Convierte líneas de afiliaciones a HTML con superíndices."""
     html_lineas = []
@@ -289,7 +298,26 @@ def build_html(
     for i, b in enumerate(bloques):
         cls = b["clasificacion"]
         if i in zona_autores_pdf:
-            continue
+            # Esta zona (entre el título y "Resumen") solo se salta si hay
+            # un reemplazo manual cargado para lo que había ahí. Antes se
+            # saltaba TODO el rango sin importar la clase, así que si no
+            # se había cargado nada a mano, la Filiación detectada
+            # automáticamente (que ahora sí sale limpia) desaparecía sin
+            # dejar nada en su lugar.
+            if cls in ("Cuerpo", "Normal", "Autores") and autores_orcid:
+                continue
+            if cls == "Filiación" and afiliaciones_txt:
+                continue
+            if (
+                cls == "Email / Metadatos" and afiliaciones_txt
+                and _email_duplicado_en_afiliaciones(b["contenido"], afiliaciones_txt)
+            ):
+                # Evita el correo duplicado cuando ya lo escribiste a mano
+                # dentro del texto de Afiliaciones (caso típico: "* correo@
+                # ..." pegado debajo de las filiaciones). Si el correo
+                # detectado del PDF NO está en tu texto manual, se sigue
+                # mostrando — así nunca desaparece un correo real.
+                continue
         dentro_de_refs = idx_refs_start is not None and i > idx_refs_start
 
         if cls == "Cómo citar":
@@ -445,7 +473,12 @@ def build_html(
             if en_refs and refs_a_usar:
                 lineas.append('<ol class="referencias">')
                 for ref in refs_a_usar:
-                    lineas.append(f"  <li>{esc(ref)}</li>")
+                    # Mismo motivo que en el bloque "Referencia" del PDF: si
+                    # el usuario ya numeró a mano ("1. Autor, A. ..."), se le
+                    # saca el número acá — el <ol> ya numera solo, y así no
+                    # queda "1. 1. Autor...".
+                    ref_limpio = re.sub(r"^\d+[\.\)]\s*", "", esc(ref))
+                    lineas.append(f"  <li>{ref_limpio}</li>")
                 lineas.append("</ol>")
 
         elif cls == "Subencabezado":
@@ -520,10 +553,23 @@ def build_html(
                     )
 
         elif cls == "Referencia":
-            lineas.append(
-                f'<p style="padding-left:1.5em;text-indent:-1.5em;font-size:10pt;">'
-                f'{texto}</p>'
-            )
+            # Antes cada bloque "Referencia" era un fragmento crudo de
+            # PyMuPDF y por eso un <p> por bloque se veía bien. Ahora que
+            # pdf_processor.py fusiona todo el texto de referencias en un
+            # solo bloque, hay que partirlo acá para no volcar todo junto
+            # en un único <p>: cada línea no vacía del bloque se convierte
+            # en su propio <li>. Si el usuario ya numeró manualmente las
+            # referencias ("1. Autor, A. ..."), se le saca el número al
+            # renderizar porque el <ol> ya numera solo (si no, quedaría
+            # "1. 1. Autor...").
+            entradas = [l.strip() for l in texto.split("\n") if l.strip()]
+            if not entradas and texto.strip():
+                entradas = [texto.strip()]
+            lineas.append('<ol class="referencias">')
+            for entrada in entradas:
+                entrada = re.sub(r"^\d+[\.\)]\s*", "", entrada)
+                lineas.append(f"  <li>{entrada}</li>")
+            lineas.append("</ol>")
 
         elif cls == "Título tabla":
             pass  # las tablas se inyectan por ancla más abajo
