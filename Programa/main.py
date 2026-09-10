@@ -38,7 +38,7 @@ class AppAPI:
 
     def abrir_pdf(self) -> str | None:
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=("Archivos PDF (*.pdf)",),
         )
@@ -47,7 +47,7 @@ class AppAPI:
     def abrir_documento(self) -> str | None:
         """RF-02 — Selector de artículo: PDF o Word (.docx) en un solo diálogo."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=(
                 "Artículo (*.pdf;*.docx)",
@@ -59,7 +59,7 @@ class AppAPI:
 
     def guardar_html(self) -> str | None:
         ruta = webview.windows[0].create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename="articulo.html",
             file_types=("Archivo HTML (*.html)",),
         )
@@ -67,7 +67,7 @@ class AppAPI:
 
     def guardar_xml(self) -> str | None:
         ruta = webview.windows[0].create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename="articulo.xml",
             file_types=("Archivo XML (*.xml)",),
         )
@@ -75,7 +75,7 @@ class AppAPI:
 
     def guardar_epub(self) -> str | None:
         ruta = webview.windows[0].create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename="articulo.epub",
             file_types=("Archivo EPUB (*.epub)",),
         )
@@ -84,7 +84,7 @@ class AppAPI:
     def abrir_excel(self) -> str | None:
         """Un solo Excel (autores)."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=("Archivo Excel (*.xlsx;*.xls)",),
         )
@@ -93,7 +93,7 @@ class AppAPI:
     def abrir_excels_multiples(self) -> list[str]:
         """Múltiples Excel (tablas)."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=True,
             file_types=("Archivo Excel (*.xlsx;*.xls)",),
         )
@@ -102,7 +102,7 @@ class AppAPI:
     def abrir_txt(self) -> str | None:
         """Archivo .txt (afiliaciones o referencias)."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=("Archivo de texto (*.txt)",),
         )
@@ -111,7 +111,7 @@ class AppAPI:
     def abrir_imagenes(self) -> list[str]:
         """Múltiples imágenes (figuras)."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=True,
             file_types=("Imágenes (*.jpg;*.jpeg;*.png;*.gif;*.webp;*.bmp)",),
         )
@@ -120,7 +120,7 @@ class AppAPI:
     def abrir_pmz(self) -> str | None:
         """Abrir un proyecto del Editor Semántico (.pmz)."""
         rutas = webview.windows[0].create_file_dialog(
-            webview.OPEN_DIALOG,
+            webview.FileDialog.OPEN,
             allow_multiple=False,
             file_types=("Proyecto Editor Semántico (*.pmz)",),
         )
@@ -129,7 +129,7 @@ class AppAPI:
     def guardar_pmz(self, nombre_sugerido: str = "proyecto.pmz") -> str | None:
         """Guardar el proyecto actual como .pmz."""
         ruta = webview.windows[0].create_file_dialog(
-            webview.SAVE_DIALOG,
+            webview.FileDialog.SAVE,
             save_filename=nombre_sugerido or "proyecto.pmz",
             file_types=("Proyecto Editor Semántico (*.pmz)",),
         )
@@ -138,7 +138,7 @@ class AppAPI:
     def seleccionar_carpeta(self) -> str | None:
         """Abre diálogo para elegir carpeta de salida predeterminada."""
         resultado = webview.windows[0].create_file_dialog(
-            webview.FOLDER_DIALOG,
+            webview.FileDialog.FOLDER,
         )
         if resultado:
             return resultado[0] if isinstance(resultado, (list, tuple)) else resultado
