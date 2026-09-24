@@ -1206,46 +1206,174 @@ const App = {
 
   // ── Dividir bloque desde selección de texto ────────────────────────────
 
+  // Al seleccionar texto dentro de un bloque, muestra la barra flotante con las
+  // etiquetas inline (bold, italic, sup, sub, sc, xref…) + "Hacer bloque".
   _onSeleccionTexto(idx, textareaEl) {
     const inicio = textareaEl.selectionStart;
     const fin    = textareaEl.selectionEnd;
     const hayTexto = fin > inicio && textareaEl.value.slice(inicio, fin).trim().length > 0;
 
-    let boton = $("btn-flotante-dividir");
+    if (!hayTexto) { App._ocultarSelToolbar(); return; }
 
-    if (!hayTexto) {
-      if (boton) boton.style.display = "none";
+    // Guardamos idx + textarea + offsets: al abrir el formulario de atributos
+    // (xref) el textarea pierde la selección, así que usamos estos offsets.
+    App._selCtx = { idx, ta: textareaEl, ini: inicio, fin };
+
+    let tb = $("sel-toolbar");
+    if (!tb) {
+      tb = document.createElement("div");
+      tb.id = "sel-toolbar";
+      tb.className = "sel-toolbar";
+      document.body.appendChild(tb);
+    }
+    tb.innerHTML = App._toolbarInlineHTML(idx);
+    tb.style.display = "flex";
+    tb.style.position = "fixed";
+    const rect = textareaEl.getBoundingClientRect();
+    tb.style.top  = `${Math.max(8, rect.top - 40)}px`;
+    const maxLeft = window.innerWidth - tb.offsetWidth - 8;
+    tb.style.left = `${Math.max(8, Math.min(rect.left + 8, maxLeft))}px`;
+  },
+
+  // Etiquetas inline disponibles en la barra (solo las que existen en el catálogo).
+  _toolbarInlineHTML(idx) {
+    const defs = [
+      { t: "italic",       lbl: "<i>I</i>",          tit: "Itálica" },
+      { t: "bold",         lbl: "<b>B</b>",          tit: "Negrita" },
+      { t: "sup",          lbl: "x<sup>2</sup>",     tit: "Superíndice" },
+      { t: "sub",          lbl: "x<sub>2</sub>",     tit: "Subíndice" },
+      { t: "sc",           lbl: "S<span style='font-size:9px'>C</span>", tit: "Versalitas" },
+      { t: "namedcontent", lbl: "nc",                tit: "Contenido nombrado" },
+      { t: "xref",         lbl: "xref",              tit: "Referencia cruzada" },
+    ];
+    let html = defs
+      .filter(d => (State._spsMeta && State._spsMeta[d.t] && State._spsMeta[d.t].inline))
+      .map(d => `<button class="sel-tag" title="${d.tit}  [${d.t}]"
+                   onmousedown="event.preventDefault()"
+                   onclick="App._aplicarInline('${d.t}')">${d.lbl}</button>`)
+      .join("");
+    html += `<span class="sel-sep"></span>`;
+    html += `<button class="sel-split" title="Crear un bloque nuevo con la selección"
+               onmousedown="event.preventDefault()"
+               onclick="App._dividirBloqueDesdeSeleccion(${idx}, App._selCtx.ta)">✂ Hacer bloque</button>`;
+    return html;
+  },
+
+  // Decide: envolver directo (sin atributos) o pedir atributos (xref, namedcontent).
+  _aplicarInline(tag) {
+    const spec = ((State._spsMeta && State._spsMeta[tag]) || {}).attrs || {};
+    if (Object.keys(spec).length === 0) App._envolverSeleccion(tag, {});
+    else App._formAtributosInline(tag, spec);
+  },
+
+  // Formulario emergente para los atributos de una etiqueta inline (p. ej. xref:
+  // ref-type + rid). Reutiliza los vocabularios del catálogo.
+  _formAtributosInline(tag, spec) {
+    let f = $("sel-attrform");
+    if (f) f.remove();
+    f = document.createElement("div");
+    f.id = "sel-attrform";
+    f.className = "sel-attrform";
+    let html = `<div class="sel-attrform-tit">Atributos de <code>[${esc(tag)}]</code></div><div class="sel-attrform-grid">`;
+    Object.keys(spec).forEach(a => {
+      const s = spec[a] || {};
+      const req = s.req ? `<span class="req" title="obligatorio">*</span>` : "";
+      let ctrl;
+      if (Array.isArray(s.valores) && s.valores.length) {
+        ctrl = `<select data-attr="${esc(a)}"><option value=""></option>` +
+          s.valores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("") + `</select>`;
+      } else {
+        ctrl = `<input type="text" data-attr="${esc(a)}" placeholder="(texto)">`;
+      }
+      html += `<label>${esc(a)}${req}</label><div>${ctrl}</div>`;
+    });
+    html += `</div><div class="sel-attrform-acc">
+      <button class="btn-sm btn-secondary" onmousedown="event.preventDefault()" onclick="App._ocultarSelToolbar()">Cancelar</button>
+      <button class="btn-sm btn-primary" onmousedown="event.preventDefault()" onclick="App._aplicarInlineForm('${esc(tag)}')">Aplicar</button>
+    </div>`;
+    f.innerHTML = html;
+    document.body.appendChild(f);
+
+    // Default cómodo: xref suele ser a bibliografía.
+    const selRt = f.querySelector('[data-attr="ref-type"]');
+    if (selRt && Array.from(selRt.options).some(o => o.value === "bibr")) selRt.value = "bibr";
+
+    const tb = $("sel-toolbar");
+    const r = (tb && tb.style.display !== "none") ? tb.getBoundingClientRect()
+                                                  : App._selCtx.ta.getBoundingClientRect();
+    f.style.position = "fixed";
+    f.style.top  = `${r.bottom + 4}px`;
+    const maxLeft = window.innerWidth - f.offsetWidth - 8;
+    f.style.left = `${Math.max(8, Math.min(r.left, maxLeft))}px`;
+  },
+
+  _aplicarInlineForm(tag) {
+    const f = $("sel-attrform");
+    if (!f) return;
+    const attrs = {};
+    f.querySelectorAll("[data-attr]").forEach(el => {
+      const v = (el.value || "").trim();
+      if (v) attrs[el.dataset.attr] = v;
+    });
+    const spec = ((State._spsMeta && State._spsMeta[tag]) || {}).attrs || {};
+    const faltan = Object.keys(spec).filter(a => spec[a].req && !attrs[a]);
+    if (faltan.length) { showToast("Faltan atributos obligatorios: " + faltan.join(", "), 3000); return; }
+    App._envolverSeleccion(tag, attrs);
+  },
+
+  // Envuelve la selección guardada con [tag ...]…[/tag] dentro del contenido del bloque.
+  async _envolverSeleccion(tag, attrs) {
+    const ctx = App._selCtx;
+    if (!ctx) return;
+    const ta = ctx.ta, idx = ctx.idx;
+    const ini = ctx.ini, fin = ctx.fin;
+    const val = ta.value;
+    if (!(fin > ini) || !val.slice(ini, fin).trim()) {
+      showToast("Selecciona primero el texto a etiquetar");
       return;
     }
+    let attrStr = "";
+    Object.keys(attrs).forEach(k => {
+      const v = (attrs[k] || "").trim();
+      if (v) attrStr += ` ${k}="${v}"`;
+    });
+    const abre = `[${tag}${attrStr}]`, cierra = `[/${tag}]`;
+    const sel = val.slice(ini, fin);
+    const nuevo = val.slice(0, ini) + abre + sel + cierra + val.slice(fin);
 
-    if (!boton) {
-      boton = document.createElement("button");
-      boton.id = "btn-flotante-dividir";
-      boton.className = "btn-flotante-dividir";
-      boton.textContent = "✂ Hacer bloque desde selección";
-      document.body.appendChild(boton);
-    }
+    ta.value = nuevo;
+    const b = State.bloques.find(x => x.id === idx);
+    if (b) b.contenido = nuevo;
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+    App._ocultarSelToolbar();
 
-    boton.dataset.idx = idx;
-    boton.onclick = () => App._dividirBloqueDesdeSeleccion(idx, textareaEl);
+    try { await API.patch(`/api/bloques/${idx}`, { idx, contenido: nuevo }); }
+    catch (_) {}
+    if (State.seccionActiva === "etiquetas") App._cargarMarkup();
 
-    const rect = textareaEl.getBoundingClientRect();
-    boton.style.display = "block";
-    boton.style.position = "fixed";
-    boton.style.top  = `${rect.top - 36}px`;
-    boton.style.left = `${rect.left + 8}px`;
+    const pos = ini + abre.length + sel.length + cierra.length;
+    ta.focus();
+    ta.setSelectionRange(pos, pos);
+  },
+
+  _ocultarSelToolbar() {
+    const tb = $("sel-toolbar");
+    if (tb) tb.style.display = "none";
+    const f = $("sel-attrform");
+    if (f) f.remove();
   },
 
   async _dividirBloqueDesdeSeleccion(idx, textareaEl) {
-    const inicio = textareaEl.selectionStart;
-    const fin    = textareaEl.selectionEnd;
+    const ctx = App._selCtx;
+    const inicio = (ctx && ctx.ta === textareaEl) ? ctx.ini : textareaEl.selectionStart;
+    const fin    = (ctx && ctx.ta === textareaEl) ? ctx.fin : textareaEl.selectionEnd;
     const completo = textareaEl.value;
 
     const texto_nuevo        = completo.slice(inicio, fin).trim();
     const contenido_restante = (completo.slice(0, inicio) + completo.slice(fin)).trim();
 
-    const boton = $("btn-flotante-dividir");
-    if (boton) boton.style.display = "none";
+    App._ocultarSelToolbar();
 
     if (!texto_nuevo) return;
 
@@ -2883,16 +3011,17 @@ App._mostrarCarpeta = (ruta) => {
 // Inicializar tema antes de que cargue el resto para evitar flash
 Tema.init();
 
-// Ocultar el botón flotante de "dividir bloque" si se hace clic fuera de él
-// y fuera de cualquier textarea de bloque.
+// Ocultar la barra flotante de selección (etiquetas inline / "hacer bloque")
+// al hacer clic fuera de ella, de su formulario de atributos y de los textarea.
 document.addEventListener("mousedown", (e) => {
-  const boton = document.getElementById("btn-flotante-dividir");
-  if (!boton || boton.style.display === "none") return;
-  const dentroDeTextarea = e.target.classList?.contains("bloque-texto");
-  const esElBoton = e.target === boton;
-  if (!dentroDeTextarea && !esElBoton) {
-    boton.style.display = "none";
-  }
+  const tb = document.getElementById("sel-toolbar");
+  const f  = document.getElementById("sel-attrform");
+  const visible = (tb && tb.style.display !== "none") || f;
+  if (!visible) return;
+  const dentroTA = e.target.classList?.contains("bloque-texto");
+  const dentroTB = tb && tb.contains(e.target);
+  const dentroF  = f && f.contains(e.target);
+  if (!dentroTA && !dentroTB && !dentroF) App._ocultarSelToolbar();
 });
 
 // Exponer App en window para que main.py (evaluate_js) pueda invocarlo:
