@@ -383,7 +383,39 @@ html, body {
   background: var(--sepia-cream);
   border-bottom: 1px solid var(--border);
 }
-.sps-picker-title { font-weight: 600; color: var(--text-main); margin-right: auto; }
+.sps-picker-title { font-weight: 600; color: var(--text-main); }
+.sps-picker-hint {
+  margin-left: 10px;
+  margin-right: auto;
+  font-size: 10.5px;
+  font-style: italic;
+  color: var(--text-light);
+}
+/* Barra de acciones: explorar sin aplicar; se confirma con "Aceptar y cambiar" */
+.sps-picker-acc {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  background: var(--sepia-cream);
+}
+.sps-picker-acc-sp { flex: 1 1 auto; }
+.sps-picker-cancel,
+.sps-picker-ok {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 13px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid var(--border);
+}
+.sps-picker-cancel { background: var(--sepia-white); color: var(--text-sub); }
+.sps-picker-cancel:hover { border-color: var(--sepia-mid); color: var(--text-main); }
+.sps-picker-ok { background: var(--navy); color: var(--text-white); border-color: var(--navy); }
+.sps-picker-ok:hover { background: var(--navy-hover, #26324a); }
 .sps-picker-auto {
   font-size: 11px;
   padding: 2px 9px;
@@ -523,7 +555,8 @@ html, body {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--sepia-dark);
-  white-space: pre;
+  white-space: pre-wrap;      /* respeta saltos de línea pero ajusta al ancho */
+  overflow-wrap: anywhere;    /* parte tokens largos para que no se desborden */
   tab-size: 2;
 }
 
@@ -614,6 +647,23 @@ html, body {
   color: var(--text-sub);
   margin-right: 2px;
 }
+
+/* Botones Deshacer/Rehacer en la barra superior (globales para todas las pestañas) */
+.btn-topbar-hist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, opacity .15s;
+}
+.btn-topbar-hist:hover:not(:disabled) { background: var(--navy); color: var(--text-white); border-color: var(--navy); }
+.btn-topbar-hist:disabled { opacity: .38; cursor: default; }
 
 .btn-export {
   display: flex;
@@ -1556,6 +1606,22 @@ html, body {
   transition: background .13s, color .13s, border-color .13s;
   flex-shrink: 0;
 }
+.btn-hist {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border-2);
+  background: var(--surface);
+  color: var(--text-sub);
+  cursor: pointer;
+  transition: background .13s, color .13s, border-color .13s, opacity .13s;
+  flex-shrink: 0;
+}
+.btn-hist:hover:not(:disabled) { background: var(--navy); color: var(--text-white); border-color: var(--navy); }
+.btn-hist:disabled { opacity: .4; cursor: default; }
+
 .btn-agregar-bloque:hover {
   background: var(--navy);
   color: var(--text-white);

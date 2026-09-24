@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import re
 import sys
+import copy
+import time
 import uuid
 import shutil
 import tempfile
@@ -58,6 +60,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Historial Undo/Redo — captura automática de estado antes de cada mutación ─
+# Toma una instantánea del contenido ANTES de correr el handler y, si la petición
+# cambió algo, la apila para deshacer. Cubre TODAS las pestañas (bloques, tablas,
+# autores, referencias, figuras, metadatos, afiliaciones) sin tocar cada endpoint.
+@app.middleware("http")
+async def _historial_middleware(request, call_next):
+    p = request.url.path
+    vigilar = (request.method in ("POST", "PUT", "PATCH", "DELETE")
+               and any(p.startswith(pre) for pre in _HIST_PREFIJOS))
+    antes = _captura_estado() if vigilar else None
+    resp = await call_next(request)
+    try:
+        if antes is not None and 200 <= resp.status_code < 300 and _captura_estado() != antes:
+            _push_undo(antes)
+    except Exception:
+        pass
+    return resp
 
 # ── Directorio de static (HTML/CSS/JS) ───────────────────────────────────────
 BASE_DIR = Path(__file__).parent
@@ -112,6 +132,55 @@ _proyectos: dict[str, dict[str, Any]] = {}    # id -> estado
 _orden:     list[str] = []                     # orden de las pestañas (izq→der)
 _activo:    str = ""                            # id del proyecto activo
 _estado:    dict[str, Any] = _nuevo_estado()   # apunta a _proyectos[_activo]
+
+# ── Historial Undo/Redo (por proyecto; NO se persiste en el .pmz) ────────────
+# Cubre TODAS las pestañas: se toma una instantánea (deepcopy) de las claves de
+# CONTENIDO de _estado antes de cada mutación (vía middleware) y se puede
+# restaurar con undo/redo. El historial vive fuera de _estado (dict de módulo por
+# proyecto) para no tocar la serialización del .pmz.
+_MAX_HIST = 60
+_CLAVES_HIST = ("bloques", "referencias_externas", "figuras_manuales",
+                "tablas_manuales", "autores_orcid", "afiliaciones_txt", "metadatos")
+# Prefijos de endpoints cuyo POST/PUT/PATCH/DELETE participa del historial.
+_HIST_PREFIJOS = ("/api/bloques", "/api/autores", "/api/afiliaciones",
+                  "/api/referencias", "/api/figuras", "/api/tablas", "/api/metadatos")
+_historial: dict[str, dict[str, list]] = {}    # pid -> {"undo":[...], "redo":[...], "_ts":float}
+
+def _hist() -> dict:
+    return _historial.setdefault(_activo or "__default__",
+                                 {"undo": [], "redo": [], "_ts": 0.0})
+
+def _captura_estado() -> dict:
+    """Instantánea (deepcopy) de las claves de contenido de _estado."""
+    return {k: copy.deepcopy(_estado.get(k)) for k in _CLAVES_HIST}
+
+def _restaurar_estado(snap: dict) -> None:
+    for k, v in snap.items():
+        _estado[k] = copy.deepcopy(v)
+    for i, b in enumerate(_estado.get("bloques") or []):   # ids de bloque = posición
+        if isinstance(b, dict):
+            b["id"] = i
+
+def _push_undo(snapshot: dict) -> None:
+    """Apila una instantánea para deshacer. Coalesce ráfagas (<0.7 s) en un solo
+    paso (p. ej. las 3 peticiones de un mismo 'Aceptar y cambiar')."""
+    h = _hist()
+    ahora = time.monotonic()
+    if h["undo"] and (ahora - h.get("_ts", 0.0)) < 0.7:
+        h["_ts"] = ahora
+        return
+    h["undo"].append(snapshot)
+    if len(h["undo"]) > _MAX_HIST:
+        h["undo"].pop(0)
+    h["redo"].clear()
+    h["_ts"] = ahora
+
+def _reset_historial() -> None:
+    """Limpia el historial del proyecto activo (p. ej. al cargar un documento nuevo)."""
+    h = _hist()
+    h["undo"].clear()
+    h["redo"].clear()
+    h["_ts"] = 0.0
 
 # RF-42: configuración de la revista — global, NO por-proyecto. Nombre,
 # abreviatura, editorial, ISSN y licencia se aplican a todos los artículos
@@ -284,6 +353,7 @@ async def cargar_pdf(file: UploadFile = File(...)):
         })
 
     _estado["bloques"]              = bloques_ui
+    _reset_historial()   # documento nuevo → historial de deshacer limpio
     _estado["figuras_manuales"]     = resultado.get("figuras", [])
     _estado["tablas_manuales"]      = resultado.get("tablas", [])
     _estado["referencias_externas"] = []
@@ -327,6 +397,7 @@ def limpiar_pdf():
     _estado["fig_dir"]          = None
     _estado["pdf_info"]         = {}
     _estado["metadatos"]        = {}
+    _reset_historial()
     return {"ok": True}
 
 
@@ -365,6 +436,7 @@ def cargar_pdf_por_ruta(payload: RutaPDFPayload):
 
     tam = os.path.getsize(ruta)
     _estado["bloques"]              = bloques_ui
+    _reset_historial()   # documento nuevo → historial de deshacer limpio
     _estado["figuras_manuales"]     = resultado.get("figuras", [])
     _estado["tablas_manuales"]      = resultado.get("tablas", [])
     _estado["referencias_externas"] = []
@@ -413,6 +485,7 @@ def _volcar_resultado_carga(resultado: dict, nombre: str, tamanio_str: str,
         })
 
     _estado["bloques"]              = bloques_ui
+    _reset_historial()   # documento nuevo → historial de deshacer limpio
     _estado["figuras_manuales"]     = resultado.get("figuras", [])
     _estado["tablas_manuales"]      = resultado.get("tablas", [])
     _estado["referencias_externas"] = []
@@ -625,12 +698,60 @@ def eliminar_bloque(idx: int):
     """
     if idx < 0 or idx >= len(_estado["bloques"]):
         raise HTTPException(status_code=404, detail="Bloque no encontrado")
-
     _estado["bloques"].pop(idx)
     for nuevo_idx, b in enumerate(_estado["bloques"]):
         b["id"] = nuevo_idx
 
     return {"ok": True, "bloques": _estado["bloques"]}
+
+
+class MoverBloque(BaseModel):
+    idx: int       # posición actual del bloque
+    destino: int   # posición destino (en la lista SIN el bloque movido)
+
+
+@app.post("/api/bloques/mover")
+def mover_bloque(datos: MoverBloque):
+    """Mueve un bloque a otra posición de la lista y reasigna los ids (== índice).
+    Reubica un bloque en la zona SPS que le corresponde tras reclasificarlo."""
+    n = len(_estado["bloques"])
+    if not (0 <= datos.idx < n):
+        raise HTTPException(status_code=404, detail="Bloque no encontrado")
+    b = _estado["bloques"].pop(datos.idx)
+    destino = max(0, min(datos.destino, len(_estado["bloques"])))
+    _estado["bloques"].insert(destino, b)
+    for nuevo_idx, blk in enumerate(_estado["bloques"]):
+        blk["id"] = nuevo_idx
+    return {"ok": True, "bloques": _estado["bloques"]}
+
+
+@app.get("/api/historial/estado")
+def historial_estado():
+    h = _hist()
+    return {"puede_undo": bool(h["undo"]), "puede_redo": bool(h["redo"])}
+
+
+@app.post("/api/undo")
+def undo_bloques():
+    """Deshace la última mutación (restaura la instantánea anterior de TODO el
+    contenido: bloques, tablas, autores, referencias, figuras, metadatos…)."""
+    h = _hist()
+    if not h["undo"]:
+        return {"ok": False, "puede_undo": False, "puede_redo": bool(h["redo"])}
+    h["redo"].append(_captura_estado())
+    _restaurar_estado(h["undo"].pop())
+    return {"ok": True, "puede_undo": bool(h["undo"]), "puede_redo": bool(h["redo"])}
+
+
+@app.post("/api/redo")
+def redo_bloques():
+    """Rehace la mutación deshecha más reciente."""
+    h = _hist()
+    if not h["redo"]:
+        return {"ok": False, "puede_undo": bool(h["undo"]), "puede_redo": False}
+    h["undo"].append(_captura_estado())
+    _restaurar_estado(h["redo"].pop())
+    return {"ok": True, "puede_undo": bool(h["undo"]), "puede_redo": bool(h["redo"])}
 
 
 @app.post("/api/bloques/dividir")
@@ -642,7 +763,6 @@ def dividir_bloque(datos: BloqueDividir):
 
     if not datos.texto_nuevo.strip():
         raise HTTPException(status_code=400, detail="El texto seleccionado está vacío.")
-
     original = _estado["bloques"][idx]
     clasificacion_nuevo = datos.clasificacion_nuevo or original.get("clasificacion", "Cuerpo")
 
@@ -675,7 +795,6 @@ def agregar_bloque(datos: BloqueNuevo):
     """
     if not datos.contenido.strip():
         raise HTTPException(status_code=400, detail="El contenido no puede estar vacio.")
-
     clasificacion = datos.clasificacion or "Cuerpo"
 
     bloque_nuevo = {
@@ -709,7 +828,6 @@ def unir_bloques(datos: UnirBloques):
         raise HTTPException(status_code=404, detail="Bloque no encontrado")
     if a == b:
         raise HTTPException(status_code=400, detail="No puedes unir un bloque consigo mismo")
-
     bloque_a = _estado["bloques"][a]
     bloque_b = _estado["bloques"][b]
 

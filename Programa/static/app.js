@@ -71,6 +71,28 @@ function _marcarSinGuardar(path) {
   if (_esMutacion(path)) _dirty(true);
 }
 
+// Interceptor global de fetch: tras CUALQUIER mutación (POST/PUT/PATCH/DELETE a
+// /api/…), refresca el estado de los botones Deshacer/Rehacer. Se envuelve el
+// fetch nativo para cubrir también las llamadas que NO pasan por el wrapper API
+// (p. ej. tablas y figuras usan fetch directo).
+(function _instalarHistorialFetchHook() {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = async function (recurso, opciones) {
+    const resp = await _origFetch(recurso, opciones);
+    try {
+      const url = typeof recurso === "string" ? recurso : (recurso && recurso.url) || "";
+      const metodo = ((opciones && opciones.method) ||
+                      (typeof recurso === "object" && recurso && recurso.method) || "GET").toUpperCase();
+      if (resp.ok && /^(POST|PUT|PATCH|DELETE)$/.test(metodo) &&
+          url.includes("/api/") && !/\/api\/(undo|redo|historial)/.test(url) &&
+          typeof App !== "undefined" && App._refrescarHistorialUI) {
+        App._refrescarHistorialUI();
+      }
+    } catch (_) {}
+    return resp;
+  };
+})();
+
 const API = {
   async get(path) {
     const r = await fetch(path);
@@ -715,16 +737,24 @@ const App = {
     pop.innerHTML = `
       <div class="sps-picker-head">
         <span class="sps-picker-title">Etiqueta del bloque ${idx + 1}</span>
-        <button class="sps-picker-auto" title="Volver a la etiqueta automática de la clasificación">Auto</button>
-        <button class="sps-picker-x" title="Cerrar">✕</button>
+        <span class="sps-picker-hint">explora sin cambiar el bloque</span>
+        <button class="sps-picker-x" title="Cerrar sin cambiar">✕</button>
       </div>
       <div class="sps-picker-cols"></div>
       <div class="sps-picker-attrs"></div>
-      <div class="sps-picker-foot"></div>`;
+      <div class="sps-picker-foot"></div>
+      <div class="sps-picker-acc">
+        <button class="sps-picker-auto" title="Volver a la etiqueta automática de la clasificación">Auto</button>
+        <span class="sps-picker-acc-sp"></span>
+        <button class="sps-picker-cancel">Cancelar</button>
+        <button class="sps-picker-ok">Aceptar y cambiar</button>
+      </div>`;
     document.body.appendChild(pop);
 
-    pop.querySelector(".sps-picker-x").onclick = App._cerrarSelector;
-    pop.querySelector(".sps-picker-auto").onclick = () => App._selectorAuto();
+    pop.querySelector(".sps-picker-x").onclick      = App._cerrarSelector;
+    pop.querySelector(".sps-picker-auto").onclick   = () => App._selectorAuto();
+    pop.querySelector(".sps-picker-cancel").onclick = App._cerrarSelector;
+    pop.querySelector(".sps-picker-ok").onclick     = () => App._confirmarSeleccion();
 
     // Guardamos el rect del ancla para reposicionar al crecer las columnas.
     App._spsPickerCtx.anchor = anchorEl.getBoundingClientRect();
@@ -761,7 +791,9 @@ const App = {
     pop.style.top = Math.max(m, Math.min(top, vh - h - m)) + "px";
   },
 
-  // Deriva el contexto del selector desde el estado del bloque.
+  // Deriva el BORRADOR inicial del selector desde el estado del bloque. Toda la
+  // navegación posterior modifica solo este borrador (ctx); el bloque no cambia
+  // hasta pulsar "Aceptar y cambiar".
   _sincronizarCtx(b) {
     const ctx = App._spsPickerCtx;
     if (!ctx) return;
@@ -769,6 +801,7 @@ const App = {
     ctx.ancla    = (State._spsAnclas && State._spsAnclas[b.clasificacion]) || "doc";
     ctx.rutaAuto = (State._spsRutas && State._spsRutas[b.clasificacion]) || [];
     ctx.camino   = b.sps_tag ? [b.sps_tag] : ctx.rutaAuto.slice();
+    ctx.attrs    = Object.assign({}, b.sps_attrs || {});   // borrador de atributos
   },
 
   _renderColumnas() {
@@ -840,44 +873,163 @@ const App = {
     return col;
   },
 
-  // Elegir clasificación (columna 0): actualiza el bloque y re-deriva la ruta SPS.
+  // Elegir clasificación (columna 0): SOLO borrador; re-deriva ancla/ruta y limpia
+  // los atributos (etiqueta nueva). No toca el bloque.
   _pickClasif(cls) {
     const ctx = App._spsPickerCtx;
     if (!ctx) return;
-    const rowEl = document.querySelector(`.bloque-item[data-idx="${ctx.idx}"]`);
-    App._onBloqueClaseChange(ctx.idx, cls, rowEl);   // color, front/back, markup
-    App._onBloqueTagChange(ctx.idx, "");             // reset del override SPS
-    const b = State.bloques.find(x => x.id === ctx.idx);
-    App._sincronizarCtx(b);
+    ctx.clasif   = cls;
+    ctx.ancla    = (State._spsAnclas && State._spsAnclas[cls]) || "doc";
+    ctx.rutaAuto = (State._spsRutas && State._spsRutas[cls]) || [];
+    ctx.camino   = ctx.rutaAuto.slice();
+    ctx.attrs    = {};
     App._renderColumnas();
   },
 
+  // Elegir etiqueta SPS en una columna: SOLO borrador. Si cambia la etiqueta
+  // hoja, se limpian los atributos del borrador. No toca el bloque.
   _pickTag(nivel, tag) {
     const ctx = App._spsPickerCtx;
     if (!ctx) return;
+    const hojaAnt = ctx.camino[ctx.camino.length - 1];
     ctx.camino = (ctx.camino || []).slice(0, nivel);
     ctx.camino[nivel] = tag;
-    App._aplicarSeleccion(ctx.camino);
+    if (ctx.camino[ctx.camino.length - 1] !== hojaAnt) ctx.attrs = {};
     App._renderColumnas();
-  },
-
-  // Aplica el camino elegido al bloque. Si coincide exactamente con la ruta
-  // automática, se guarda como "auto" (sin override); si no, override = hoja.
-  _aplicarSeleccion(camino) {
-    const ctx = App._spsPickerCtx;
-    if (!ctx) return;
-    const auto = ctx.rutaAuto || [];
-    const esAuto = camino.length === auto.length && camino.every((t, i) => t === auto[i]);
-    const hoja = camino[camino.length - 1] || "";
-    App._onBloqueTagChange(ctx.idx, esAuto ? "" : hoja);
   },
 
   _selectorAuto() {
     const ctx = App._spsPickerCtx;
     if (!ctx) return;
     ctx.camino = (ctx.rutaAuto || []).slice();
-    App._onBloqueTagChange(ctx.idx, "");
+    ctx.attrs = {};
     App._renderColumnas();
+  },
+
+  // "Aceptar y cambiar": recién aquí se aplica el borrador al bloque
+  // (clasificación + etiqueta SPS + atributos). Si el cambio lleva el bloque a
+  // otra zona SPS, avisa antes y, al continuar, lo reubica en la lista.
+  async _confirmarSeleccion() {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    const idx = ctx.idx;
+    const b = State.bloques.find(x => x.id === idx);
+    if (!b) { App._cerrarSelector(); return; }
+    const rowEl = document.querySelector(`.bloque-item[data-idx="${idx}"]`);
+    const cambiaClase = ctx.clasif && ctx.clasif !== b.clasificacion;
+    const cambiaZona  = cambiaClase && App._zonaCambia(b.clasificacion, ctx.clasif);
+
+    if (cambiaZona) {
+      const rank = App._zonaDe(ctx.clasif);
+      const zonas = { 0: "la portada / metadatos (front)", 1: "el cuerpo del artículo", 2: "las referencias (back)" };
+      const ok = await _modalConfirmar({
+        titulo: "Mover a otra sección",
+        mensaje: `Con la etiqueta «${ctx.clasif}», en el orden SPS este bloque pasa a ${zonas[rank]}. ` +
+                 `Se reubicará también aquí, en la lista de bloques, para que ambas vistas coincidan. ¿Continuar?`,
+        btnOk: "Continuar",
+      });
+      if (!ok) return;   // cancela: no aplica nada y deja el selector abierto
+    }
+
+    if (cambiaClase) await App._onBloqueClaseChange(idx, ctx.clasif, rowEl);
+    const auto = ctx.rutaAuto || [];
+    const esAuto = ctx.camino.length === auto.length && ctx.camino.every((t, i) => t === auto[i]);
+    const hoja = ctx.camino[ctx.camino.length - 1] || "";
+    await App._onBloqueTagChange(idx, esAuto ? "" : hoja);
+    await App._onBloqueAttrsChange(idx, ctx.attrs || {});
+
+    App._cerrarSelector();
+    if (cambiaZona) await App._reubicarBloque(idx, ctx.clasif);
+    else            showToast("Etiqueta actualizada ✓");
+  },
+
+  // Zona SPS de una clasificación: 0=front (portada/metadatos), 1=cuerpo, 2=back.
+  _zonaDe(clase) {
+    const FRONT = new Set(["Título principal", "Título secundario", "Cuerpo del abstract",
+      "Resumen / Abstract", "Palabras clave", "Filiación", "Email / Metadatos",
+      "Cómo citar", "Fecha manuscrito"]);
+    const BACK = new Set(["Referencia"]);
+    if (FRONT.has(clase)) return 0;
+    if (BACK.has(clase))  return 2;
+    return 1;   // cuerpo
+  },
+  _zonaCambia(anterior, nueva) {
+    const IGN = new Set(["Ignorar", "Imagen"]);
+    if (!anterior || IGN.has(anterior) || IGN.has(nueva)) return false;
+    return App._zonaDe(anterior) !== App._zonaDe(nueva);
+  },
+
+  // Reubica el bloque al final del grupo de su zona en la lista de bloques.
+  async _reubicarBloque(idx, nuevaClase) {
+    const rank = App._zonaDe(nuevaClase);
+    const resto = State.bloques.filter(b => b.id !== idx);
+    let destino = resto.length;
+    for (let i = 0; i < resto.length; i++) {
+      if (App._zonaDe(resto[i].clasificacion) > rank) { destino = i; break; }
+    }
+    try {
+      const data = await API.post("/api/bloques/mover", { idx, destino });
+      State.bloques = data.bloques;
+      App._poblarFiltro();
+      App._renderBloques(State.bloques);
+      if (State.seccionActiva === "etiquetas") App._cargarMarkup();
+      showToast("Bloque reubicado ✓");
+    } catch (e) {
+      showToast("Error al reubicar el bloque: " + e.message, 4000);
+    }
+  },
+
+  // ── Undo / Redo (todas las pestañas) ─────────────────────────────────────
+  async _undo() {
+    try {
+      const data = await API.post("/api/undo", {});
+      if (data.ok) { await App._recargarTrasHistorial(); showToast("Deshecho ↺"); }
+      else showToast("Nada que deshacer");
+      App._aplicarHistFlags(data);
+    } catch (e) { showToast("Error al deshacer: " + e.message, 4000); }
+  },
+  async _redo() {
+    try {
+      const data = await API.post("/api/redo", {});
+      if (data.ok) { await App._recargarTrasHistorial(); showToast("Rehecho ↻"); }
+      else showToast("Nada que rehacer");
+      App._aplicarHistFlags(data);
+    } catch (e) { showToast("Error al rehacer: " + e.message, 4000); }
+  },
+
+  // Tras un undo/redo (que restaura TODO el contenido en el backend), recarga los
+  // datos de todas las pestañas en el frontend y repinta la sección activa.
+  async _recargarTrasHistorial() {
+    App._cerrarSelector();
+    try { State.bloques   = (await API.get("/api/bloques")).bloques || []; } catch (_) {}
+    try { State.metadatos = (await API.get("/api/metadatos")).metadatos || {}; } catch (_) {}
+    try { State.autores   = (await API.get("/api/autores")).autores || []; } catch (_) {}
+    try {
+      State._afilTxt = (await API.get("/api/afiliaciones")).texto || "";
+      const ta = $("afiliaciones-txt"); if (ta) ta.value = State._afilTxt;
+    } catch (_) {}
+
+    App._poblarFiltro();
+    App._renderBloques(State.bloques);
+    App._renderMetadatos();
+    App._renderAutores();
+
+    const s = State.seccionActiva;
+    if      (s === "referencias") App._cargarReferencias();
+    else if (s === "figuras")     App._cargarFiguras();
+    else if (s === "tablas")      App._cargarTablas();
+    else if (s === "etiquetas")   App._cargarMarkup();
+  },
+
+  _aplicarHistFlags(flags) {
+    State._puedeUndo = !!(flags && flags.puede_undo);
+    State._puedeRedo = !!(flags && flags.puede_redo);
+    const bu = $("btn-undo"), br = $("btn-redo");
+    if (bu) bu.disabled = !State._puedeUndo;
+    if (br) br.disabled = !State._puedeRedo;
+  },
+  async _refrescarHistorialUI() {
+    try { App._aplicarHistFlags(await API.get("/api/historial/estado")); } catch (_) {}
   },
 
   // ── Panel de atributos de la etiqueta elegida (como "Editar etiqueta" de Markup)
@@ -894,8 +1046,7 @@ const App = {
       cont.innerHTML = `<div class="sps-attrs-none">La etiqueta <code>[${esc(tag)}]</code> no tiene atributos editables.</div>`;
       return;
     }
-    const b = State.bloques.find(x => x.id === ctx.idx);
-    const actuales = (b && b.sps_attrs) || {};
+    const actuales = ctx.attrs || {};   // borrador (no el bloque)
     let html = `<div class="sps-attrs-title">Atributos de <code>[${esc(tag)}]</code></div><div class="sps-attrs-grid">`;
     nombres.forEach(a => {
       const spec = attrs[a] || {};
@@ -903,13 +1054,13 @@ const App = {
       const req = spec.req ? `<span class="req" title="requerido">*</span>` : "";
       let control;
       if (Array.isArray(spec.valores) && spec.valores.length) {
-        control = `<select data-attr="${esc(a)}" onchange="App._attrChange(${ctx.idx}, this)">` +
+        control = `<select data-attr="${esc(a)}" onchange="App._attrChange(this)">` +
           `<option value=""${val === "" ? " selected" : ""}>—</option>` +
           spec.valores.map(v => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(v)}</option>`).join("") +
           `</select>`;
       } else {
         control = `<input type="text" data-attr="${esc(a)}" value="${esc(val)}"
-                     placeholder="(texto libre)" onchange="App._attrChange(${ctx.idx}, this)">`;
+                     placeholder="(texto libre)" onchange="App._attrChange(this)">`;
       }
       html += `<label class="sps-attr-lbl">${esc(a)}${req}</label><div class="sps-attr-ctl">${control}</div>`;
     });
@@ -917,14 +1068,14 @@ const App = {
     cont.innerHTML = html;
   },
 
-  _attrChange(idx, el) {
-    const b = State.bloques.find(x => x.id === idx);
-    if (!b) return;
-    const attrs = Object.assign({}, b.sps_attrs || {});
+  // Edita el BORRADOR de atributos (ctx.attrs); se aplica al confirmar.
+  _attrChange(el) {
+    const ctx = App._spsPickerCtx;
+    if (!ctx) return;
+    if (!ctx.attrs) ctx.attrs = {};
     const name = el.dataset.attr;
     const v = (el.value || "").trim();
-    if (v === "") delete attrs[name]; else attrs[name] = v;
-    App._onBloqueAttrsChange(idx, attrs);
+    if (v === "") delete ctx.attrs[name]; else ctx.attrs[name] = v;
   },
 
   async _onBloqueAttrsChange(idx, attrs) {
@@ -2836,6 +2987,7 @@ async function init() {
 
     // 5. Mostrar sección inicial
     App.irSeccion("pdf");
+    App._refrescarHistorialUI();   // estado inicial de los botones Deshacer/Rehacer
 
     // 6. Mostrar carpeta de salida guardada (si existe)
     App._mostrarCarpeta(localStorage.getItem("carpetaSalida"));
@@ -3022,6 +3174,17 @@ document.addEventListener("mousedown", (e) => {
   const dentroTB = tb && tb.contains(e.target);
   const dentroF  = f && f.contains(e.target);
   if (!dentroTA && !dentroTB && !dentroF) App._ocultarSelToolbar();
+});
+
+// Atajos de teclado Deshacer/Rehacer (bloques). No interceptamos cuando el foco
+// está en un campo editable, para respetar el deshacer nativo del texto.
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const t = e.target;
+  if (/^(textarea|input|select)$/i.test(t.tagName) || t.isContentEditable) return;
+  const k = (e.key || "").toLowerCase();
+  if (k === "z" && !e.shiftKey)                 { e.preventDefault(); App._undo(); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); App._redo(); }
 });
 
 // Exponer App en window para que main.py (evaluate_js) pueda invocarlo:

@@ -208,6 +208,25 @@ def _construir_cuerpo(bloques: list[dict]) -> Nodo:
         if not texto or cls in _IGNORAR or cls in _FUERA_CUERPO:
             continue
 
+        # Override explícito del selector Miller: la etiqueta elegida por el
+        # usuario manda sobre la clasificación, para CUALQUIER tipo de bloque
+        # del cuerpo (no solo párrafo). Cierra el hueco de alcance de la Fase 3.
+        override = (b.get("sps_tag") or "").strip()
+        if override:
+            attrs = _merge({}, b)
+            if override in ("sec", "subsec"):
+                # Etiqueta contenedora: abre sección/subsección con el texto como título.
+                cont = _n(override, attrs, [_txt("sectitle", texto)])
+                if override == "sec":
+                    body.hijos.append(cont)
+                    sec_actual, sub_actual = cont, None
+                else:
+                    _asegurar_sec().hijos.append(cont)
+                    sub_actual = cont
+            else:
+                _contenedor().hijos.append(Nodo(override, attrs, [texto]))
+            continue
+
         if cls in _SECCION:
             sec_actual = _n("sec", _merge({}, b), [_txt("sectitle", texto)])
             body.hijos.append(sec_actual)
@@ -232,9 +251,9 @@ def _construir_cuerpo(bloques: list[dict]) -> Nodo:
             _contenedor().hijos.append(
                 _n("figgrp", _merge({"id": f"f{contador_fig}"}, b), hijos))
         else:
-            # Párrafo (o etiqueta de bloque que el usuario haya fijado a mano).
-            tag = b.get("sps_tag") or "p"
-            _contenedor().hijos.append(Nodo(tag, dict(b.get("sps_attrs") or {}), [texto]))
+            # Párrafo por defecto (sin override); puede llevar atributos propios.
+            _contenedor().hijos.append(
+                Nodo("p", dict(b.get("sps_attrs") or {}), [texto]))
         # otros (Filiación, Email, Cómo citar, Fecha manuscrito, Título principal,
         # Palabras clave, Referencia) se tratan fuera del cuerpo o se omiten aquí.
     return body
@@ -274,10 +293,13 @@ def estado_a_arbol(estado: dict) -> Nodo:
     if doi:
         doc.hijos.append(_txt("doi", doi))
 
-    # Título principal → doctitle
+    # Título principal → doctitle (o la etiqueta que el usuario haya fijado a mano).
     for b in bloques:
         if b.get("clasificacion") == "Título principal" and (b.get("contenido") or "").strip():
-            doc.hijos.append(_txt("doctitle", b["contenido"].strip(), {"language": "es"}))
+            override = (b.get("sps_tag") or "").strip()
+            tag = override or "doctitle"
+            attrs = _merge({} if override else {"language": "es"}, b)
+            doc.hijos.append(Nodo(tag, attrs, [b["contenido"].strip()]))
             break
 
     _front_autores(doc, estado)
