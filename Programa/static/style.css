@@ -1421,6 +1421,76 @@ html, body {
 .bloque-item:last-child { border-bottom: none; }
 .bloque-item:hover { background: var(--sepia-cream); }
 
+/* Tira superior: breadcrumb de la etiqueta elegida (span de todas las columnas) */
+.bloque-bc {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px 5px 52px;
+  background: var(--sepia-cream);
+  border-bottom: 1px dashed var(--border);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+.bloque-bc .bc-chip {
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bloque-bc .bc-clasif {
+  background: #EFE6D6;
+  color: var(--text-sub);
+  border: 1px solid var(--border);
+}
+.bloque-bc .bc-sps {
+  background: #E6EFE6;
+  color: #3F5F3F;
+  border: 1px solid #CBE0CB;
+  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+.bloque-bc .bc-sep { color: var(--text-light); font-weight: 700; }
+.bloque-bc .bc-vacio { color: var(--text-light); font-style: italic; }
+
+/* Tira inferior: atributos de la etiqueta (span de todas las columnas) */
+.bloque-attrs {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 12px 6px 52px;
+  background: #FBF6EC;
+  border-top: 1px dashed var(--border);
+}
+.bloque-attrs .bloque-attr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+}
+.bloque-attrs .bloque-attr > label {
+  color: var(--text-sub);
+  font-weight: 600;
+}
+.bloque-attrs .bloque-attr .req { color: #8B3A3A; margin-left: 1px; }
+.bloque-attrs .bloque-attr input,
+.bloque-attrs .bloque-attr select {
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text-main);
+  font-family: inherit;
+  outline: none;
+  max-width: 220px;
+}
+.bloque-attrs .bloque-attr input:focus,
+.bloque-attrs .bloque-attr select:focus { border-color: var(--sepia-mid); }
+
 .bloque-num {
   display: flex;
   align-items: center;

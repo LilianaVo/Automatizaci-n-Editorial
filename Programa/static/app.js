@@ -608,6 +608,7 @@ const App = {
         .join("");
 
       div.innerHTML = `
+        <div class="bloque-bc" id="bloque-bc-${idx}" title="Ruta SPS de la etiqueta elegida">${App._breadcrumbHTML(b)}</div>
         <div class="bloque-num">${idx + 1}</div>
         <textarea class="bloque-texto" id="bloque-texto-${idx}"
           oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
@@ -629,6 +630,7 @@ const App = {
           onclick="App._ignorarBloque(${idx}, this.closest('.bloque-item'))">✕</button>
         <button class="bloque-eliminar" title="Eliminar bloque por completo (no se puede deshacer)"
           onclick="App._eliminarBloque(${idx})">🗑</button>
+        ${App._bloqueAtributosHTML(idx, b)}
       `;
 
       lista.appendChild(div);
@@ -687,6 +689,77 @@ const App = {
     return `${b ? b.clasificacion : ""}  ·  ${sps}`;
   },
 
+  // Segmentos del breadcrumb de un bloque: [clasificación, ...ruta SPS]. Con
+  // override manual la ruta SPS es la etiqueta forzada; si no, la ruta automática.
+  _rutaSegmentos(b) {
+    const seg = [];
+    if (b && b.clasificacion) seg.push({ txt: b.clasificacion, tipo: "clasif" });
+    if (b && b.sps_tag) {
+      seg.push({ txt: b.sps_tag, tipo: "sps" });
+    } else {
+      const ruta = (State._spsRutas && State._spsRutas[b && b.clasificacion]) || [];
+      ruta.forEach(t => seg.push({ txt: t, tipo: "sps" }));
+    }
+    return seg;
+  },
+
+  // Tira superior: breadcrumb con chips separados por ▸.
+  _breadcrumbHTML(b) {
+    const seg = App._rutaSegmentos(b);
+    if (!seg.length) return `<span class="bc-vacio">(sin etiquetar)</span>`;
+    return seg.map((s, i) =>
+      `${i ? `<span class="bc-sep">▸</span>` : ``}` +
+      `<span class="bc-chip bc-${s.tipo}">${esc(s.txt)}</span>`
+    ).join("");
+  },
+
+  // Etiqueta SPS resuelta (hoja): override manual, o última de la ruta automática.
+  _tagResuelto(b) {
+    if (b && b.sps_tag) return b.sps_tag;
+    const ruta = (State._spsRutas && State._spsRutas[b && b.clasificacion]) || [];
+    return ruta.length ? ruta[ruta.length - 1] : "";
+  },
+
+  // Tira inferior: atributos editables de la etiqueta resuelta. Si la etiqueta no
+  // tiene atributos, devuelve "" y la tira se omite por completo.
+  _bloqueAtributosHTML(idx, b) {
+    const tag = App._tagResuelto(b);
+    if (!tag) return "";
+    const meta = (State._spsMeta && State._spsMeta[tag]) || {};
+    const attrs = meta.attrs || {};
+    const nombres = Object.keys(attrs);
+    if (!nombres.length) return "";
+    const actuales = (b && b.sps_attrs) || {};
+    const campos = nombres.map(a => {
+      const spec = attrs[a] || {};
+      const val = actuales[a] != null ? String(actuales[a]) : "";
+      const req = spec.req ? `<span class="req" title="requerido">*</span>` : ``;
+      let control;
+      if (Array.isArray(spec.valores) && spec.valores.length) {
+        control = `<select data-attr="${esc(a)}" onchange="App._onBloqueAttrInline(${idx}, this)">` +
+          `<option value=""${val === "" ? " selected" : ""}>—</option>` +
+          spec.valores.map(v => `<option value="${esc(v)}"${v === val ? " selected" : ""}>${esc(v)}</option>`).join("") +
+          `</select>`;
+      } else {
+        control = `<input type="text" data-attr="${esc(a)}" value="${esc(val)}"
+                     placeholder="(vacío)" onchange="App._onBloqueAttrInline(${idx}, this)">`;
+      }
+      return `<span class="bloque-attr"><label>${esc(a)}${req}</label>${control}</span>`;
+    }).join("");
+    return `<div class="bloque-attrs" title="Atributos de [${esc(tag)}]">${campos}</div>`;
+  },
+
+  // Edita un atributo directamente desde la tira inferior del bloque.
+  async _onBloqueAttrInline(idx, el) {
+    const b = State.bloques.find(x => x.id === idx);
+    if (!b) return;
+    const attrs = { ...(b.sps_attrs || {}) };
+    const name = el.dataset.attr;
+    const v = (el.value || "").trim();
+    if (v === "") delete attrs[name]; else attrs[name] = v;
+    await App._onBloqueAttrsChange(idx, attrs);
+  },
+
   // ¿La etiqueta es inline? Los inline marcan trozos de texto, no bloques: se
   // excluyen de las columnas de selección de bloque (y así se evita la recursión
   // bold › italic › bold … infinita). Se reservan para el marcado de selección.
@@ -698,10 +771,27 @@ const App = {
   // Refresca el breadcrumb de un bloque (tras cambiar clasificación u override).
   _refrescarRuta(idx) {
     const b = State.bloques.find(b => b.id === idx);
+    if (!b) return;
     const el = document.getElementById(`bloque-ruta-${idx}`);
-    if (!b || !el) return;
-    el.textContent = App._rutaTexto(b);
-    el.classList.toggle("override", !!b.sps_tag);
+    if (el) {
+      el.textContent = App._rutaTexto(b);
+      el.classList.toggle("override", !!b.sps_tag);
+    }
+    App._refrescarBloqueMeta(idx);
+  },
+
+  // Repinta las tiras superior (breadcrumb) e inferior (atributos) de un bloque
+  // sin re-renderizar toda la lista, para conservar el estado de las textareas.
+  _refrescarBloqueMeta(idx) {
+    const b = State.bloques.find(x => x.id === idx);
+    const row = document.querySelector(`.bloque-item[data-idx="${idx}"]`);
+    if (!b || !row) return;
+    const bc = row.querySelector(".bloque-bc");
+    if (bc) bc.innerHTML = App._breadcrumbHTML(b);
+    const vieja = row.querySelector(".bloque-attrs");
+    if (vieja) vieja.remove();
+    const html = App._bloqueAtributosHTML(idx, b);
+    if (html) row.insertAdjacentHTML("beforeend", html);
   },
 
   // Fase 3 — catálogo de etiquetas SPS + grafo de anidación (una vez, al iniciar).
